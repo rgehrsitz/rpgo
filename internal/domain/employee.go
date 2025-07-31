@@ -21,7 +21,13 @@ type Employee struct {
 	SSBenefit70                   decimal.Decimal `yaml:"ss_benefit_70" json:"ss_benefit_70"`        // Monthly at age 70
 	FEHBPremiumMonthly            decimal.Decimal `yaml:"fehb_premium_monthly" json:"fehb_premium_monthly"`
 	SurvivorBenefitElectionPercent decimal.Decimal `yaml:"survivor_benefit_election_percent" json:"survivor_benefit_election_percent"`
+	
+	// Optional fields for additional context (not used in calculations)
+	PayPlanGrade                  string          `yaml:"pay_plan_grade,omitempty" json:"pay_plan_grade,omitempty"`
+	SSNLast4                      string          `yaml:"ssn_last4,omitempty" json:"ssn_last4,omitempty"`
 }
+
+
 
 // RetirementScenario represents a specific retirement scenario for an employee
 type RetirementScenario struct {
