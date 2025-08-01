@@ -29,37 +29,37 @@ func (ssc *SocialSecurityCalculator) CalculateBenefitAtAge(claimingAge int) deci
 	if claimingAge < 62 {
 		return decimal.Zero
 	}
-	
+
 	if claimingAge < ssc.FullRetirementAge {
 		// Early retirement reduction
 		monthsEarly := (ssc.FullRetirementAge - claimingAge) * 12
 		var reductionRate decimal.Decimal
-		
+
 		if monthsEarly <= 36 {
 			// 5/9 of 1% per month for first 36 months
-			reductionRate = decimal.NewFromFloat(5.0/9.0/100.0).Mul(decimal.NewFromInt(int64(monthsEarly)))
+			reductionRate = decimal.NewFromFloat(5.0 / 9.0 / 100.0).Mul(decimal.NewFromInt(int64(monthsEarly)))
 		} else {
 			// 5/9 of 1% for first 36 months, 5/12 of 1% for additional months
-			firstReduction := decimal.NewFromFloat(5.0/9.0/100.0).Mul(decimal.NewFromInt(36))
+			firstReduction := decimal.NewFromFloat(5.0 / 9.0 / 100.0).Mul(decimal.NewFromInt(36))
 			additionalMonths := monthsEarly - 36
-			additionalReduction := decimal.NewFromFloat(5.0/12.0/100.0).Mul(decimal.NewFromInt(int64(additionalMonths)))
+			additionalReduction := decimal.NewFromFloat(5.0 / 12.0 / 100.0).Mul(decimal.NewFromInt(int64(additionalMonths)))
 			reductionRate = firstReduction.Add(additionalReduction)
 		}
-		
+
 		return ssc.BenefitAtFRA.Mul(decimal.NewFromFloat(1).Sub(reductionRate))
 	}
-	
+
 	if claimingAge > ssc.FullRetirementAge {
 		// Delayed retirement credits: 8% per year (2/3% per month)
 		monthsDelayed := (claimingAge - ssc.FullRetirementAge) * 12
 		if monthsDelayed > 48 { // Cap at age 70
 			monthsDelayed = 48
 		}
-		
-		delayCredit := decimal.NewFromFloat(2.0/3.0/100.0).Mul(decimal.NewFromInt(int64(monthsDelayed)))
+
+		delayCredit := decimal.NewFromFloat(2.0 / 3.0 / 100.0).Mul(decimal.NewFromInt(int64(monthsDelayed)))
 		return ssc.BenefitAtFRA.Mul(decimal.NewFromFloat(1).Add(delayCredit))
 	}
-	
+
 	return ssc.BenefitAtFRA // At Full Retirement Age
 }
 
@@ -77,15 +77,15 @@ func ApplySSCOLA(currentBenefit decimal.Decimal, colaRate decimal.Decimal) decim
 // ProjectSocialSecurityBenefits projects Social Security benefits over multiple years
 func ProjectSocialSecurityBenefits(employee *domain.Employee, ssStartAge int, projectionYears int, colaRate decimal.Decimal) []decimal.Decimal {
 	projections := make([]decimal.Decimal, projectionYears)
-	
+
 	// Calculate initial benefit at claiming age
 	initialBenefit := CalculateMonthlySSBenefitAtAge(employee.SSBenefitFRA, employee.BirthDate, ssStartAge)
 	currentBenefit := initialBenefit
-	
+
 	for year := 0; year < projectionYears; year++ {
 		projectionDate := time.Now().AddDate(year, 0, 0)
 		age := employee.Age(projectionDate)
-		
+
 		// Check if Social Security has started
 		if age >= ssStartAge {
 			// Apply COLA for each year after the first
@@ -97,7 +97,7 @@ func ProjectSocialSecurityBenefits(employee *domain.Employee, ssStartAge int, pr
 			projections[year] = decimal.Zero
 		}
 	}
-	
+
 	return projections
 }
 
@@ -118,7 +118,7 @@ func NewSSTaxCalculator() *SSTaxCalculator {
 func (sstc *SSTaxCalculator) CalculateTaxableSocialSecurity(totalSSBenefitAnnual decimal.Decimal, provisionalIncome decimal.Decimal) decimal.Decimal {
 	threshold1 := decimal.NewFromInt(32000)
 	threshold2 := decimal.NewFromInt(44000)
-	
+
 	if provisionalIncome.LessThanOrEqual(threshold1) {
 		return decimal.Zero
 	} else if provisionalIncome.GreaterThan(threshold1) && provisionalIncome.LessThanOrEqual(threshold2) {
@@ -145,7 +145,7 @@ func (sstc *SSTaxCalculator) CalculateTaxableSocialSecurity(totalSSBenefitAnnual
 func (sstc *SSTaxCalculator) CalculateTaxableSocialSecuritySingle(totalSSBenefitAnnual decimal.Decimal, provisionalIncome decimal.Decimal) decimal.Decimal {
 	threshold1 := decimal.NewFromInt(25000)
 	threshold2 := decimal.NewFromInt(34000)
-	
+
 	if provisionalIncome.LessThanOrEqual(threshold1) {
 		return decimal.Zero
 	} else if provisionalIncome.GreaterThan(threshold1) && provisionalIncome.LessThanOrEqual(threshold2) {
@@ -176,7 +176,7 @@ func (sstc *SSTaxCalculator) CalculateProvisionalIncome(agi decimal.Decimal, non
 // InterpolateSSBenefit interpolates Social Security benefits between known ages
 func InterpolateSSBenefit(benefit62, benefitFRA, benefit70 decimal.Decimal, claimingAge int) decimal.Decimal {
 	fra := 67 // Assuming 1960+ birth year for simplicity
-	
+
 	if claimingAge <= 62 {
 		return benefit62
 	} else if claimingAge == fra {
@@ -202,24 +202,25 @@ func InterpolateSSBenefit(benefit62, benefitFRA, benefit70 decimal.Decimal, clai
 func CalculateSSBenefitForYear(employee *domain.Employee, ssStartAge int, year int, colaRate decimal.Decimal) decimal.Decimal {
 	projectionDate := time.Now().AddDate(year, 0, 0)
 	age := employee.Age(projectionDate)
-	
+
 	// Check if Social Security has started
 	if age < ssStartAge {
 		return decimal.Zero
 	}
-	
+
 	// Calculate initial benefit at claiming age
 	initialBenefit := CalculateMonthlySSBenefitAtAge(employee.SSBenefitFRA, employee.BirthDate, ssStartAge)
-	
-	// Apply COLA for each year after the first
+
+	// Apply COLA for each year after the first year of benefits
 	currentBenefit := initialBenefit
-	for y := 0; y < year; y++ {
-		projectionYearDate := time.Now().AddDate(y, 0, 0)
-		projectionYearAge := employee.Age(projectionYearDate)
-		if projectionYearAge >= ssStartAge {
+	yearsSinceStart := age - ssStartAge
+
+	// Only apply COLA if this is not the first year of benefits
+	if yearsSinceStart > 0 {
+		for y := 0; y < yearsSinceStart; y++ {
 			currentBenefit = ApplySSCOLA(currentBenefit, colaRate)
 		}
 	}
-	
+
 	return currentBenefit.Mul(decimal.NewFromInt(12)) // Convert to annual
-} 
+}

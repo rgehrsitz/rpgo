@@ -93,50 +93,109 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		ageRobert := robert.Age(projectionDate)
 		ageDawn := dawn.Age(projectionDate)
 
-		// Determine if retired (year 0 is current year, so retirement happens at year = retirementYear)
-		isRetired := year >= retirementYear
+		// Calculate partial year retirement for each person
+		robertRetirementYear := scenario.Robert.RetirementDate.Year() - time.Now().Year()
+		dawnRetirementYear := scenario.Dawn.RetirementDate.Year() - time.Now().Year()
 
-		// Calculate FERS pensions
+		// Determine if each person is retired for this year
+		isRobertRetired := year >= robertRetirementYear
+		isDawnRetired := year >= dawnRetirementYear
+
+		// Calculate partial year factors (what portion of the year each person works)
+		var robertWorkFraction, dawnWorkFraction decimal.Decimal
+
+		if year == robertRetirementYear && robertRetirementYear >= 0 {
+			// Robert retires during this year - calculate work fraction
+			robertRetirementDate := scenario.Robert.RetirementDate
+			yearStart := time.Date(projectionDate.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+			daysWorked := robertRetirementDate.Sub(yearStart).Hours() / 24
+			daysInYear := 365.0
+			robertWorkFraction = decimal.NewFromFloat(daysWorked / daysInYear)
+		} else if isRobertRetired {
+			robertWorkFraction = decimal.Zero
+		} else {
+			robertWorkFraction = decimal.NewFromInt(1)
+		}
+
+		if year == dawnRetirementYear && dawnRetirementYear >= 0 {
+			// Dawn retires during this year - calculate work fraction
+			dawnRetirementDate := scenario.Dawn.RetirementDate
+			yearStart := time.Date(projectionDate.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+			daysWorked := dawnRetirementDate.Sub(yearStart).Hours() / 24
+			daysInYear := 365.0
+			dawnWorkFraction = decimal.NewFromFloat(daysWorked / daysInYear)
+		} else if isDawnRetired {
+			dawnWorkFraction = decimal.Zero
+		} else {
+			dawnWorkFraction = decimal.NewFromInt(1)
+		}
+
+		// Calculate FERS pensions (only for retired portion of year)
 		var pensionRobert, pensionDawn decimal.Decimal
-		if isRetired {
-			pensionRobert = ce.calculatePensionForYear(robert, scenario.Robert.RetirementDate, year-retirementYear, assumptions.InflationRate)
-			pensionDawn = ce.calculatePensionForYear(dawn, scenario.Dawn.RetirementDate, year-retirementYear, assumptions.InflationRate)
+		if isRobertRetired {
+			pensionRobert = ce.calculatePensionForYear(robert, scenario.Robert.RetirementDate, year-robertRetirementYear, assumptions.InflationRate)
+			// Adjust for partial year if retiring this year
+			if year == robertRetirementYear {
+				pensionRobert = pensionRobert.Mul(decimal.NewFromInt(1).Sub(robertWorkFraction))
+			}
+		}
+		if isDawnRetired {
+			pensionDawn = ce.calculatePensionForYear(dawn, scenario.Dawn.RetirementDate, year-dawnRetirementYear, assumptions.InflationRate)
+			// Adjust for partial year if retiring this year
+			if year == dawnRetirementYear {
+				pensionDawn = pensionDawn.Mul(decimal.NewFromInt(1).Sub(dawnWorkFraction))
+			}
 		}
 
 		// Calculate Social Security benefits
 		ssRobert := ce.calculateSSBenefitForYear(robert, scenario.Robert.SSStartAge, year, assumptions.COLAGeneralRate)
 		ssDawn := ce.calculateSSBenefitForYear(dawn, scenario.Dawn.SSStartAge, year, assumptions.COLAGeneralRate)
 
+		// Adjust Social Security for partial year if retiring this year
+		if year == robertRetirementYear && robertRetirementYear >= 0 {
+			// Robert retires during this year - adjust SS for partial year
+			ssRobert = ssRobert.Mul(decimal.NewFromInt(1).Sub(robertWorkFraction))
+		}
+		if year == dawnRetirementYear && dawnRetirementYear >= 0 {
+			// Dawn retires during this year - adjust SS for partial year
+			ssDawn = ssDawn.Mul(decimal.NewFromInt(1).Sub(dawnWorkFraction))
+		}
+
 		// Calculate FERS Special Retirement Supplement (only if retired)
 		var srsRobert, srsDawn decimal.Decimal
-		if isRetired {
-			srsRobert = ce.calculateFERSSupplement(robert, scenario.Robert.RetirementDate, year-retirementYear, assumptions.InflationRate)
-			srsDawn = ce.calculateFERSSupplement(dawn, scenario.Dawn.RetirementDate, year-retirementYear, assumptions.InflationRate)
+		if isRobertRetired {
+			srsRobert = ce.calculateFERSSupplement(robert, scenario.Robert.RetirementDate, year-robertRetirementYear, assumptions.InflationRate)
+			// Adjust for partial year if retiring this year
+			if year == robertRetirementYear {
+				srsRobert = srsRobert.Mul(decimal.NewFromInt(1).Sub(robertWorkFraction))
+			}
+		}
+		if isDawnRetired {
+			srsDawn = ce.calculateFERSSupplement(dawn, scenario.Dawn.RetirementDate, year-dawnRetirementYear, assumptions.InflationRate)
+			// Adjust for partial year if retiring this year
+			if year == dawnRetirementYear {
+				srsDawn = srsDawn.Mul(decimal.NewFromInt(1).Sub(dawnWorkFraction))
+			}
 		}
 
 		// Calculate TSP withdrawals and update balances
 		var tspWithdrawalRobert, tspWithdrawalDawn decimal.Decimal
-		if isRetired {
+		if isRobertRetired {
 			// For 4% rule: Always withdraw 4% of initial balance (adjusted for inflation)
 			if scenario.Robert.TSPWithdrawalStrategy == "4_percent_rule" {
 				// Use the 4% rule strategy to calculate withdrawals
 				tspWithdrawalRobert = robertStrategy.CalculateWithdrawal(
 					currentTSPTraditionalRobert.Add(currentTSPRothRobert),
-					year-retirementYear+1,
+					year-robertRetirementYear+1,
 					decimal.Zero, // Not used for 4% rule
 					ageRobert,
 					dateutil.IsRMDYear(robert.BirthDate, projectionDate),
 					ce.calculateRMD(currentTSPTraditionalRobert, robert.BirthDate.Year(), ageRobert),
 				)
-
-				tspWithdrawalDawn = dawnStrategy.CalculateWithdrawal(
-					currentTSPTraditionalDawn.Add(currentTSPRothDawn),
-					year-retirementYear+1,
-					decimal.Zero, // Not used for 4% rule
-					ageDawn,
-					dateutil.IsRMDYear(dawn.BirthDate, projectionDate),
-					ce.calculateRMD(currentTSPTraditionalDawn, dawn.BirthDate.Year(), ageDawn),
-				)
+				// Adjust for partial year if retiring this year
+				if year == robertRetirementYear {
+					tspWithdrawalRobert = tspWithdrawalRobert.Mul(decimal.NewFromInt(1).Sub(robertWorkFraction))
+				}
 			} else {
 				// For need_based: Use the target monthly amount
 				targetIncome := pensionRobert.Add(pensionDawn).Add(ssRobert).Add(ssDawn).Add(srsRobert).Add(srsDawn)
@@ -144,36 +203,72 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 				// Calculate withdrawals
 				tspWithdrawalRobert = robertStrategy.CalculateWithdrawal(
 					currentTSPTraditionalRobert.Add(currentTSPRothRobert),
-					year-retirementYear+1,
+					year-robertRetirementYear+1,
 					targetIncome,
 					ageRobert,
 					dateutil.IsRMDYear(robert.BirthDate, projectionDate),
 					ce.calculateRMD(currentTSPTraditionalRobert, robert.BirthDate.Year(), ageRobert),
 				)
+				// Adjust for partial year if retiring this year
+				if year == robertRetirementYear {
+					tspWithdrawalRobert = tspWithdrawalRobert.Mul(decimal.NewFromInt(1).Sub(robertWorkFraction))
+				}
+			}
+		}
 
+		if isDawnRetired {
+			if scenario.Dawn.TSPWithdrawalStrategy == "4_percent_rule" {
 				tspWithdrawalDawn = dawnStrategy.CalculateWithdrawal(
 					currentTSPTraditionalDawn.Add(currentTSPRothDawn),
-					year-retirementYear+1,
+					year-dawnRetirementYear+1,
+					decimal.Zero, // Not used for 4% rule
+					ageDawn,
+					dateutil.IsRMDYear(dawn.BirthDate, projectionDate),
+					ce.calculateRMD(currentTSPTraditionalDawn, dawn.BirthDate.Year(), ageDawn),
+				)
+				// Adjust for partial year if retiring this year
+				if year == dawnRetirementYear {
+					tspWithdrawalDawn = tspWithdrawalDawn.Mul(decimal.NewFromInt(1).Sub(dawnWorkFraction))
+				}
+			} else {
+				// For need_based: Use the target monthly amount
+				targetIncome := pensionRobert.Add(pensionDawn).Add(ssRobert).Add(ssDawn).Add(srsRobert).Add(srsDawn)
+
+				// Calculate withdrawals
+				tspWithdrawalDawn = dawnStrategy.CalculateWithdrawal(
+					currentTSPTraditionalDawn.Add(currentTSPRothDawn),
+					year-dawnRetirementYear+1,
 					targetIncome,
 					ageDawn,
 					dateutil.IsRMDYear(dawn.BirthDate, projectionDate),
 					ce.calculateRMD(currentTSPTraditionalDawn, dawn.BirthDate.Year(), ageDawn),
 				)
+				// Adjust for partial year if retiring this year
+				if year == dawnRetirementYear {
+					tspWithdrawalDawn = tspWithdrawalDawn.Mul(decimal.NewFromInt(1).Sub(dawnWorkFraction))
+				}
 			}
+		}
 
-			// Update TSP balances
+		// Update TSP balances
+		if isRobertRetired {
 			currentTSPTraditionalRobert, currentTSPRothRobert = ce.updateTSPBalances(
 				currentTSPTraditionalRobert, currentTSPRothRobert, tspWithdrawalRobert,
-				assumptions.TSPReturnPostRetirement,
-			)
-			currentTSPTraditionalDawn, currentTSPRothDawn = ce.updateTSPBalances(
-				currentTSPTraditionalDawn, currentTSPRothDawn, tspWithdrawalDawn,
 				assumptions.TSPReturnPostRetirement,
 			)
 		} else {
 			// Pre-retirement TSP growth
 			currentTSPTraditionalRobert = ce.growTSPBalance(currentTSPTraditionalRobert, robert.TotalAnnualTSPContribution(), assumptions.TSPReturnPreRetirement)
 			currentTSPRothRobert = ce.growTSPBalance(currentTSPRothRobert, decimal.Zero, assumptions.TSPReturnPreRetirement)
+		}
+
+		if isDawnRetired {
+			currentTSPTraditionalDawn, currentTSPRothDawn = ce.updateTSPBalances(
+				currentTSPTraditionalDawn, currentTSPRothDawn, tspWithdrawalDawn,
+				assumptions.TSPReturnPostRetirement,
+			)
+		} else {
+			// Pre-retirement TSP growth
 			currentTSPTraditionalDawn = ce.growTSPBalance(currentTSPTraditionalDawn, dawn.TotalAnnualTSPContribution(), assumptions.TSPReturnPreRetirement)
 			currentTSPRothDawn = ce.growTSPBalance(currentTSPRothDawn, decimal.Zero, assumptions.TSPReturnPreRetirement)
 		}
@@ -186,37 +281,27 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 
 		// Calculate taxes
 		federalTax, stateTax, localTax, ficaTax := ce.calculateTaxes(
-			robert, dawn, scenario, year, isRetired,
+			robert, dawn, scenario, year, isRobertRetired && isDawnRetired, // Both retired for tax purposes
 			pensionRobert, pensionDawn, tspWithdrawalRobert, tspWithdrawalDawn,
 			ssRobert, ssDawn, assumptions,
 		)
 
-		// Calculate TSP contributions (only for pre-retirement years)
+		// Calculate TSP contributions (only for working portion of year)
 		var tspContributions decimal.Decimal
-		if !isRetired {
-			tspContributions = robert.TotalAnnualTSPContribution().Add(dawn.TotalAnnualTSPContribution())
+		if !isRobertRetired || !isDawnRetired {
+			robertContributions := robert.TotalAnnualTSPContribution().Mul(robertWorkFraction)
+			dawnContributions := dawn.TotalAnnualTSPContribution().Mul(dawnWorkFraction)
+			tspContributions = robertContributions.Add(dawnContributions)
 		}
 
 		// Create annual cash flow
 		cashFlow := domain.AnnualCashFlow{
-			Year:      year + 1,
-			Date:      projectionDate,
-			AgeRobert: ageRobert,
-			AgeDawn:   ageDawn,
-			SalaryRobert: func() decimal.Decimal {
-				if isRetired {
-					return decimal.Zero
-				} else {
-					return robert.CurrentSalary
-				}
-			}(),
-			SalaryDawn: func() decimal.Decimal {
-				if isRetired {
-					return decimal.Zero
-				} else {
-					return dawn.CurrentSalary
-				}
-			}(),
+			Year:                  year + 1,
+			Date:                  projectionDate,
+			AgeRobert:             ageRobert,
+			AgeDawn:               ageDawn,
+			SalaryRobert:          robert.CurrentSalary.Mul(robertWorkFraction),
+			SalaryDawn:            dawn.CurrentSalary.Mul(dawnWorkFraction),
 			PensionRobert:         pensionRobert,
 			PensionDawn:           pensionDawn,
 			TSPWithdrawalRobert:   tspWithdrawalRobert,
@@ -236,7 +321,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 			TSPBalanceDawn:        currentTSPTraditionalDawn.Add(currentTSPRothDawn),
 			TSPBalanceTraditional: currentTSPTraditionalRobert.Add(currentTSPTraditionalDawn),
 			TSPBalanceRoth:        currentTSPRothRobert.Add(currentTSPRothDawn),
-			IsRetired:             isRetired,
+			IsRetired:             isRobertRetired && isDawnRetired, // Both retired
 			IsMedicareEligible:    dateutil.IsMedicareEligible(robert.BirthDate, projectionDate) || dateutil.IsMedicareEligible(dawn.BirthDate, projectionDate),
 			IsRMDYear:             dateutil.IsRMDYear(robert.BirthDate, projectionDate) || dateutil.IsRMDYear(dawn.BirthDate, projectionDate),
 		}
