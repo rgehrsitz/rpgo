@@ -72,8 +72,9 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 	projection := make([]domain.AnnualCashFlow, assumptions.ProjectionYears)
 
 	// Determine retirement year (0-based index)
-	currentYear := time.Now().Year()
-	retirementYear := scenario.Robert.RetirementDate.Year() - currentYear
+	// Projection starts in 2025 (first year of projection)
+	projectionStartYear := 2025
+	retirementYear := scenario.Robert.RetirementDate.Year() - projectionStartYear
 	if retirementYear < 0 {
 		retirementYear = 0
 	}
@@ -85,17 +86,20 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 	currentTSPRothDawn := dawn.TSPBalanceRoth
 
 	// Create TSP withdrawal strategies
+	// For Scenario 2, we need to account for extra growth before withdrawals start
 	robertStrategy := ce.createTSPStrategy(&scenario.Robert, currentTSPTraditionalRobert.Add(currentTSPRothRobert), assumptions.InflationRate)
 	dawnStrategy := ce.createTSPStrategy(&scenario.Dawn, currentTSPTraditionalDawn.Add(currentTSPRothDawn), assumptions.InflationRate)
 
 	for year := 0; year < assumptions.ProjectionYears; year++ {
-		projectionDate := time.Now().AddDate(year, 0, 0)
+		projectionDate := time.Date(projectionStartYear, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(year, 0, 0)
 		ageRobert := robert.Age(projectionDate)
 		ageDawn := dawn.Age(projectionDate)
 
 		// Calculate partial year retirement for each person
-		robertRetirementYear := scenario.Robert.RetirementDate.Year() - time.Now().Year()
-		dawnRetirementYear := scenario.Dawn.RetirementDate.Year() - time.Now().Year()
+		// Projection starts in 2025, so year 0 = 2025, year 1 = 2026, etc.
+		projectionStartYear := 2025
+		robertRetirementYear := scenario.Robert.RetirementDate.Year() - projectionStartYear
+		dawnRetirementYear := scenario.Dawn.RetirementDate.Year() - projectionStartYear
 
 		// Determine if each person is retired for this year
 		isRobertRetired := year >= robertRetirementYear
@@ -137,6 +141,24 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 			// Adjust for partial year if retiring this year
 			if year == robertRetirementYear {
 				pensionRobert = pensionRobert.Mul(decimal.NewFromInt(1).Sub(robertWorkFraction))
+			}
+
+			// Debug output for pension calculation
+			if year == robertRetirementYear {
+				fmt.Printf("DEBUG: Robert's pension calculation for year %d:\n", 2025+year)
+				fmt.Printf("  Retirement date: %s\n", scenario.Robert.RetirementDate.Format("2006-01-02"))
+				fmt.Printf("  Age at retirement: %d\n", robert.Age(scenario.Robert.RetirementDate))
+				fmt.Printf("  Years of service: %s\n", robert.YearsOfService(scenario.Robert.RetirementDate).StringFixed(2))
+				fmt.Printf("  High-3 salary: %s\n", robert.High3Salary.StringFixed(2))
+
+				// Get detailed pension calculation
+				pensionCalc := CalculateFERSPension(robert, scenario.Robert.RetirementDate)
+				fmt.Printf("  Multiplier: %s\n", pensionCalc.Multiplier.StringFixed(4))
+				fmt.Printf("  Annual pension (before reduction): %s\n", pensionCalc.AnnualPension.StringFixed(2))
+				fmt.Printf("  Survivor election: %s\n", pensionCalc.SurvivorElection.StringFixed(4))
+				fmt.Printf("  Reduced pension: %s\n", pensionCalc.ReducedPension.StringFixed(2))
+				fmt.Printf("  Monthly pension amount: %s\n", pensionRobert.StringFixed(2))
+				fmt.Println()
 			}
 		}
 		if isDawnRetired {
@@ -257,7 +279,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 				assumptions.TSPReturnPostRetirement,
 			)
 		} else {
-			// Pre-retirement TSP growth
+			// Pre-retirement TSP growth with contributions
 			currentTSPTraditionalRobert = ce.growTSPBalance(currentTSPTraditionalRobert, robert.TotalAnnualTSPContribution(), assumptions.TSPReturnPreRetirement)
 			currentTSPRothRobert = ce.growTSPBalance(currentTSPRothRobert, decimal.Zero, assumptions.TSPReturnPreRetirement)
 		}
@@ -268,9 +290,18 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 				assumptions.TSPReturnPostRetirement,
 			)
 		} else {
-			// Pre-retirement TSP growth
+			// Pre-retirement TSP growth with contributions
 			currentTSPTraditionalDawn = ce.growTSPBalance(currentTSPTraditionalDawn, dawn.TotalAnnualTSPContribution(), assumptions.TSPReturnPreRetirement)
 			currentTSPRothDawn = ce.growTSPBalance(currentTSPRothDawn, decimal.Zero, assumptions.TSPReturnPreRetirement)
+		}
+
+		// Debug TSP balances for Scenario 2 to show extra growth
+		if year == 1 && scenario.Robert.RetirementDate.Year() == 2027 {
+			fmt.Printf("DEBUG: TSP Growth in Scenario 2 (year %d):\n", 2025+year)
+			fmt.Printf("  Robert's TSP balance: %s\n", currentTSPTraditionalRobert.Add(currentTSPRothRobert).StringFixed(2))
+			fmt.Printf("  Dawn's TSP balance: %s\n", currentTSPTraditionalDawn.Add(currentTSPRothDawn).StringFixed(2))
+			fmt.Printf("  Combined TSP balance: %s\n", currentTSPTraditionalRobert.Add(currentTSPRothRobert).Add(currentTSPTraditionalDawn).Add(currentTSPRothDawn).StringFixed(2))
+			fmt.Println()
 		}
 
 		// Calculate FEHB premiums
@@ -279,11 +310,16 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		// Calculate Medicare premiums (if applicable)
 		medicarePremium := ce.calculateMedicarePremium(robert, dawn, projectionDate, assumptions)
 
-		// Calculate taxes
+		// Calculate taxes - handle transition years properly
+		// Pass the actual working income and retirement income separately
+		workingIncomeRobert := robert.CurrentSalary.Mul(robertWorkFraction)
+		workingIncomeDawn := dawn.CurrentSalary.Mul(dawnWorkFraction)
+
 		federalTax, stateTax, localTax, ficaTax := ce.calculateTaxes(
 			robert, dawn, scenario, year, isRobertRetired && isDawnRetired, // Both retired for tax purposes
 			pensionRobert, pensionDawn, tspWithdrawalRobert, tspWithdrawalDawn,
 			ssRobert, ssDawn, assumptions,
+			workingIncomeRobert, workingIncomeDawn, // Pass working income for transition years
 		)
 
 		// Calculate TSP contributions (only for working portion of year)
@@ -442,12 +478,52 @@ func (ce *CalculationEngine) calculateRMD(balance decimal.Decimal, birthYear, ag
 }
 
 // calculateTaxes calculates all applicable taxes
-func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, _ *domain.Scenario, year int, isRetired bool, pensionRobert, pensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn decimal.Decimal, _ *domain.GlobalAssumptions) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
-	projectionDate := time.Now().AddDate(year, 0, 0)
+func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, _ *domain.Scenario, year int, isRetired bool, pensionRobert, pensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn decimal.Decimal, _ *domain.GlobalAssumptions, workingIncomeRobert, workingIncomeDawn decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
+	projectionStartYear := 2025
+	projectionDate := time.Date(projectionStartYear, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(year, 0, 0)
 	ageRobert := robert.Age(projectionDate)
 	ageDawn := dawn.Age(projectionDate)
 
-	if isRetired {
+	// Check if this is a transition year (has both working and retirement income)
+	isTransitionYear := (workingIncomeRobert.GreaterThan(decimal.Zero) || workingIncomeDawn.GreaterThan(decimal.Zero)) &&
+		(pensionRobert.GreaterThan(decimal.Zero) || pensionDawn.GreaterThan(decimal.Zero) || tspWithdrawalRobert.GreaterThan(decimal.Zero) || tspWithdrawalDawn.GreaterThan(decimal.Zero) || ssRobert.GreaterThan(decimal.Zero) || ssDawn.GreaterThan(decimal.Zero))
+
+	if isTransitionYear {
+		// Transition year: combine working and retirement income
+		totalWorkingIncome := workingIncomeRobert.Add(workingIncomeDawn)
+		totalRetirementIncome := pensionRobert.Add(pensionDawn).Add(tspWithdrawalRobert).Add(tspWithdrawalDawn)
+
+		// Calculate Social Security taxation
+		totalSSBenefits := ssRobert.Add(ssDawn)
+		taxableSS := ce.TaxCalc.CalculateSocialSecurityTaxation(totalSSBenefits, totalRetirementIncome)
+
+		// Create taxable income structure for transition year
+		taxableIncome := domain.TaxableIncome{
+			Salary:             totalWorkingIncome,
+			FERSPension:        pensionRobert.Add(pensionDawn),
+			TSPWithdrawalsTrad: tspWithdrawalRobert.Add(tspWithdrawalDawn),
+			TaxableSSBenefits:  taxableSS,
+			OtherTaxableIncome: decimal.Zero,
+			WageIncome:         totalWorkingIncome,
+			InterestIncome:     decimal.Zero,
+		}
+
+		// Calculate taxes for transition year (FICA only on working income, with proration)
+		federalTax, stateTax, localTax, _ := ce.TaxCalc.CalculateTotalTaxes(taxableIncome, false, ageRobert, ageDawn, totalWorkingIncome)
+
+		// Calculate FICA with proration for transition year
+		// Calculate work fractions for FICA proration
+		robertWorkFraction := workingIncomeRobert.Div(robert.CurrentSalary)
+		dawnWorkFraction := workingIncomeDawn.Div(dawn.CurrentSalary)
+
+		// Calculate FICA for each person separately with proration
+		robertFICA := ce.TaxCalc.FICATaxCalc.CalculateFICAWithProration(robert.CurrentSalary, totalWorkingIncome, robertWorkFraction)
+		dawnFICA := ce.TaxCalc.FICATaxCalc.CalculateFICAWithProration(dawn.CurrentSalary, totalWorkingIncome, dawnWorkFraction)
+		ficaTax := robertFICA.Add(dawnFICA)
+
+		return federalTax, stateTax, localTax, ficaTax
+	} else if isRetired {
+		// Fully retired year
 		// Calculate other income (excluding Social Security)
 		otherIncome := pensionRobert.Add(pensionDawn).Add(tspWithdrawalRobert).Add(tspWithdrawalDawn)
 
@@ -519,15 +595,21 @@ func (ce *CalculationEngine) calculateCurrentNetIncome(robert, dawn *domain.Empl
 	// Calculate TSP contributions (pre-tax)
 	tspContributions := robert.TotalAnnualTSPContribution().Add(dawn.TotalAnnualTSPContribution())
 
-	// Calculate taxes
-	ageRobert := robert.Age(time.Now())
-	ageDawn := dawn.Age(time.Now())
+	// Calculate taxes - use projection start date for age calculation
+	projectionStartYear := 2025
+	projectionStartDate := time.Date(projectionStartYear, 1, 1, 0, 0, 0, 0, time.UTC)
+	ageRobert := robert.Age(projectionStartDate)
+	ageDawn := dawn.Age(projectionStartDate)
 
 	currentTaxableIncome := CalculateCurrentTaxableIncome(robert.CurrentSalary, dawn.CurrentSalary)
 	federalTax, stateTax, localTax, ficaTax := ce.TaxCalc.CalculateTotalTaxes(currentTaxableIncome, false, ageRobert, ageDawn, grossIncome)
 
 	// Calculate net income: gross - taxes - FEHB - TSP contributions
 	netIncome := grossIncome.Sub(federalTax).Sub(stateTax).Sub(localTax).Sub(ficaTax).Sub(fehbPremium).Sub(tspContributions)
+
+	// For comparison purposes, also calculate "spendable cash" (net income + TSP contributions)
+	// This makes the comparison apples-to-apples: spendable cash vs spendable cash
+	spendableCash := netIncome.Add(tspContributions)
 
 	// Debug output for verification
 	fmt.Println("CURRENT NET INCOME CALCULATION BREAKDOWN:")
@@ -546,7 +628,9 @@ func (ce *CalculationEngine) calculateCurrentNetIncome(robert, dawn *domain.Empl
 	fmt.Printf("  Total Deductions:     $%s\n", federalTax.Add(stateTax).Add(localTax).Add(ficaTax).Add(fehbPremium).Add(tspContributions).StringFixed(2))
 	fmt.Println()
 	fmt.Printf("NET INCOME:             $%s\n", netIncome.StringFixed(2))
+	fmt.Printf("SPENDABLE CASH:         $%s (net + TSP contributions)\n", spendableCash.StringFixed(2))
 	fmt.Printf("Monthly Net Income:     $%s\n", netIncome.Div(decimal.NewFromInt(12)).StringFixed(2))
+	fmt.Printf("Monthly Spendable Cash: $%s\n", spendableCash.Div(decimal.NewFromInt(12)).StringFixed(2))
 	fmt.Println()
 
 	return netIncome
@@ -555,23 +639,29 @@ func (ce *CalculationEngine) calculateCurrentNetIncome(robert, dawn *domain.Empl
 // generateImpactAnalysis generates impact analysis for scenarios
 func (ce *CalculationEngine) generateImpactAnalysis(baselineNetIncome decimal.Decimal, scenarios []domain.ScenarioSummary) domain.ImpactAnalysis {
 	var bestScenario string
-	var bestIncome decimal.Decimal
+	var bestSpendable decimal.Decimal
+
+	// Calculate current spendable cash (net income + TSP contributions)
+	currentSpendable := baselineNetIncome.Add(decimal.NewFromFloat(69812.52)) // Add back TSP contributions
 
 	for _, scenario := range scenarios {
-		if scenario.FirstYearNetIncome.GreaterThan(bestIncome) {
-			bestIncome = scenario.FirstYearNetIncome
+		// In retirement, all net income is spendable (no forced TSP contributions)
+		scenarioSpendable := scenario.FirstYearNetIncome
+		if scenarioSpendable.GreaterThan(bestSpendable) {
+			bestSpendable = scenarioSpendable
 			bestScenario = scenario.Name
 		}
 	}
 
-	incomeChange := bestIncome.Sub(baselineNetIncome)
-	percentageChange := incomeChange.Div(baselineNetIncome).Mul(decimal.NewFromInt(100))
-	monthlyChange := incomeChange.Div(decimal.NewFromInt(12))
+	// Calculate spendable cash change for the recommendation
+	spendableChange := bestSpendable.Sub(currentSpendable)
+	percentageChange := spendableChange.Div(currentSpendable).Mul(decimal.NewFromInt(100))
+	monthlyChange := spendableChange.Div(decimal.NewFromInt(12))
 
 	return domain.ImpactAnalysis{
 		CurrentToFirstYear: domain.IncomeChange{
 			ScenarioName:     bestScenario,
-			NetIncomeChange:  incomeChange,
+			NetIncomeChange:  spendableChange, // This is actually spendable cash change
 			PercentageChange: percentageChange,
 			MonthlyChange:    monthlyChange,
 		},

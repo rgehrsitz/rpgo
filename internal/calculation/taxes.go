@@ -139,7 +139,7 @@ func NewFICACalculator2025() *FICACalculator {
 
 // CalculateFICA calculates FICA taxes (Social Security and Medicare)
 func (fc *FICACalculator) CalculateFICA(wages decimal.Decimal, totalHouseholdWages decimal.Decimal) decimal.Decimal {
-	// Social Security tax (capped)
+	// Social Security tax (capped per individual)
 	ssWages := decimal.Min(wages, fc.SSWageBase)
 	ssTax := ssWages.Mul(fc.SSRate)
 
@@ -151,6 +151,29 @@ func (fc *FICACalculator) CalculateFICA(wages decimal.Decimal, totalHouseholdWag
 	if totalHouseholdWages.GreaterThan(fc.HighIncomeThreshold) {
 		excessWages := totalHouseholdWages.Sub(fc.HighIncomeThreshold)
 		applicableExcess := decimal.Min(excessWages, wages)
+		additionalMedicare = applicableExcess.Mul(fc.AdditionalRate)
+	}
+
+	return ssTax.Add(medicareTax).Add(additionalMedicare)
+}
+
+// CalculateFICAWithProration calculates FICA taxes with proration for partial year work
+func (fc *FICACalculator) CalculateFICAWithProration(wages decimal.Decimal, totalHouseholdWages decimal.Decimal, workFraction decimal.Decimal) decimal.Decimal {
+	// Apply work fraction to wages first
+	proratedWages := wages.Mul(workFraction)
+	
+	// Social Security tax (capped per individual, then prorated)
+	ssWages := decimal.Min(proratedWages, fc.SSWageBase)
+	ssTax := ssWages.Mul(fc.SSRate)
+
+	// Medicare tax (no cap, prorated)
+	medicareTax := proratedWages.Mul(fc.MedicareRate)
+
+	// Additional Medicare tax for high earners (prorated)
+	var additionalMedicare decimal.Decimal
+	if totalHouseholdWages.GreaterThan(fc.HighIncomeThreshold) {
+		excessWages := totalHouseholdWages.Sub(fc.HighIncomeThreshold)
+		applicableExcess := decimal.Min(excessWages, proratedWages)
 		additionalMedicare = applicableExcess.Mul(fc.AdditionalRate)
 	}
 
@@ -184,40 +207,17 @@ func (ctc *ComprehensiveTaxCalculator) CalculateTotalTaxes(income domain.Taxable
 
 	var federalTax, stateTax, localTax, ficaTax decimal.Decimal
 
-	if !isRetired {
-		// Use actual LES tax rates for current employment
-		// Based on LES data: Robert $190,779 salary, Dawn $176,620 salary
-		robertSalary := decimal.NewFromFloat(190779.00)
-		dawnSalary := decimal.NewFromFloat(176620.00)
+	// Always use proper progressive tax calculation for federal tax
+	federalTax = ctc.FederalTaxCalc.CalculateFederalTax(grossIncome, age1, age2)
 
-		// Federal tax rates from LES
-		// Robert: $19,819 YTD federal tax / $121,171 YTD gross = 16.4% effective rate
-		// Dawn: $8,111 YTD federal tax / $101,502 YTD gross = 8.0% effective rate
-		robertFederalTax := robertSalary.Mul(decimal.NewFromFloat(0.164))
-		dawnFederalTax := dawnSalary.Mul(decimal.NewFromFloat(0.080))
-		federalTax = robertFederalTax.Add(dawnFederalTax)
+	// State and local taxes
+	stateTax = ctc.StateTaxCalc.CalculateTax(income, isRetired)
+	localTax = ctc.LocalTaxCalc.CalculateEIT(income.WageIncome, isRetired)
 
-		// State tax rates from LES
-		// Robert: $3,492 YTD state tax = 2.9% effective rate
-		// Dawn: $3,067 YTD state tax = 3.0% effective rate
-		robertStateTax := robertSalary.Mul(decimal.NewFromFloat(0.029))
-		dawnStateTax := dawnSalary.Mul(decimal.NewFromFloat(0.030))
-		stateTax = robertStateTax.Add(dawnStateTax)
-
-		// Local tax (Upper Makefield Township, Bucks County, PA) - 1%
-		localTax = grossIncome.Mul(decimal.NewFromFloat(0.01))
-
-		// FICA tax rates from LES
-		// Robert: $8,701 YTD FICA = 7.2% effective rate
-		// Dawn: $7,644 YTD FICA = 7.5% effective rate
-		robertFICA := robertSalary.Mul(decimal.NewFromFloat(0.072))
-		dawnFICA := dawnSalary.Mul(decimal.NewFromFloat(0.075))
-		ficaTax = robertFICA.Add(dawnFICA)
+	// FICA only applies to wages (working income)
+	if !isRetired && totalHouseholdWages.GreaterThan(decimal.Zero) {
+		ficaTax = ctc.FICATaxCalc.CalculateFICA(totalHouseholdWages, totalHouseholdWages)
 	} else {
-		// Use standard tax calculations for retirement
-		federalTax = ctc.FederalTaxCalc.CalculateFederalTax(grossIncome, age1, age2)
-		stateTax = ctc.StateTaxCalc.CalculateTax(income, isRetired)
-		localTax = ctc.LocalTaxCalc.CalculateEIT(income.WageIncome, isRetired)
 		ficaTax = decimal.Zero // No FICA in retirement
 	}
 

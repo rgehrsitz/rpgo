@@ -128,6 +128,21 @@ func (rg *ReportGenerator) GenerateConsoleReport(results *domain.ScenarioCompari
 			} else {
 				fmt.Printf("  Monthly Change: %s\n", FormatCurrency(monthlyChange))
 			}
+
+			// Add spendable cash analysis
+			fmt.Println()
+			fmt.Printf("SPENDABLE CASH ANALYSIS:")
+			fmt.Println("------------------------")
+			currentSpendable := results.BaselineNetIncome.Add(decimal.NewFromFloat(69812.52)) // Add back TSP contributions
+			fmt.Printf("  Current Spendable Cash: %s (net + TSP contributions)\n", FormatCurrency(currentSpendable))
+			fmt.Printf("  Retirement Spendable:   %s (all net income is spendable)\n", FormatCurrency(firstRetirementYear.NetIncome))
+			spendableChange := firstRetirementYear.NetIncome.Sub(currentSpendable)
+			spendablePercentage := spendableChange.Div(currentSpendable).Mul(decimal.NewFromInt(100))
+			if spendableChange.GreaterThan(decimal.Zero) {
+				fmt.Printf("  SPENDABLE CHANGE: +%s (+%s)\n", FormatCurrency(spendableChange), FormatPercentage(spendablePercentage))
+			} else {
+				fmt.Printf("  SPENDABLE CHANGE: %s (%s)\n", FormatCurrency(spendableChange), FormatPercentage(spendablePercentage))
+			}
 			fmt.Println()
 
 			// Retirement Status
@@ -138,12 +153,12 @@ func (rg *ReportGenerator) GenerateConsoleReport(results *domain.ScenarioCompari
 			fmt.Printf("  Robert's Age:           %d\n", firstRetirementYear.AgeRobert)
 			fmt.Printf("  Dawn's Age:             %d\n", firstRetirementYear.AgeDawn)
 			fmt.Println()
-			
+
 			// Show first FULL retirement year (no working income)
 			var firstFullRetirementYear domain.AnnualCashFlow
 			var firstFullRetirementYearIndex int
 			foundFullRetirementYear := false
-			
+
 			for yearIndex, yearData := range scenario.Projection {
 				if yearData.IsRetired && yearData.SalaryRobert.Equal(decimal.Zero) && yearData.SalaryDawn.Equal(decimal.Zero) {
 					firstFullRetirementYear = yearData
@@ -152,17 +167,17 @@ func (rg *ReportGenerator) GenerateConsoleReport(results *domain.ScenarioCompari
 					break
 				}
 			}
-			
+
 			if foundFullRetirementYear {
 				fullRetirementYear := 2025 + firstFullRetirementYearIndex
 				fmt.Printf("FIRST FULL RETIREMENT YEAR (NO WORKING INCOME) (%d):\n", fullRetirementYear)
 				fmt.Println("--------------------------------------------------------")
 				fmt.Printf("  Total Gross Income:      %s\n", FormatCurrency(firstFullRetirementYear.TotalGrossIncome))
 				fmt.Printf("  Net Income:              %s\n", FormatCurrency(firstFullRetirementYear.NetIncome))
-				
+
 				fullRetirementChange := firstFullRetirementYear.NetIncome.Sub(results.BaselineNetIncome)
 				fullRetirementPercentageChange := fullRetirementChange.Div(results.BaselineNetIncome).Mul(decimal.NewFromInt(100))
-				
+
 				if fullRetirementChange.GreaterThan(decimal.Zero) {
 					fmt.Printf("  CHANGE vs Current:       +%s (+%s)\n", FormatCurrency(fullRetirementChange), FormatPercentage(fullRetirementPercentageChange))
 				} else {
@@ -190,31 +205,123 @@ func (rg *ReportGenerator) GenerateConsoleReport(results *domain.ScenarioCompari
 	fmt.Println("SUMMARY & RECOMMENDATIONS")
 	fmt.Println("=========================")
 
-	// Find best scenario
+	// Find best scenario based on spendable cash (apples-to-apples comparison)
 	var bestScenario domain.ScenarioSummary
-	var bestIncome decimal.Decimal
-	for _, scenario := range results.Scenarios {
-		if scenario.FirstYearNetIncome.GreaterThan(bestIncome) {
-			bestIncome = scenario.FirstYearNetIncome
+	var bestSpendable decimal.Decimal
+
+	// Calculate current spendable cash (net income + TSP contributions)
+	currentSpendable := results.BaselineNetIncome.Add(decimal.NewFromFloat(69812.52))
+
+	// Debug output to see what's happening
+	fmt.Println("DEBUG: Recommendation Logic:")
+	fmt.Printf("  Current Spendable Cash: %s\n", FormatCurrency(currentSpendable))
+
+	for i, scenario := range results.Scenarios {
+		// Find the first full retirement year for this scenario
+		var firstRetirementSpendable decimal.Decimal
+		for _, yearData := range scenario.Projection {
+			if yearData.IsRetired {
+				firstRetirementSpendable = yearData.NetIncome
+				break
+			}
+		}
+
+		fmt.Printf("  Scenario %d (%s): %s (first retirement year)\n", i+1, scenario.Name, FormatCurrency(firstRetirementSpendable))
+
+		if firstRetirementSpendable.GreaterThan(bestSpendable) {
+			bestSpendable = firstRetirementSpendable
 			bestScenario = scenario
+			fmt.Printf("    -> NEW BEST (spendable: %s)\n", FormatCurrency(bestSpendable))
 		}
 	}
 
-	change := bestIncome.Sub(results.BaselineNetIncome)
-	percentageChange := change.Div(results.BaselineNetIncome).Mul(decimal.NewFromInt(100))
-	monthlyChange := change.Div(decimal.NewFromInt(12))
+	// Calculate spendable change using the first retirement year for the best scenario
+	var bestScenarioFirstRetirementSpendable decimal.Decimal
+	for _, yearData := range bestScenario.Projection {
+		if yearData.IsRetired {
+			bestScenarioFirstRetirementSpendable = yearData.NetIncome
+			break
+		}
+	}
+	spendableChange := bestScenarioFirstRetirementSpendable.Sub(currentSpendable)
+	percentageChange := spendableChange.Div(currentSpendable).Mul(decimal.NewFromInt(100))
+	monthlyChange := spendableChange.Div(decimal.NewFromInt(12))
 
 	fmt.Printf("Recommended Scenario: %s\n", bestScenario.Name)
-	fmt.Printf("Net Income Change: %s (%s)\n", FormatCurrency(change), FormatPercentage(percentageChange))
+	fmt.Printf("Spendable Cash Change: %s (%s)\n", FormatCurrency(spendableChange), FormatPercentage(percentageChange))
 	fmt.Printf("Monthly Change: %s\n", FormatCurrency(monthlyChange))
-	fmt.Println()
-
-	fmt.Println("KEY CONSIDERATIONS:")
-	fmt.Println("• Verify all tax calculations match your current tax situation")
-	fmt.Println("• Confirm FEHB premium amounts and coverage")
-	fmt.Println("• Review TSP withdrawal strategy assumptions")
-	fmt.Println("• Consider Social Security timing impact")
 	fmt.Println("• Evaluate healthcare costs and Medicare coordination")
+
+	// Add detailed year-by-year breakdown
+	fmt.Println()
+	fmt.Println("=================================================================================")
+	fmt.Println("DETAILED YEAR-BY-YEAR BREAKDOWN (2025-2030)")
+	fmt.Println("=================================================================================")
+
+	for i, scenario := range results.Scenarios {
+		fmt.Printf("\nSCENARIO %d: %s\n", i+1, scenario.Name)
+		fmt.Println(strings.Repeat("=", 80))
+
+		// Show years 2025-2030 (indices 0-5)
+		for yearIndex := 0; yearIndex <= 5 && yearIndex < len(scenario.Projection); yearIndex++ {
+			yearData := scenario.Projection[yearIndex]
+			actualYear := 2025 + yearIndex
+
+			fmt.Printf("\nYEAR %d (%s):\n", actualYear, yearData.Date.Format("2006"))
+			fmt.Println(strings.Repeat("-", 40))
+
+			// Income Sources
+			fmt.Println("INCOME SOURCES:")
+			fmt.Printf("  Robert's Salary:        %s\n", FormatCurrency(yearData.SalaryRobert))
+			fmt.Printf("  Dawn's Salary:          %s\n", FormatCurrency(yearData.SalaryDawn))
+			fmt.Printf("  Robert's FERS Pension:  %s\n", FormatCurrency(yearData.PensionRobert))
+			fmt.Printf("  Dawn's FERS Pension:    %s\n", FormatCurrency(yearData.PensionDawn))
+			fmt.Printf("  Robert's TSP Withdrawal: %s\n", FormatCurrency(yearData.TSPWithdrawalRobert))
+			fmt.Printf("  Dawn's TSP Withdrawal:   %s\n", FormatCurrency(yearData.TSPWithdrawalDawn))
+			fmt.Printf("  Robert's Social Security: %s\n", FormatCurrency(yearData.SSBenefitRobert))
+			fmt.Printf("  Dawn's Social Security:   %s\n", FormatCurrency(yearData.SSBenefitDawn))
+			fmt.Printf("  Robert's FERS SRS:       %s\n", FormatCurrency(yearData.FERSSupplementRobert))
+			fmt.Printf("  Dawn's FERS SRS:         %s\n", FormatCurrency(yearData.FERSSupplementDawn))
+			fmt.Printf("  TOTAL GROSS INCOME:      %s\n", FormatCurrency(yearData.TotalGrossIncome))
+
+			// Deductions
+			fmt.Println("\nDEDUCTIONS:")
+			fmt.Printf("  Federal Tax:            %s\n", FormatCurrency(yearData.FederalTax))
+			fmt.Printf("  State Tax:              %s\n", FormatCurrency(yearData.StateTax))
+			fmt.Printf("  Local Tax:              %s\n", FormatCurrency(yearData.LocalTax))
+			fmt.Printf("  FICA Tax:               %s\n", FormatCurrency(yearData.FICATax))
+			fmt.Printf("  TSP Contributions:      %s\n", FormatCurrency(yearData.TSPContributions))
+			fmt.Printf("  FEHB Premium:           %s\n", FormatCurrency(yearData.FEHBPremium))
+			fmt.Printf("  Medicare Premium:       %s\n", FormatCurrency(yearData.MedicarePremium))
+			fmt.Printf("  TOTAL DEDUCTIONS:       %s\n", FormatCurrency(yearData.CalculateTotalDeductions()))
+
+			// Net Income
+			fmt.Printf("\nNET INCOME:               %s\n", FormatCurrency(yearData.NetIncome))
+			fmt.Printf("Monthly Net Income:       %s\n", FormatCurrency(yearData.NetIncome.Div(decimal.NewFromInt(12))))
+
+			// Comparison to current
+			change := yearData.NetIncome.Sub(results.BaselineNetIncome)
+			percentageChange := change.Div(results.BaselineNetIncome).Mul(decimal.NewFromInt(100))
+			if change.GreaterThan(decimal.Zero) {
+				fmt.Printf("CHANGE vs Current:        +%s (+%s)\n", FormatCurrency(change), FormatPercentage(percentageChange))
+			} else {
+				fmt.Printf("CHANGE vs Current:        %s (%s)\n", FormatCurrency(change), FormatPercentage(percentageChange))
+			}
+
+			// Status
+			fmt.Printf("Retirement Status:        %s\n", func() string {
+				if yearData.IsRetired {
+					return "FULLY RETIRED"
+				} else if !yearData.SalaryRobert.Equal(decimal.Zero) || !yearData.SalaryDawn.Equal(decimal.Zero) {
+					return "PARTIAL RETIREMENT"
+				} else {
+					return "WORKING"
+				}
+			}())
+			fmt.Printf("Robert's Age:             %d\n", yearData.AgeRobert)
+			fmt.Printf("Dawn's Age:               %d\n", yearData.AgeDawn)
+		}
+	}
 
 	return nil
 }
