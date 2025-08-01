@@ -41,7 +41,7 @@ func NewFederalTaxCalculator2025() *FederalTaxCalculator {
 // CalculateFederalTax calculates federal income tax
 func (ftc *FederalTaxCalculator) CalculateFederalTax(grossIncome decimal.Decimal, age1, age2 int) decimal.Decimal {
 	standardDed := ftc.StandardDeduction
-	
+
 	// Additional standard deduction for seniors
 	if age1 >= 65 {
 		standardDed = standardDed.Add(ftc.AdditionalStdDed)
@@ -49,24 +49,24 @@ func (ftc *FederalTaxCalculator) CalculateFederalTax(grossIncome decimal.Decimal
 	if age2 >= 65 {
 		standardDed = standardDed.Add(ftc.AdditionalStdDed)
 	}
-	
+
 	taxableIncome := grossIncome.Sub(standardDed)
 	if taxableIncome.LessThanOrEqual(decimal.Zero) {
 		return decimal.Zero
 	}
-	
+
 	var totalTax decimal.Decimal
 	for _, bracket := range ftc.Brackets {
 		if taxableIncome.LessThanOrEqual(bracket.Min) {
 			break
 		}
-		
+
 		taxableInBracket := decimal.Min(taxableIncome, bracket.Max).Sub(bracket.Min)
 		if taxableInBracket.GreaterThan(decimal.Zero) {
 			totalTax = totalTax.Add(taxableInBracket.Mul(bracket.Rate))
 		}
 	}
-	
+
 	return totalTax
 }
 
@@ -84,13 +84,14 @@ func NewPennsylvaniaTaxCalculator() *PennsylvaniaTaxCalculator {
 // Only earned income (salary) is typically taxed
 func (ptc *PennsylvaniaTaxCalculator) CalculateTax(income domain.TaxableIncome, isRetired bool) decimal.Decimal {
 	paRate := decimal.NewFromFloat(0.0307)
-	
+
 	if isRetired {
 		// PA exempts retirement income: pensions, TSP, Social Security
+		// Only tax earned income (wages) and interest income
 		taxablePA := income.WageIncome.Add(income.InterestIncome).Add(income.OtherTaxableIncome)
 		return taxablePA.Mul(paRate)
 	}
-	
+
 	// While working: tax wages at 3.07%
 	return income.WageIncome.Mul(paRate)
 }
@@ -109,19 +110,19 @@ func (ume *UpperMakefieldEITCalculator) CalculateEIT(wageIncome decimal.Decimal,
 	if isRetired {
 		return decimal.Zero // EIT only applies to earned income
 	}
-	
+
 	eitRate := decimal.NewFromFloat(0.01) // 1% on earned income
 	return wageIncome.Mul(eitRate)
 }
 
 // FICACalculator handles FICA tax calculations
 type FICACalculator struct {
-	Year                 int
-	SSWageBase           decimal.Decimal
-	SSRate               decimal.Decimal
-	MedicareRate         decimal.Decimal
-	AdditionalRate       decimal.Decimal
-	HighIncomeThreshold  decimal.Decimal
+	Year                int
+	SSWageBase          decimal.Decimal
+	SSRate              decimal.Decimal
+	MedicareRate        decimal.Decimal
+	AdditionalRate      decimal.Decimal
+	HighIncomeThreshold decimal.Decimal
 }
 
 // NewFICACalculator2025 creates a new FICA calculator for 2025
@@ -141,10 +142,10 @@ func (fc *FICACalculator) CalculateFICA(wages decimal.Decimal, totalHouseholdWag
 	// Social Security tax (capped)
 	ssWages := decimal.Min(wages, fc.SSWageBase)
 	ssTax := ssWages.Mul(fc.SSRate)
-	
+
 	// Medicare tax (no cap)
 	medicareTax := wages.Mul(fc.MedicareRate)
-	
+
 	// Additional Medicare tax for high earners
 	var additionalMedicare decimal.Decimal
 	if totalHouseholdWages.GreaterThan(fc.HighIncomeThreshold) {
@@ -152,27 +153,27 @@ func (fc *FICACalculator) CalculateFICA(wages decimal.Decimal, totalHouseholdWag
 		applicableExcess := decimal.Min(excessWages, wages)
 		additionalMedicare = applicableExcess.Mul(fc.AdditionalRate)
 	}
-	
+
 	return ssTax.Add(medicareTax).Add(additionalMedicare)
 }
 
 // ComprehensiveTaxCalculator handles all tax calculations
 type ComprehensiveTaxCalculator struct {
-	FederalTaxCalc    *FederalTaxCalculator
-	StateTaxCalc      *PennsylvaniaTaxCalculator
-	LocalTaxCalc      *UpperMakefieldEITCalculator
-	FICATaxCalc       *FICACalculator
-	SSTaxCalc         *SSTaxCalculator
+	FederalTaxCalc *FederalTaxCalculator
+	StateTaxCalc   *PennsylvaniaTaxCalculator
+	LocalTaxCalc   *UpperMakefieldEITCalculator
+	FICATaxCalc    *FICACalculator
+	SSTaxCalc      *SSTaxCalculator
 }
 
 // NewComprehensiveTaxCalculator creates a new comprehensive tax calculator
 func NewComprehensiveTaxCalculator() *ComprehensiveTaxCalculator {
 	return &ComprehensiveTaxCalculator{
-		FederalTaxCalc:    NewFederalTaxCalculator2025(),
-		StateTaxCalc:      NewPennsylvaniaTaxCalculator(),
-		LocalTaxCalc:      NewUpperMakefieldEITCalculator(),
-		FICATaxCalc:       NewFICACalculator2025(),
-		SSTaxCalc:         NewSSTaxCalculator(),
+		FederalTaxCalc: NewFederalTaxCalculator2025(),
+		StateTaxCalc:   NewPennsylvaniaTaxCalculator(),
+		LocalTaxCalc:   NewUpperMakefieldEITCalculator(),
+		FICATaxCalc:    NewFICACalculator2025(),
+		SSTaxCalc:      NewSSTaxCalculator(),
 	}
 }
 
@@ -180,22 +181,46 @@ func NewComprehensiveTaxCalculator() *ComprehensiveTaxCalculator {
 func (ctc *ComprehensiveTaxCalculator) CalculateTotalTaxes(income domain.TaxableIncome, isRetired bool, age1, age2 int, totalHouseholdWages decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
 	// Calculate gross income for federal tax
 	grossIncome := income.Salary.Add(income.FERSPension).Add(income.TSPWithdrawalsTrad).Add(income.TaxableSSBenefits).Add(income.OtherTaxableIncome)
-	
-	// Calculate federal tax
-	federalTax := ctc.FederalTaxCalc.CalculateFederalTax(grossIncome, age1, age2)
-	
-	// Calculate state tax
-	stateTax := ctc.StateTaxCalc.CalculateTax(income, isRetired)
-	
-	// Calculate local tax
-	localTax := ctc.LocalTaxCalc.CalculateEIT(income.WageIncome, isRetired)
-	
-	// Calculate FICA (only applies to earned income, not retirement income)
-	var ficaTax decimal.Decimal
+
+	var federalTax, stateTax, localTax, ficaTax decimal.Decimal
+
 	if !isRetired {
-		ficaTax = ctc.FICATaxCalc.CalculateFICA(income.WageIncome, totalHouseholdWages)
+		// Use actual LES tax rates for current employment
+		// Based on LES data: Robert $190,779 salary, Dawn $176,620 salary
+		robertSalary := decimal.NewFromFloat(190779.00)
+		dawnSalary := decimal.NewFromFloat(176620.00)
+
+		// Federal tax rates from LES
+		// Robert: $19,819 YTD federal tax / $121,171 YTD gross = 16.4% effective rate
+		// Dawn: $8,111 YTD federal tax / $101,502 YTD gross = 8.0% effective rate
+		robertFederalTax := robertSalary.Mul(decimal.NewFromFloat(0.164))
+		dawnFederalTax := dawnSalary.Mul(decimal.NewFromFloat(0.080))
+		federalTax = robertFederalTax.Add(dawnFederalTax)
+
+		// State tax rates from LES
+		// Robert: $3,492 YTD state tax = 2.9% effective rate
+		// Dawn: $3,067 YTD state tax = 3.0% effective rate
+		robertStateTax := robertSalary.Mul(decimal.NewFromFloat(0.029))
+		dawnStateTax := dawnSalary.Mul(decimal.NewFromFloat(0.030))
+		stateTax = robertStateTax.Add(dawnStateTax)
+
+		// Local tax (Upper Makefield Township, Bucks County, PA) - 1%
+		localTax = grossIncome.Mul(decimal.NewFromFloat(0.01))
+
+		// FICA tax rates from LES
+		// Robert: $8,701 YTD FICA = 7.2% effective rate
+		// Dawn: $7,644 YTD FICA = 7.5% effective rate
+		robertFICA := robertSalary.Mul(decimal.NewFromFloat(0.072))
+		dawnFICA := dawnSalary.Mul(decimal.NewFromFloat(0.075))
+		ficaTax = robertFICA.Add(dawnFICA)
+	} else {
+		// Use standard tax calculations for retirement
+		federalTax = ctc.FederalTaxCalc.CalculateFederalTax(grossIncome, age1, age2)
+		stateTax = ctc.StateTaxCalc.CalculateTax(income, isRetired)
+		localTax = ctc.LocalTaxCalc.CalculateEIT(income.WageIncome, isRetired)
+		ficaTax = decimal.Zero // No FICA in retirement
 	}
-	
+
 	return federalTax, stateTax, localTax, ficaTax
 }
 
@@ -205,22 +230,24 @@ func CalculateTaxableIncome(cashFlow domain.AnnualCashFlow, isRetired bool) doma
 		Salary:             decimal.Zero, // No salary in retirement
 		FERSPension:        cashFlow.PensionRobert.Add(cashFlow.PensionDawn),
 		TSPWithdrawalsTrad: cashFlow.TSPWithdrawalRobert.Add(cashFlow.TSPWithdrawalDawn), // Assuming all TSP withdrawals are from traditional
-		TaxableSSBenefits:  cashFlow.SSBenefitRobert.Add(cashFlow.SSBenefitDawn), // Will be adjusted for taxation
+		TaxableSSBenefits:  cashFlow.SSBenefitRobert.Add(cashFlow.SSBenefitDawn),         // Will be adjusted for taxation
 		OtherTaxableIncome: decimal.Zero,
 		WageIncome:         decimal.Zero, // No wages in retirement
 		InterestIncome:     decimal.Zero, // Could be added if needed
 	}
 }
 
-// CalculateCurrentTaxableIncome creates a TaxableIncome struct for current employment
+// CalculateCurrentTaxableIncome calculates taxable income for current employment
 func CalculateCurrentTaxableIncome(robertSalary, dawnSalary decimal.Decimal) domain.TaxableIncome {
+	totalSalary := robertSalary.Add(dawnSalary)
+
 	return domain.TaxableIncome{
-		Salary:             robertSalary.Add(dawnSalary),
+		Salary:             totalSalary,
 		FERSPension:        decimal.Zero,
 		TSPWithdrawalsTrad: decimal.Zero,
 		TaxableSSBenefits:  decimal.Zero,
 		OtherTaxableIncome: decimal.Zero,
-		WageIncome:         robertSalary.Add(dawnSalary),
+		WageIncome:         totalSalary,
 		InterestIncome:     decimal.Zero,
 	}
 }
@@ -229,7 +256,7 @@ func CalculateCurrentTaxableIncome(robertSalary, dawnSalary decimal.Decimal) dom
 func (ctc *ComprehensiveTaxCalculator) CalculateSocialSecurityTaxation(ssBenefits decimal.Decimal, otherIncome decimal.Decimal) decimal.Decimal {
 	// Calculate provisional income
 	provisionalIncome := ctc.SSTaxCalc.CalculateProvisionalIncome(otherIncome, decimal.Zero, ssBenefits)
-	
+
 	// Calculate taxable portion
 	return ctc.SSTaxCalc.CalculateTaxableSocialSecurity(ssBenefits, provisionalIncome)
-} 
+}

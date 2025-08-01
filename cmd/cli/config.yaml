@@ -2,7 +2,7 @@ personal_details:
     dawn:
         name: Dawn M. Gehrsitz
         birth_date: 1963-07-31T00:00:00Z
-        hire_date: 1988-07-10T00:00:00Z
+        hire_date: 1995-07-11T00:00:00Z
         current_salary: "176620"
         high_3_salary: "176620"
         tsp_balance_traditional: "1525175.90"
@@ -19,7 +19,7 @@ personal_details:
     robert:
         name: Robert F. Gehrsitz
         birth_date: 1965-02-25T00:00:00Z
-        hire_date: 1985-03-20T00:00:00Z
+        hire_date: 1987-06-22T00:00:00Z
         current_salary: "190779"
         high_3_salary: "190779"
         tsp_balance_traditional: "1966168.86"
@@ -50,36 +50,24 @@ scenarios:
     - name: Early Retirement 2025
       robert:
         employee_name: robert
-        retirement_date: 2025-12-31T00:00:00Z
+        retirement_date: 2025-12-01T00:00:00Z
         ss_start_age: 62
         tsp_withdrawal_strategy: 4_percent_rule
       dawn:
         employee_name: dawn
-        retirement_date: 2025-12-31T00:00:00Z
+        retirement_date: 2025-08-30T00:00:00Z
         ss_start_age: 62
         tsp_withdrawal_strategy: 4_percent_rule
     - name: Delayed Retirement 2028
       robert:
         employee_name: robert
-        retirement_date: 2028-12-31T00:00:00Z
-        ss_start_age: 67
-        tsp_withdrawal_strategy: need_based
+        retirement_date: 2027-02-28T00:00:00Z
+        ss_start_age: 62
+        tsp_withdrawal_strategy: 4_percent_rule
         tsp_withdrawal_target_monthly: "3000"
       dawn:
         employee_name: dawn
-        retirement_date: 2028-12-31T00:00:00Z
+        retirement_date: 2025-08-30T00:00:00Z
         ss_start_age: 62
         tsp_withdrawal_strategy: 4_percent_rule
-    - name: Full Retirement Age 2032
-      robert:
-        employee_name: robert
-        retirement_date: 2032-02-25T00:00:00Z  # Robert's 67th birthday
-        ss_start_age: 67
-        tsp_withdrawal_strategy: need_based
-        tsp_withdrawal_target_monthly: "2500"
-      dawn:
-        employee_name: dawn
-        retirement_date: 2030-07-31T00:00:00Z  # Dawn's 67th birthday
-        ss_start_age: 67
-        tsp_withdrawal_strategy: need_based
-        tsp_withdrawal_target_monthly: "2500"
+

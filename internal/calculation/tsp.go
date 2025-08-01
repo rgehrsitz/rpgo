@@ -34,25 +34,25 @@ func NewFourPercentRule(initialBalance decimal.Decimal, inflationRate decimal.De
 // CalculateWithdrawal calculates the withdrawal amount for a given year
 func (fpr *FourPercentRule) CalculateWithdrawal(currentBalance decimal.Decimal, year int, targetIncome decimal.Decimal, age int, isRMDYear bool, rmdAmount decimal.Decimal) decimal.Decimal {
 	var withdrawal decimal.Decimal
-	
+
 	if year == 1 {
 		withdrawal = fpr.FirstWithdrawalAmount
 	} else {
 		// Inflate previous year's withdrawal
 		inflationFactor := decimal.NewFromFloat(1).Add(fpr.InflationRate)
-		withdrawal = fpr.FirstWithdrawalAmount.Mul(inflationFactor.Pow(decimal.NewFromInt(int64(year-1))))
+		withdrawal = fpr.FirstWithdrawalAmount.Mul(inflationFactor.Pow(decimal.NewFromInt(int64(year - 1))))
 	}
-	
+
 	// Handle RMD (Required Minimum Distribution)
 	if isRMDYear && withdrawal.LessThan(rmdAmount) {
 		return rmdAmount
 	}
-	
+
 	// Ensure withdrawal doesn't exceed available balance
 	if withdrawal.GreaterThan(currentBalance) {
 		return currentBalance
 	}
-	
+
 	return withdrawal
 }
 
@@ -75,27 +75,27 @@ func NewNeedBasedWithdrawal(targetMonthly decimal.Decimal) *NeedBasedWithdrawal 
 
 // CalculateWithdrawal calculates the withdrawal amount based on target income
 func (nbw *NeedBasedWithdrawal) CalculateWithdrawal(currentBalance decimal.Decimal, year int, targetIncome decimal.Decimal, age int, isRMDYear bool, rmdAmount decimal.Decimal) decimal.Decimal {
-	// Calculate annual target withdrawal
+	// Calculate annual target withdrawal (this is the amount we want to withdraw)
 	annualTarget := nbw.TargetMonthlyWithdrawal.Mul(decimal.NewFromInt(12))
-	
-	// Calculate gap between other income sources and target
-	withdrawal := annualTarget.Sub(targetIncome)
-	
+
+	// The withdrawal should be the target amount, not the gap
+	withdrawal := annualTarget
+
 	// Ensure withdrawal is not negative
 	if withdrawal.LessThan(decimal.Zero) {
 		withdrawal = decimal.Zero
 	}
-	
+
 	// Handle RMD
 	if isRMDYear && withdrawal.LessThan(rmdAmount) {
 		withdrawal = rmdAmount
 	}
-	
+
 	// Ensure withdrawal doesn't exceed available balance
 	if withdrawal.GreaterThan(currentBalance) {
 		return currentBalance
 	}
-	
+
 	return withdrawal
 }
 
@@ -126,49 +126,49 @@ func (rmd *RMDCalculator) CalculateRMD(traditionalBalance decimal.Decimal, age i
 	if age < rmd.GetRMDAge() {
 		return decimal.Zero
 	}
-	
+
 	// IRS Uniform Lifetime Table (simplified version)
 	distributionPeriods := map[int]decimal.Decimal{
-		72: decimal.NewFromFloat(27.4),
-		73: decimal.NewFromFloat(26.5),
-		74: decimal.NewFromFloat(25.5),
-		75: decimal.NewFromFloat(24.6),
-		76: decimal.NewFromFloat(23.7),
-		77: decimal.NewFromFloat(22.9),
-		78: decimal.NewFromFloat(22.0),
-		79: decimal.NewFromFloat(21.1),
-		80: decimal.NewFromFloat(20.2),
-		81: decimal.NewFromFloat(19.4),
-		82: decimal.NewFromFloat(18.5),
-		83: decimal.NewFromFloat(17.7),
-		84: decimal.NewFromFloat(16.8),
-		85: decimal.NewFromFloat(16.0),
-		86: decimal.NewFromFloat(15.2),
-		87: decimal.NewFromFloat(14.4),
-		88: decimal.NewFromFloat(13.7),
-		89: decimal.NewFromFloat(12.9),
-		90: decimal.NewFromFloat(12.2),
-		91: decimal.NewFromFloat(11.5),
-		92: decimal.NewFromFloat(10.8),
-		93: decimal.NewFromFloat(10.1),
-		94: decimal.NewFromFloat(9.5),
-		95: decimal.NewFromFloat(8.9),
-		96: decimal.NewFromFloat(8.4),
-		97: decimal.NewFromFloat(7.8),
-		98: decimal.NewFromFloat(7.3),
-		99: decimal.NewFromFloat(6.8),
+		72:  decimal.NewFromFloat(27.4),
+		73:  decimal.NewFromFloat(26.5),
+		74:  decimal.NewFromFloat(25.5),
+		75:  decimal.NewFromFloat(24.6),
+		76:  decimal.NewFromFloat(23.7),
+		77:  decimal.NewFromFloat(22.9),
+		78:  decimal.NewFromFloat(22.0),
+		79:  decimal.NewFromFloat(21.1),
+		80:  decimal.NewFromFloat(20.2),
+		81:  decimal.NewFromFloat(19.4),
+		82:  decimal.NewFromFloat(18.5),
+		83:  decimal.NewFromFloat(17.7),
+		84:  decimal.NewFromFloat(16.8),
+		85:  decimal.NewFromFloat(16.0),
+		86:  decimal.NewFromFloat(15.2),
+		87:  decimal.NewFromFloat(14.4),
+		88:  decimal.NewFromFloat(13.7),
+		89:  decimal.NewFromFloat(12.9),
+		90:  decimal.NewFromFloat(12.2),
+		91:  decimal.NewFromFloat(11.5),
+		92:  decimal.NewFromFloat(10.8),
+		93:  decimal.NewFromFloat(10.1),
+		94:  decimal.NewFromFloat(9.5),
+		95:  decimal.NewFromFloat(8.9),
+		96:  decimal.NewFromFloat(8.4),
+		97:  decimal.NewFromFloat(7.8),
+		98:  decimal.NewFromFloat(7.3),
+		99:  decimal.NewFromFloat(6.8),
 		100: decimal.NewFromFloat(6.4),
 	}
-	
+
 	if period, exists := distributionPeriods[age]; exists {
 		return traditionalBalance.Div(period)
 	}
-	
+
 	// For ages beyond 100, use a reasonable estimate
 	if age > 100 {
 		return traditionalBalance.Div(decimal.NewFromFloat(6.0))
 	}
-	
+
 	return decimal.Zero
 }
 
@@ -186,44 +186,44 @@ func ProjectTSP(initialBalance decimal.Decimal, strategy TSPWithdrawalStrategy, 
 	projections := make([]domain.TSPProjection, years)
 	currentBalance := initialBalance
 	rmdCalc := NewRMDCalculator(birthYear)
-	
+
 	for year := 1; year <= years; year++ {
 		// Calculate growth
 		growth := currentBalance.Mul(returnRate)
-		
+
 		// Determine if this is an RMD year
 		age := birthYear + year - 1
 		isRMDYear := age >= rmdCalc.GetRMDAge()
 		rmdAmount := rmdCalc.CalculateRMD(currentBalance, age)
-		
+
 		// Calculate withdrawal
 		var targetIncomeForYear decimal.Decimal
 		if year <= len(targetIncome) {
 			targetIncomeForYear = targetIncome[year-1]
 		}
-		
+
 		withdrawal := strategy.CalculateWithdrawal(currentBalance, year, targetIncomeForYear, age, isRMDYear, rmdAmount)
-		
+
 		// Ensure withdrawal doesn't exceed balance plus growth
 		if withdrawal.GreaterThan(currentBalance.Add(growth)) {
 			withdrawal = currentBalance.Add(growth)
 		}
-		
+
 		// Calculate ending balance
 		endingBalance := currentBalance.Add(growth).Sub(withdrawal)
-		
+
 		projections[year-1] = domain.TSPProjection{
 			Year:             year,
 			BeginningBalance: currentBalance,
-			Growth:          growth,
-			Withdrawal:      withdrawal,
-			RMD:             rmdAmount,
-			EndingBalance:   endingBalance,
+			Growth:           growth,
+			Withdrawal:       withdrawal,
+			RMD:              rmdAmount,
+			EndingBalance:    endingBalance,
 		}
-		
+
 		currentBalance = endingBalance
 	}
-	
+
 	return projections
 }
 
@@ -232,37 +232,37 @@ func ProjectTSPWithTraditionalRoth(initialTraditional decimal.Decimal, initialRo
 	traditionalBalances := make([]decimal.Decimal, years)
 	rothBalances := make([]decimal.Decimal, years)
 	withdrawals := make([]decimal.Decimal, years)
-	
+
 	currentTraditional := initialTraditional
 	currentRoth := initialRoth
 	rmdCalc := NewRMDCalculator(birthYear)
-	
+
 	for year := 1; year <= years; year++ {
 		// Calculate growth for both accounts
 		traditionalGrowth := currentTraditional.Mul(returnRate)
 		rothGrowth := currentRoth.Mul(returnRate)
-		
+
 		// Determine if this is an RMD year (only affects Traditional)
 		age := birthYear + year - 1
 		isRMDYear := age >= rmdCalc.GetRMDAge()
 		rmdAmount := rmdCalc.CalculateRMD(currentTraditional, age)
-		
+
 		// Calculate withdrawal
 		var targetIncomeForYear decimal.Decimal
 		if year <= len(targetIncome) {
 			targetIncomeForYear = targetIncome[year-1]
 		}
-		
+
 		totalWithdrawal := strategy.CalculateWithdrawal(currentTraditional.Add(currentRoth), year, targetIncomeForYear, age, isRMDYear, rmdAmount)
-		
+
 		// Prioritize Roth withdrawals first (no RMD requirement)
 		var rothWithdrawal, traditionalWithdrawal decimal.Decimal
-		
+
 		if isRMDYear && rmdAmount.GreaterThan(decimal.Zero) {
 			// Must take RMD from Traditional first
 			traditionalWithdrawal = rmdAmount
 			remainingWithdrawal := totalWithdrawal.Sub(rmdAmount)
-			
+
 			if remainingWithdrawal.GreaterThan(decimal.Zero) {
 				// Take remaining from Roth
 				if remainingWithdrawal.GreaterThan(currentRoth.Add(rothGrowth)) {
@@ -280,7 +280,7 @@ func ProjectTSPWithTraditionalRoth(initialTraditional decimal.Decimal, initialRo
 				rothWithdrawal = totalWithdrawal
 			}
 		}
-		
+
 		// Ensure withdrawals don't exceed balances
 		if traditionalWithdrawal.GreaterThan(currentTraditional.Add(traditionalGrowth)) {
 			traditionalWithdrawal = currentTraditional.Add(traditionalGrowth)
@@ -288,16 +288,16 @@ func ProjectTSPWithTraditionalRoth(initialTraditional decimal.Decimal, initialRo
 		if rothWithdrawal.GreaterThan(currentRoth.Add(rothGrowth)) {
 			rothWithdrawal = currentRoth.Add(rothGrowth)
 		}
-		
+
 		// Update balances
 		currentTraditional = currentTraditional.Add(traditionalGrowth).Sub(traditionalWithdrawal)
 		currentRoth = currentRoth.Add(rothGrowth).Sub(rothWithdrawal)
-		
+
 		// Store results
 		traditionalBalances[year-1] = currentTraditional
 		rothBalances[year-1] = currentRoth
 		withdrawals[year-1] = traditionalWithdrawal.Add(rothWithdrawal)
 	}
-	
+
 	return traditionalBalances, rothBalances, withdrawals
-} 
+}
