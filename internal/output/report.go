@@ -138,6 +138,38 @@ func (rg *ReportGenerator) GenerateConsoleReport(results *domain.ScenarioCompari
 			fmt.Printf("  Robert's Age:           %d\n", firstRetirementYear.AgeRobert)
 			fmt.Printf("  Dawn's Age:             %d\n", firstRetirementYear.AgeDawn)
 			fmt.Println()
+			
+			// Show first FULL retirement year (no working income)
+			var firstFullRetirementYear domain.AnnualCashFlow
+			var firstFullRetirementYearIndex int
+			foundFullRetirementYear := false
+			
+			for yearIndex, yearData := range scenario.Projection {
+				if yearData.IsRetired && yearData.SalaryRobert.Equal(decimal.Zero) && yearData.SalaryDawn.Equal(decimal.Zero) {
+					firstFullRetirementYear = yearData
+					firstFullRetirementYearIndex = yearIndex
+					foundFullRetirementYear = true
+					break
+				}
+			}
+			
+			if foundFullRetirementYear {
+				fullRetirementYear := 2025 + firstFullRetirementYearIndex
+				fmt.Printf("FIRST FULL RETIREMENT YEAR (NO WORKING INCOME) (%d):\n", fullRetirementYear)
+				fmt.Println("--------------------------------------------------------")
+				fmt.Printf("  Total Gross Income:      %s\n", FormatCurrency(firstFullRetirementYear.TotalGrossIncome))
+				fmt.Printf("  Net Income:              %s\n", FormatCurrency(firstFullRetirementYear.NetIncome))
+				
+				fullRetirementChange := firstFullRetirementYear.NetIncome.Sub(results.BaselineNetIncome)
+				fullRetirementPercentageChange := fullRetirementChange.Div(results.BaselineNetIncome).Mul(decimal.NewFromInt(100))
+				
+				if fullRetirementChange.GreaterThan(decimal.Zero) {
+					fmt.Printf("  CHANGE vs Current:       +%s (+%s)\n", FormatCurrency(fullRetirementChange), FormatPercentage(fullRetirementPercentageChange))
+				} else {
+					fmt.Printf("  CHANGE vs Current:       %s (%s)\n", FormatCurrency(fullRetirementChange), FormatPercentage(fullRetirementPercentageChange))
+				}
+				fmt.Println()
+			}
 		} else {
 			fmt.Println("No retirement year found in projection")
 			fmt.Println()
