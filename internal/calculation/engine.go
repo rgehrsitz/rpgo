@@ -170,10 +170,11 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 				// Get detailed pension calculation
 				pensionCalc := CalculateFERSPension(robert, scenario.Robert.RetirementDate)
 				fmt.Printf("  Multiplier: %s\n", pensionCalc.Multiplier.StringFixed(4))
-				fmt.Printf("  Annual pension (before reduction): %s\n", pensionCalc.AnnualPension.StringFixed(2))
+				fmt.Printf("  ANNUAL pension (before reduction): $%s\n", pensionCalc.AnnualPension.StringFixed(2))
 				fmt.Printf("  Survivor election: %s\n", pensionCalc.SurvivorElection.StringFixed(4))
-				fmt.Printf("  Final pension: %s\n", pensionCalc.ReducedPension.StringFixed(2))
-				fmt.Printf("  Monthly pension amount: %s\n", pensionCalc.ReducedPension.Div(decimal.NewFromInt(12)).StringFixed(2))
+				fmt.Printf("  ANNUAL pension (final): $%s\n", pensionCalc.ReducedPension.StringFixed(2))
+				fmt.Printf("  MONTHLY pension amount: $%s\n", pensionCalc.ReducedPension.Div(decimal.NewFromInt(12)).StringFixed(2))
+				fmt.Printf("  Current-year cash received (partial): $%s\n", pensionRobert.StringFixed(2))
 				fmt.Println()
 			}
 		}
@@ -189,14 +190,34 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		ssRobert := ce.calculateSSBenefitForYear(robert, scenario.Robert.SSStartAge, year, assumptions.COLAGeneralRate)
 		ssDawn := ce.calculateSSBenefitForYear(dawn, scenario.Dawn.SSStartAge, year, assumptions.COLAGeneralRate)
 
-		// Adjust Social Security for partial year if retiring this year
+		// Adjust Social Security for partial year based on eligibility and retirement timing
 		if year == robertRetirementYear && robertRetirementYear >= 0 {
-			// Robert retires during this year - adjust SS for partial year
-			ssRobert = ssRobert.Mul(decimal.NewFromInt(1).Sub(robertWorkFraction))
+			// Robert can start SS when he retires (if 62+) or when he turns 62, whichever is later
+			ageAtRetirement := robert.Age(scenario.Robert.RetirementDate)
+			if ageAtRetirement >= scenario.Robert.SSStartAge {
+				// Can start SS immediately upon retirement
+				ssRobert = ssRobert.Mul(decimal.NewFromInt(1).Sub(robertWorkFraction))
+			} else {
+				// Will start SS later when turns 62
+				ssRobert = decimal.Zero
+			}
 		}
 		if year == dawnRetirementYear && dawnRetirementYear >= 0 {
-			// Dawn retires during this year - adjust SS for partial year
-			ssDawn = ssDawn.Mul(decimal.NewFromInt(1).Sub(dawnWorkFraction))
+			// Dawn turns 62 on July 31, 2025 and retires August 30, 2025
+			// She can start SS immediately upon retirement in August 2025
+			ageAtRetirement := dawn.Age(scenario.Dawn.RetirementDate)
+			if ageAtRetirement >= scenario.Dawn.SSStartAge {
+				// Dawn can start SS in September 2025 (month after retirement)
+				retirementDate := scenario.Dawn.RetirementDate
+				ssStartDate := time.Date(retirementDate.Year(), retirementDate.Month()+1, 1, 0, 0, 0, 0, time.UTC)
+				monthsOfBenefits := 12 - int(ssStartDate.Month()) + 1 // Sept(9) to Dec(12) = 4 months
+				
+				// Prorate SS for partial year
+				ssMonthlyBenefit := ssDawn.Div(decimal.NewFromInt(12))
+				ssDawn = ssMonthlyBenefit.Mul(decimal.NewFromInt(int64(monthsOfBenefits)))
+			} else {
+				ssDawn = decimal.Zero
+			}
 		}
 
 		// Calculate FERS Special Retirement Supplement (only if retired)
@@ -399,6 +420,12 @@ func (ce *CalculationEngine) createTSPStrategy(scenario *domain.RetirementScenar
 		}
 		// Fallback to 4% rule if target not specified
 		return NewFourPercentRule(initialBalance, inflationRate)
+	case "variable_percentage":
+		if scenario.TSPWithdrawalRate != nil {
+			return NewVariablePercentageWithdrawal(initialBalance, *scenario.TSPWithdrawalRate, inflationRate)
+		}
+		// Fallback to 4% rule if rate not specified
+		return NewFourPercentRule(initialBalance, inflationRate)
 	default:
 		// Default to 4% rule
 		return NewFourPercentRule(initialBalance, inflationRate)
@@ -485,14 +512,31 @@ func (ce *CalculationEngine) calculateFEHBPremium(employee *domain.Employee, yea
 	return adjustedPremium.Mul(decimal.NewFromInt(26)) // 26 pay periods per year
 }
 
-// calculateMedicarePremium calculates Medicare premiums (simplified)
+// calculateMedicarePremium calculates Medicare premiums with IRMAA considerations
 func (ce *CalculationEngine) calculateMedicarePremium(robert, dawn *domain.Employee, projectionDate time.Time, _ *domain.GlobalAssumptions) decimal.Decimal {
-	// Simplified Medicare calculation - could be enhanced with IRMAA tiers
-	if dateutil.IsMedicareEligible(robert.BirthDate, projectionDate) || dateutil.IsMedicareEligible(dawn.BirthDate, projectionDate) {
-		// Basic Medicare Part B premium (simplified)
-		return decimal.NewFromInt(174).Mul(decimal.NewFromInt(12)) // Monthly premium * 12
+	var totalPremium decimal.Decimal
+	
+	// Check if Robert is Medicare eligible
+	if dateutil.IsMedicareEligible(robert.BirthDate, projectionDate) {
+		// TODO: Implement proper IRMAA calculation based on AGI
+		// For high AGI (>$250k), IRMAA surcharges will apply
+		// Base Part B premium 2025: ~$185/month
+		// IRMAA tiers can add $70-$500+ per month per person
+		basePremium := decimal.NewFromFloat(185.0) // 2025 estimated base premium
+		irmaaPlaceholder := decimal.NewFromFloat(200.0) // Placeholder for high-income surcharge
+		robertPremium := basePremium.Add(irmaaPlaceholder).Mul(decimal.NewFromInt(12))
+		totalPremium = totalPremium.Add(robertPremium)
 	}
-	return decimal.Zero
+	
+	// Check if Dawn is Medicare eligible  
+	if dateutil.IsMedicareEligible(dawn.BirthDate, projectionDate) {
+		basePremium := decimal.NewFromFloat(185.0)
+		irmaaPlaceholder := decimal.NewFromFloat(200.0) // Placeholder for high-income surcharge
+		dawnPremium := basePremium.Add(irmaaPlaceholder).Mul(decimal.NewFromInt(12))
+		totalPremium = totalPremium.Add(dawnPremium)
+	}
+	
+	return totalPremium
 }
 
 // calculateRMD calculates Required Minimum Distribution
@@ -535,14 +579,9 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, _ *do
 		// Calculate taxes for transition year (FICA only on working income, with proration)
 		federalTax, stateTax, localTax, _ := ce.TaxCalc.CalculateTotalTaxes(taxableIncome, false, ageRobert, ageDawn, totalWorkingIncome)
 
-		// Calculate FICA with proration for transition year
-		// Calculate work fractions for FICA proration
-		robertWorkFraction := workingIncomeRobert.Div(robert.CurrentSalary)
-		dawnWorkFraction := workingIncomeDawn.Div(dawn.CurrentSalary)
-
-		// Calculate FICA for each person separately with proration
-		robertFICA := ce.TaxCalc.FICATaxCalc.CalculateFICAWithProration(robert.CurrentSalary, totalWorkingIncome, robertWorkFraction)
-		dawnFICA := ce.TaxCalc.FICATaxCalc.CalculateFICAWithProration(dawn.CurrentSalary, totalWorkingIncome, dawnWorkFraction)
+		// Calculate FICA only on actual working income (no proration needed since we already have working income)
+		robertFICA := ce.TaxCalc.FICATaxCalc.CalculateFICA(workingIncomeRobert, totalWorkingIncome)
+		dawnFICA := ce.TaxCalc.FICATaxCalc.CalculateFICA(workingIncomeDawn, totalWorkingIncome)
 		ficaTax := robertFICA.Add(dawnFICA)
 
 		return federalTax, stateTax, localTax, ficaTax

@@ -5,6 +5,24 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// TAX CALCULATION ASSUMPTIONS:
+// 
+// 1. Federal Tax Brackets: Uses 2025 tax brackets for all projection years
+//    - No inflation indexing applied to future years
+//    - Standard deduction: $30,000 (2025 MFJ estimate)
+//    - Additional standard deduction for age 65+: $1,550 per person
+//
+// 2. Pennsylvania State Tax: 3.07% flat tax rate (no inflation adjustment)
+//
+// 3. Upper Makefield EIT: 1% flat tax on earned income only
+//    - Does not apply to retirement income (pensions, TSP, SS)
+//
+// 4. Medicare Part B & IRMAA: Placeholder implementation
+//    - Base premium: $185/month per person (2025 estimate)
+//    - IRMAA surcharge: $200/month placeholder (needs AGI-based calculation)
+//
+// TODO: Consider adding inflation indexing for long-term projections
+
 // TaxBracket represents a federal tax bracket
 type TaxBracket struct {
 	Min  decimal.Decimal
@@ -129,7 +147,7 @@ type FICACalculator struct {
 func NewFICACalculator2025() *FICACalculator {
 	return &FICACalculator{
 		Year:                2025,
-		SSWageBase:          decimal.NewFromInt(168600), // 2025 estimated
+		SSWageBase:          decimal.NewFromInt(176100), // 2025 official
 		SSRate:              decimal.NewFromFloat(0.062),
 		MedicareRate:        decimal.NewFromFloat(0.0145),
 		AdditionalRate:      decimal.NewFromFloat(0.009),
@@ -146,12 +164,14 @@ func (fc *FICACalculator) CalculateFICA(wages decimal.Decimal, totalHouseholdWag
 	// Medicare tax (no cap)
 	medicareTax := wages.Mul(fc.MedicareRate)
 
-	// Additional Medicare tax for high earners
+	// Additional Medicare tax for high earners - proportionally allocated
 	var additionalMedicare decimal.Decimal
 	if totalHouseholdWages.GreaterThan(fc.HighIncomeThreshold) {
 		excessWages := totalHouseholdWages.Sub(fc.HighIncomeThreshold)
-		applicableExcess := decimal.Min(excessWages, wages)
-		additionalMedicare = applicableExcess.Mul(fc.AdditionalRate)
+		totalAdditionalMedicare := excessWages.Mul(fc.AdditionalRate)
+		// Allocate proportionally based on individual wages
+		wagesProportion := wages.Div(totalHouseholdWages)
+		additionalMedicare = totalAdditionalMedicare.Mul(wagesProportion)
 	}
 
 	return ssTax.Add(medicareTax).Add(additionalMedicare)
@@ -161,6 +181,7 @@ func (fc *FICACalculator) CalculateFICA(wages decimal.Decimal, totalHouseholdWag
 func (fc *FICACalculator) CalculateFICAWithProration(wages decimal.Decimal, totalHouseholdWages decimal.Decimal, workFraction decimal.Decimal) decimal.Decimal {
 	// Apply work fraction to wages first
 	proratedWages := wages.Mul(workFraction)
+	proratedHouseholdWages := totalHouseholdWages.Mul(workFraction)
 	
 	// Social Security tax (capped per individual, then prorated)
 	ssWages := decimal.Min(proratedWages, fc.SSWageBase)
@@ -169,12 +190,14 @@ func (fc *FICACalculator) CalculateFICAWithProration(wages decimal.Decimal, tota
 	// Medicare tax (no cap, prorated)
 	medicareTax := proratedWages.Mul(fc.MedicareRate)
 
-	// Additional Medicare tax for high earners (prorated)
+	// Additional Medicare tax for high earners (prorated and proportionally allocated)
 	var additionalMedicare decimal.Decimal
-	if totalHouseholdWages.GreaterThan(fc.HighIncomeThreshold) {
-		excessWages := totalHouseholdWages.Sub(fc.HighIncomeThreshold)
-		applicableExcess := decimal.Min(excessWages, proratedWages)
-		additionalMedicare = applicableExcess.Mul(fc.AdditionalRate)
+	if proratedHouseholdWages.GreaterThan(fc.HighIncomeThreshold) {
+		excessWages := proratedHouseholdWages.Sub(fc.HighIncomeThreshold)
+		totalAdditionalMedicare := excessWages.Mul(fc.AdditionalRate)
+		// Allocate proportionally based on individual prorated wages
+		wagesProportion := proratedWages.Div(proratedHouseholdWages)
+		additionalMedicare = totalAdditionalMedicare.Mul(wagesProportion)
 	}
 
 	return ssTax.Add(medicareTax).Add(additionalMedicare)

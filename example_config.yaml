@@ -58,30 +58,30 @@ global_assumptions:
     municipality: "Upper Makefield Township"
 
 scenarios:
-  - name: "Both Retire Early - Dec 2025"
+  - name: "Both Retire in 2025"
     robert:
       employee_name: "robert"
-      retirement_date: "2025-12-01T00:00:00Z"
+      retirement_date: "2025-12-27T00:00:00Z"
       ss_start_age: 62
-      tsp_withdrawal_strategy: "4_percent_rule"
-      tsp_withdrawal_target_monthly: "2000.00"
+      tsp_withdrawal_strategy: "variable_percentage"
+      tsp_withdrawal_rate: "0.02"  # 3.5% withdrawal rate
     dawn:
       employee_name: "dawn"
       retirement_date: "2025-08-30T00:00:00Z"
       ss_start_age: 62
-      tsp_withdrawal_strategy: "4_percent_rule"
-      tsp_withdrawal_target_monthly: "1700.00"
+      tsp_withdrawal_strategy: "variable_percentage"
+      tsp_withdrawal_rate: "0.02"   # 3.0% withdrawal rate
       
-  - name: "Both Retire at Robert's 62 - Feb 2027"
+  - name: "Rob Retires at 62 - Feb 2027"
     robert:
       employee_name: "robert"
       retirement_date: "2027-02-28T00:00:00Z"
       ss_start_age: 62
-      tsp_withdrawal_strategy: "4_percent_rule"
-      tsp_withdrawal_target_monthly: "2000.00"
+      tsp_withdrawal_strategy: "variable_percentage"
+      tsp_withdrawal_rate: "0.02"   # 4.0% withdrawal rate
     dawn:
       employee_name: "dawn"
       retirement_date: "2025-08-30T00:00:00Z"
       ss_start_age: 62
-      tsp_withdrawal_strategy: "4_percent_rule"
-      tsp_withdrawal_target_monthly: "1700.00"
+      tsp_withdrawal_strategy: "variable_percentage"
+      tsp_withdrawal_rate: "0.02"   # 3.0% withdrawal rate

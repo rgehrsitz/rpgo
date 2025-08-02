@@ -104,6 +104,55 @@ func (nbw *NeedBasedWithdrawal) GetStrategyName() string {
 	return "need_based"
 }
 
+// VariablePercentageWithdrawal implements a strategy with a configurable percentage rate
+type VariablePercentageWithdrawal struct {
+	WithdrawalRate   decimal.Decimal
+	InflationRate    decimal.Decimal
+	InitialBalance   decimal.Decimal
+	FirstWithdrawalAmount decimal.Decimal
+}
+
+// NewVariablePercentageWithdrawal creates a new VariablePercentageWithdrawal strategy
+func NewVariablePercentageWithdrawal(initialBalance decimal.Decimal, withdrawalRate decimal.Decimal, inflationRate decimal.Decimal) *VariablePercentageWithdrawal {
+	initialWithdrawal := initialBalance.Mul(withdrawalRate)
+	return &VariablePercentageWithdrawal{
+		WithdrawalRate:        withdrawalRate,
+		InflationRate:         inflationRate,
+		InitialBalance:        initialBalance,
+		FirstWithdrawalAmount: initialWithdrawal,
+	}
+}
+
+// CalculateWithdrawal calculates the withdrawal amount for a given year using the variable percentage
+func (vpw *VariablePercentageWithdrawal) CalculateWithdrawal(currentBalance decimal.Decimal, year int, targetIncome decimal.Decimal, age int, isRMDYear bool, rmdAmount decimal.Decimal) decimal.Decimal {
+	var withdrawal decimal.Decimal
+
+	if year == 1 {
+		withdrawal = vpw.FirstWithdrawalAmount
+	} else {
+		// Inflate previous year's withdrawal
+		inflationFactor := decimal.NewFromFloat(1).Add(vpw.InflationRate)
+		withdrawal = vpw.FirstWithdrawalAmount.Mul(inflationFactor.Pow(decimal.NewFromInt(int64(year - 1))))
+	}
+
+	// Handle RMD (Required Minimum Distribution)
+	if isRMDYear && withdrawal.LessThan(rmdAmount) {
+		return rmdAmount
+	}
+
+	// Ensure withdrawal doesn't exceed available balance
+	if withdrawal.GreaterThan(currentBalance) {
+		return currentBalance
+	}
+
+	return withdrawal
+}
+
+// GetStrategyName returns the name of this strategy
+func (vpw *VariablePercentageWithdrawal) GetStrategyName() string {
+	return "variable_percentage"
+}
+
 // RMDCalculator calculates Required Minimum Distributions
 type RMDCalculator struct {
 	BirthYear int

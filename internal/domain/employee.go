@@ -36,6 +36,7 @@ type RetirementScenario struct {
 	SSStartAge                int             `yaml:"ss_start_age" json:"ss_start_age"`
 	TSPWithdrawalStrategy     string          `yaml:"tsp_withdrawal_strategy" json:"tsp_withdrawal_strategy"`
 	TSPWithdrawalTargetMonthly *decimal.Decimal `yaml:"tsp_withdrawal_target_monthly,omitempty" json:"tsp_withdrawal_target_monthly,omitempty"`
+	TSPWithdrawalRate         *decimal.Decimal `yaml:"tsp_withdrawal_rate,omitempty" json:"tsp_withdrawal_rate,omitempty"`
 }
 
 // Scenario represents a complete retirement scenario for both employees

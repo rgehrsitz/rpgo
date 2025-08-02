@@ -54,6 +54,16 @@ func (rg *ReportGenerator) GenerateConsoleReport(results *domain.ScenarioCompari
 	fmt.Println("DETAILED FERS RETIREMENT INCOME ANALYSIS")
 	fmt.Println("=================================================================================")
 	fmt.Println()
+	
+	// Document key assumptions
+	fmt.Println("KEY ASSUMPTIONS:")
+	fmt.Println("• General COLA (FERS pension & SS): 2.5% annually")
+	fmt.Println("• FEHB premium inflation: 4.0% annually") 
+	fmt.Println("• TSP growth pre-retirement: 7.0% annually")
+	fmt.Println("• TSP growth post-retirement: 5.0% annually")
+	fmt.Println("• Social Security wage base indexing: ~5% annually (2025 est: $168,600)")
+	fmt.Println("• Tax brackets: 2025 levels held constant (no inflation indexing)")
+	fmt.Println()
 
 	// Current Net Income Breakdown
 	fmt.Println("CURRENT NET INCOME BREAKDOWN (Pre-Retirement)")
@@ -88,7 +98,8 @@ func (rg *ReportGenerator) GenerateConsoleReport(results *domain.ScenarioCompari
 		if foundRetirementYear {
 			// Calculate the actual year (2025 + yearIndex)
 			actualYear := 2025 + firstRetirementYearIndex
-			fmt.Printf("FIRST FULL RETIREMENT YEAR (%d) INCOME BREAKDOWN:\n", actualYear)
+			fmt.Printf("FIRST RETIREMENT YEAR (%d) INCOME BREAKDOWN:\n", actualYear)
+			fmt.Println("(Note: Amounts shown are current-year cash received - may be partial year)")
 			fmt.Println("----------------------------------------")
 
 			// Income Sources
@@ -278,6 +289,7 @@ func (rg *ReportGenerator) GenerateConsoleReport(results *domain.ScenarioCompari
 			actualYear := 2025 + yearIndex
 
 			fmt.Printf("\nYEAR %d (%s):\n", actualYear, yearData.Date.Format("2006"))
+			fmt.Println("(Current-year cash received)")
 			fmt.Println(strings.Repeat("-", 40))
 
 			// Income Sources

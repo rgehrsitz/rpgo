@@ -236,30 +236,30 @@ func TestFICACalculation(t *testing.T) {
 		},
 		{
 			name:                "At SS wage base",
-			wages:               decimal.NewFromInt(168600), // 2025 SS wage base
-			totalHouseholdWages: decimal.NewFromInt(168600),
-			expectedFICA:        decimal.NewFromFloat(14424.70), // 168600 * (0.062 + 0.0145)
+			wages:               decimal.NewFromInt(176100), // 2025 SS wage base
+			totalHouseholdWages: decimal.NewFromInt(176100),
+			expectedFICA:        decimal.NewFromFloat(13471.65), // 176100 * (0.062 + 0.0145)
 			description:         "FICA at Social Security wage base limit",
 		},
 		{
 			name:                "Above SS wage base",
 			wages:               decimal.NewFromInt(200000),
 			totalHouseholdWages: decimal.NewFromInt(200000),
-			expectedFICA:        decimal.NewFromFloat(13365.20), // SS capped + Medicare on full amount
+			expectedFICA:        decimal.NewFromFloat(13818.20), // SS capped at 176100 + Medicare on full 200000
 			description:         "FICA with SS cap but full Medicare",
 		},
 		{
 			name:                "High income - additional Medicare",
 			wages:               decimal.NewFromInt(300000),
 			totalHouseholdWages: decimal.NewFromInt(300000),
-			expectedFICA:        decimal.NewFromFloat(15815.20), // Complex calculation with additional Medicare
+			expectedFICA:        decimal.NewFromFloat(15718.20), // SS capped at 176100 + Medicare + Additional Medicare
 			description:         "High income with additional 0.9% Medicare tax",
 		},
 		{
 			name:                "Robert and Dawn working scenario",
 			wages:               decimal.NewFromFloat(190779), // Robert's salary
 			totalHouseholdWages: decimal.NewFromFloat(367399), // Combined
-			expectedFICA:        decimal.NewFromFloat(14594.59), // Robert's portion of household FICA
+			expectedFICA:        decimal.NewFromFloat(14233.30), // Robert's portion of household FICA with proportional additional Medicare
 			description:         "Robert's FICA from actual scenario",
 		},
 	}

@@ -58,6 +58,7 @@ reports/
 *.html
 *.csv
 *.json
+*.xlsx
 
 # Backup files
 *.bak
@@ -73,3 +74,4 @@ coverage.html
 
 # Air live reload
 tmp/ 
+

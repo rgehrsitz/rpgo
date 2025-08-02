@@ -194,14 +194,20 @@ func (ip *InputParser) validateRetirementScenario(employeeName string, scenario 
 	if scenario.SSStartAge < 62 || scenario.SSStartAge > 70 {
 		return fmt.Errorf("Social Security start age must be between 62 and 70")
 	}
-	if scenario.TSPWithdrawalStrategy != "4_percent_rule" && scenario.TSPWithdrawalStrategy != "need_based" {
-		return fmt.Errorf("TSP withdrawal strategy must be '4_percent_rule' or 'need_based'")
+	if scenario.TSPWithdrawalStrategy != "4_percent_rule" && scenario.TSPWithdrawalStrategy != "need_based" && scenario.TSPWithdrawalStrategy != "variable_percentage" {
+		return fmt.Errorf("TSP withdrawal strategy must be '4_percent_rule', 'need_based', or 'variable_percentage'")
 	}
 	if scenario.TSPWithdrawalStrategy == "need_based" && scenario.TSPWithdrawalTargetMonthly == nil {
 		return fmt.Errorf("TSP withdrawal target monthly is required for need_based strategy")
 	}
+	if scenario.TSPWithdrawalStrategy == "variable_percentage" && scenario.TSPWithdrawalRate == nil {
+		return fmt.Errorf("TSP withdrawal rate is required for variable_percentage strategy")
+	}
 	if scenario.TSPWithdrawalTargetMonthly != nil && scenario.TSPWithdrawalTargetMonthly.LessThanOrEqual(decimal.Zero) {
 		return fmt.Errorf("TSP withdrawal target monthly must be positive")
+	}
+	if scenario.TSPWithdrawalRate != nil && (scenario.TSPWithdrawalRate.LessThanOrEqual(decimal.Zero) || scenario.TSPWithdrawalRate.GreaterThan(decimal.NewFromFloat(0.2))) {
+		return fmt.Errorf("TSP withdrawal rate must be between 0 and 20%%")
 	}
 	
 	return nil
