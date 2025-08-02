@@ -245,4 +245,132 @@ func TestProjectFERSPension(t *testing.T) {
 		assert.True(t, projections[i].GreaterThan(projections[i-1]),
 			"Year %d pension should be greater than year %d", i+1, i)
 	}
+}
+
+// TestFERSPensionOfficialExamples tests FERS pension calculations using official OPM examples
+func TestFERSPensionOfficialExamples(t *testing.T) {
+	tests := []struct {
+		name           string
+		birthDate      time.Time
+		hireDate       time.Time
+		retirementDate time.Time
+		high3Salary    decimal.Decimal
+		expectedAnnual decimal.Decimal
+		description    string
+	}{
+		{
+			name:           "OPM Example: Age 62, 25 years service, $80k salary",
+			birthDate:      time.Date(1963, 1, 1, 0, 0, 0, 0, time.UTC),
+			hireDate:       time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
+			retirementDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			high3Salary:    decimal.NewFromInt(80000),
+			expectedAnnual: decimal.NewFromInt(22000), // 25 * 80000 * 0.011 = 22000
+			description:    "Enhanced multiplier (1.1%) at age 62 with 20+ years",
+		},
+		{
+			name:           "OPM Example: Age 60, 30 years service, $95k salary",
+			birthDate:      time.Date(1965, 1, 1, 0, 0, 0, 0, time.UTC),
+			hireDate:       time.Date(1995, 1, 1, 0, 0, 0, 0, time.UTC),
+			retirementDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			high3Salary:    decimal.NewFromInt(95000),
+			expectedAnnual: decimal.NewFromInt(28500), // 30 * 95000 * 0.01 = 28500
+			description:    "Standard multiplier (1.0%) at age 60 (before 62)",
+		},
+		{
+			name:           "Robert's Actual Scenario: Age 60, 38.44 years, $190k salary",
+			birthDate:      time.Date(1965, 2, 25, 0, 0, 0, 0, time.UTC),
+			hireDate:       time.Date(1987, 6, 22, 0, 0, 0, 0, time.UTC),
+			retirementDate: time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
+			high3Salary:    decimal.NewFromInt(190000),
+			expectedAnnual: decimal.NewFromFloat(73045.31), // 38.44 * 190000 * 0.01 ≈ 73045
+			description:    "Real scenario: Standard multiplier due to age < 62",
+		},
+		{
+			name:           "Dawn's Actual Scenario: Age 62, ~30.1 years, $164k salary", 
+			birthDate:      time.Date(1963, 7, 31, 0, 0, 0, 0, time.UTC),
+			hireDate:       time.Date(1995, 7, 11, 0, 0, 0, 0, time.UTC),
+			retirementDate: time.Date(2025, 8, 30, 0, 0, 0, 0, time.UTC),
+			high3Salary:    decimal.NewFromInt(164000),
+			expectedAnnual: decimal.NewFromFloat(54350), // ~30.1 * 164000 * 0.011 ≈ 54350
+			description:    "Real scenario: Enhanced multiplier at age 62 with 20+ years",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			employee := &domain.Employee{
+				BirthDate:   tt.birthDate,
+				HireDate:    tt.hireDate,
+				High3Salary: tt.high3Salary,
+				SurvivorBenefitElectionPercent: decimal.Zero,
+			}
+
+			result := CalculateFERSPension(employee, tt.retirementDate)
+			
+			// Allow for small rounding differences (within $50)
+			difference := result.ReducedPension.Sub(tt.expectedAnnual).Abs()
+			assert.True(t, difference.LessThan(decimal.NewFromInt(50)),
+				"%s: Expected %s, got %s (difference: %s)", 
+				tt.description, tt.expectedAnnual.StringFixed(2), 
+				result.ReducedPension.StringFixed(2), difference.StringFixed(2))
+		})
+	}
+}
+
+// TestFERSEligibilityScenarios tests various FERS eligibility scenarios
+func TestFERSEligibilityScenarios(t *testing.T) {
+	tests := []struct {
+		name           string
+		birthDate      time.Time
+		hireDate       time.Time
+		retirementDate time.Time
+		expectedValid  bool
+		expectedReason string
+	}{
+		{
+			name:           "Immediate: Age 62+ with 5 years",
+			birthDate:      time.Date(1963, 1, 1, 0, 0, 0, 0, time.UTC),
+			hireDate:       time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+			retirementDate: time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
+			expectedValid:  true,
+			expectedReason: "Eligible for immediate annuity at age 62+",
+		},
+		{
+			name:           "Immediate: Age 60 with 20 years", 
+			birthDate:      time.Date(1965, 1, 1, 0, 0, 0, 0, time.UTC),
+			hireDate:       time.Date(2005, 1, 1, 0, 0, 0, 0, time.UTC),
+			retirementDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			expectedValid:  true,
+			expectedReason: "Eligible for immediate annuity at MRA with 10+ years",
+		},
+		{
+			name:           "Immediate: MRA with 30 years",
+			birthDate:      time.Date(1967, 1, 1, 0, 0, 0, 0, time.UTC), // MRA = 56.5, rounds to 56
+			hireDate:       time.Date(1995, 1, 1, 0, 0, 0, 0, time.UTC),
+			retirementDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), // Age 58 - above MRA
+			expectedValid:  true,
+			expectedReason: "Eligible for immediate annuity at MRA with 10+ years",
+		},
+		{
+			name:           "Not eligible: Under MRA",
+			birthDate:      time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), // MRA = 57
+			hireDate:       time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
+			retirementDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), // Age 55
+			expectedValid:  false,
+			expectedReason: "Employee has not reached Minimum Retirement Age",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			employee := &domain.Employee{
+				BirthDate: tt.birthDate,
+				HireDate:  tt.hireDate,
+			}
+			
+			valid, reason := ValidateFERSEligibility(employee, tt.retirementDate)
+			assert.Equal(t, tt.expectedValid, valid, "Validity check failed for %s", tt.name)
+			assert.Contains(t, reason, tt.expectedReason, "Reason check failed for %s", tt.name)
+		})
+	}
 } 

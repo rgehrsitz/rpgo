@@ -129,21 +129,6 @@ func (rg *ReportGenerator) GenerateConsoleReport(results *domain.ScenarioCompari
 				fmt.Printf("  Monthly Change: %s\n", FormatCurrency(monthlyChange))
 			}
 
-			// Add spendable cash analysis
-			fmt.Println()
-			fmt.Printf("SPENDABLE CASH ANALYSIS:")
-			fmt.Println("------------------------")
-			currentSpendable := results.BaselineNetIncome.Add(decimal.NewFromFloat(69812.52)) // Add back TSP contributions
-			fmt.Printf("  Current Spendable Cash: %s (net + TSP contributions)\n", FormatCurrency(currentSpendable))
-			fmt.Printf("  Retirement Spendable:   %s (all net income is spendable)\n", FormatCurrency(firstRetirementYear.NetIncome))
-			spendableChange := firstRetirementYear.NetIncome.Sub(currentSpendable)
-			spendablePercentage := spendableChange.Div(currentSpendable).Mul(decimal.NewFromInt(100))
-			if spendableChange.GreaterThan(decimal.Zero) {
-				fmt.Printf("  SPENDABLE CHANGE: +%s (+%s)\n", FormatCurrency(spendableChange), FormatPercentage(spendablePercentage))
-			} else {
-				fmt.Printf("  SPENDABLE CHANGE: %s (%s)\n", FormatCurrency(spendableChange), FormatPercentage(spendablePercentage))
-			}
-			fmt.Println()
 
 			// Retirement Status
 			fmt.Println("RETIREMENT STATUS:")
@@ -205,50 +190,50 @@ func (rg *ReportGenerator) GenerateConsoleReport(results *domain.ScenarioCompari
 	fmt.Println("SUMMARY & RECOMMENDATIONS")
 	fmt.Println("=========================")
 
-	// Find best scenario based on spendable cash (apples-to-apples comparison)
+	// Find best scenario based on net income comparison (true take-home to take-home)
 	var bestScenario domain.ScenarioSummary
-	var bestSpendable decimal.Decimal
+	var bestRetirementIncome decimal.Decimal
 
-	// Calculate current spendable cash (net income + TSP contributions)
-	currentSpendable := results.BaselineNetIncome.Add(decimal.NewFromFloat(69812.52))
+	// Use current take-home income as baseline (no TSP additions - this is actual spendable money)
+	currentTakeHome := results.BaselineNetIncome
 
 	// Debug output to see what's happening
 	fmt.Println("DEBUG: Recommendation Logic:")
-	fmt.Printf("  Current Spendable Cash: %s\n", FormatCurrency(currentSpendable))
+	fmt.Printf("  Current Take-Home Income: %s\n", FormatCurrency(currentTakeHome))
 
 	for i, scenario := range results.Scenarios {
 		// Find the first full retirement year for this scenario
-		var firstRetirementSpendable decimal.Decimal
+		var firstRetirementIncome decimal.Decimal
 		for _, yearData := range scenario.Projection {
 			if yearData.IsRetired {
-				firstRetirementSpendable = yearData.NetIncome
+				firstRetirementIncome = yearData.NetIncome
 				break
 			}
 		}
 
-		fmt.Printf("  Scenario %d (%s): %s (first retirement year)\n", i+1, scenario.Name, FormatCurrency(firstRetirementSpendable))
+		fmt.Printf("  Scenario %d (%s): %s (first retirement year)\n", i+1, scenario.Name, FormatCurrency(firstRetirementIncome))
 
-		if firstRetirementSpendable.GreaterThan(bestSpendable) {
-			bestSpendable = firstRetirementSpendable
+		if firstRetirementIncome.GreaterThan(bestRetirementIncome) {
+			bestRetirementIncome = firstRetirementIncome
 			bestScenario = scenario
-			fmt.Printf("    -> NEW BEST (spendable: %s)\n", FormatCurrency(bestSpendable))
+			fmt.Printf("    -> NEW BEST (income: %s)\n", FormatCurrency(bestRetirementIncome))
 		}
 	}
 
-	// Calculate spendable change using the first retirement year for the best scenario
-	var bestScenarioFirstRetirementSpendable decimal.Decimal
+	// Calculate net income change using the first retirement year for the best scenario
+	var bestScenarioFirstRetirementIncome decimal.Decimal
 	for _, yearData := range bestScenario.Projection {
 		if yearData.IsRetired {
-			bestScenarioFirstRetirementSpendable = yearData.NetIncome
+			bestScenarioFirstRetirementIncome = yearData.NetIncome
 			break
 		}
 	}
-	spendableChange := bestScenarioFirstRetirementSpendable.Sub(currentSpendable)
-	percentageChange := spendableChange.Div(currentSpendable).Mul(decimal.NewFromInt(100))
-	monthlyChange := spendableChange.Div(decimal.NewFromInt(12))
+	netIncomeChange := bestScenarioFirstRetirementIncome.Sub(currentTakeHome)
+	percentageChange := netIncomeChange.Div(currentTakeHome).Mul(decimal.NewFromInt(100))
+	monthlyChange := netIncomeChange.Div(decimal.NewFromInt(12))
 
 	fmt.Printf("Recommended Scenario: %s\n", bestScenario.Name)
-	fmt.Printf("Spendable Cash Change: %s (%s)\n", FormatCurrency(spendableChange), FormatPercentage(percentageChange))
+	fmt.Printf("Take-Home Income Change: %s (%s)\n", FormatCurrency(netIncomeChange), FormatPercentage(percentageChange))
 	fmt.Printf("Monthly Change: %s\n", FormatCurrency(monthlyChange))
 	fmt.Println("• Evaluate healthcare costs and Medicare coordination")
 

@@ -202,8 +202,10 @@ func InterpolateSSBenefit(benefit62, benefitFRA, benefit70 decimal.Decimal, clai
 func CalculateSSBenefitForYear(employee *domain.Employee, ssStartAge int, year int, colaRate decimal.Decimal) decimal.Decimal {
 	// Start projection from 2025, not current year
 	projectionStartYear := 2025
-	projectionDate := time.Date(projectionStartYear+year, 1, 1, 0, 0, 0, 0, time.UTC)
-	age := employee.Age(projectionDate)
+	
+	// Use end of year for age calculation to account for people who turn eligible during the year
+	endOfYearDate := time.Date(projectionStartYear+year, 12, 31, 0, 0, 0, 0, time.UTC)
+	age := employee.Age(endOfYearDate)
 
 	// Check if Social Security has started
 	if age < ssStartAge {

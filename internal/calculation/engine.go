@@ -173,7 +173,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 				fmt.Printf("  Annual pension (before reduction): %s\n", pensionCalc.AnnualPension.StringFixed(2))
 				fmt.Printf("  Survivor election: %s\n", pensionCalc.SurvivorElection.StringFixed(4))
 				fmt.Printf("  Final pension: %s\n", pensionCalc.ReducedPension.StringFixed(2))
-				fmt.Printf("  Monthly pension amount: %s\n", pensionRobert.Div(decimal.NewFromInt(12)).StringFixed(2))
+				fmt.Printf("  Monthly pension amount: %s\n", pensionCalc.ReducedPension.Div(decimal.NewFromInt(12)).StringFixed(2))
 				fmt.Println()
 			}
 		}
@@ -631,9 +631,6 @@ func (ce *CalculationEngine) calculateCurrentNetIncome(robert, dawn *domain.Empl
 	// Calculate net income: gross - taxes - FEHB - TSP contributions
 	netIncome := grossIncome.Sub(federalTax).Sub(stateTax).Sub(localTax).Sub(ficaTax).Sub(fehbPremium).Sub(tspContributions)
 
-	// For comparison purposes, also calculate "spendable cash" (net income + TSP contributions)
-	// This makes the comparison apples-to-apples: spendable cash vs spendable cash
-	spendableCash := netIncome.Add(tspContributions)
 
 	// Debug output for verification
 	fmt.Println("CURRENT NET INCOME CALCULATION BREAKDOWN:")
@@ -651,10 +648,8 @@ func (ce *CalculationEngine) calculateCurrentNetIncome(robert, dawn *domain.Empl
 	fmt.Printf("  TSP Contributions:    $%s\n", tspContributions.StringFixed(2))
 	fmt.Printf("  Total Deductions:     $%s\n", federalTax.Add(stateTax).Add(localTax).Add(ficaTax).Add(fehbPremium).Add(tspContributions).StringFixed(2))
 	fmt.Println()
-	fmt.Printf("NET INCOME:             $%s\n", netIncome.StringFixed(2))
-	fmt.Printf("SPENDABLE CASH:         $%s (net + TSP contributions)\n", spendableCash.StringFixed(2))
-	fmt.Printf("Monthly Net Income:     $%s\n", netIncome.Div(decimal.NewFromInt(12)).StringFixed(2))
-	fmt.Printf("Monthly Spendable Cash: $%s\n", spendableCash.Div(decimal.NewFromInt(12)).StringFixed(2))
+	fmt.Printf("CURRENT NET TAKE-HOME:  $%s\n", netIncome.StringFixed(2))
+	fmt.Printf("Monthly Take-Home:      $%s\n", netIncome.Div(decimal.NewFromInt(12)).StringFixed(2))
 	fmt.Println()
 
 	return netIncome
@@ -663,29 +658,29 @@ func (ce *CalculationEngine) calculateCurrentNetIncome(robert, dawn *domain.Empl
 // generateImpactAnalysis generates impact analysis for scenarios
 func (ce *CalculationEngine) generateImpactAnalysis(baselineNetIncome decimal.Decimal, scenarios []domain.ScenarioSummary) domain.ImpactAnalysis {
 	var bestScenario string
-	var bestSpendable decimal.Decimal
+	var bestRetirementIncome decimal.Decimal
 
-	// Calculate current spendable cash (net income + TSP contributions)
-	currentSpendable := baselineNetIncome.Add(decimal.NewFromFloat(69812.52)) // Add back TSP contributions
+	// Use baseline net income as-is (true take-home after all deductions including TSP)
+	currentTakeHome := baselineNetIncome
 
 	for _, scenario := range scenarios {
-		// In retirement, all net income is spendable (no forced TSP contributions)
-		scenarioSpendable := scenario.FirstYearNetIncome
-		if scenarioSpendable.GreaterThan(bestSpendable) {
-			bestSpendable = scenarioSpendable
+		// Compare retirement net income directly to current take-home
+		scenarioNetIncome := scenario.FirstYearNetIncome
+		if scenarioNetIncome.GreaterThan(bestRetirementIncome) {
+			bestRetirementIncome = scenarioNetIncome
 			bestScenario = scenario.Name
 		}
 	}
 
-	// Calculate spendable cash change for the recommendation
-	spendableChange := bestSpendable.Sub(currentSpendable)
-	percentageChange := spendableChange.Div(currentSpendable).Mul(decimal.NewFromInt(100))
-	monthlyChange := spendableChange.Div(decimal.NewFromInt(12))
+	// Calculate net income change for the recommendation
+	netIncomeChange := bestRetirementIncome.Sub(currentTakeHome)
+	percentageChange := netIncomeChange.Div(currentTakeHome).Mul(decimal.NewFromInt(100))
+	monthlyChange := netIncomeChange.Div(decimal.NewFromInt(12))
 
 	return domain.ImpactAnalysis{
 		CurrentToFirstYear: domain.IncomeChange{
 			ScenarioName:     bestScenario,
-			NetIncomeChange:  spendableChange, // This is actually spendable cash change
+			NetIncomeChange:  netIncomeChange,
 			PercentageChange: percentageChange,
 			MonthlyChange:    monthlyChange,
 		},

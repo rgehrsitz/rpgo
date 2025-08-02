@@ -35,27 +35,27 @@ func FullRetirementAge(birthDate time.Time) int {
 	case birthYear <= 1937:
 		return 65
 	case birthYear == 1938:
-		return 65 + 2 // 65 years and 2 months
+		return 65 // 65 years and 2 months, rounded down
 	case birthYear == 1939:
-		return 65 + 4 // 65 years and 4 months
+		return 65 // 65 years and 4 months, rounded down
 	case birthYear == 1940:
-		return 65 + 6 // 65 years and 6 months
+		return 65 // 65 years and 6 months, rounded down
 	case birthYear == 1941:
-		return 65 + 8 // 65 years and 8 months
+		return 65 // 65 years and 8 months, rounded down
 	case birthYear == 1942:
-		return 65 + 10 // 65 years and 10 months
+		return 65 // 65 years and 10 months, rounded down
 	case birthYear >= 1943 && birthYear <= 1954:
 		return 66
 	case birthYear == 1955:
-		return 66 + 2 // 66 years and 2 months
+		return 66 // 66 years and 2 months, rounded down
 	case birthYear == 1956:
-		return 66 + 4 // 66 years and 4 months
+		return 66 // 66 years and 4 months, rounded down
 	case birthYear == 1957:
-		return 66 + 6 // 66 years and 6 months
+		return 66 // 66 years and 6 months, rounded down
 	case birthYear == 1958:
-		return 66 + 8 // 66 years and 8 months
+		return 66 // 66 years and 8 months, rounded down
 	case birthYear == 1959:
-		return 66 + 10 // 66 years and 10 months
+		return 66 // 66 years and 10 months, rounded down
 	default: // 1960 and later
 		return 67
 	}
@@ -69,27 +69,27 @@ func MinimumRetirementAge(birthDate time.Time) int {
 	case birthYear <= 1947:
 		return 55
 	case birthYear == 1948:
-		return 55 + 2 // 55 years and 2 months
+		return 55 // 55 years and 2 months, rounded down
 	case birthYear == 1949:
-		return 55 + 4 // 55 years and 4 months
+		return 55 // 55 years and 4 months, rounded down
 	case birthYear == 1950:
-		return 55 + 6 // 55 years and 6 months
+		return 55 // 55 years and 6 months, rounded down
 	case birthYear == 1951:
-		return 55 + 8 // 55 years and 8 months
+		return 55 // 55 years and 8 months, rounded down
 	case birthYear == 1952:
-		return 55 + 10 // 55 years and 10 months
+		return 55 // 55 years and 10 months, rounded down
 	case birthYear >= 1953 && birthYear <= 1964:
 		return 56
 	case birthYear == 1965:
-		return 56 + 2 // 56 years and 2 months
+		return 56 // 56 years and 2 months, rounded down
 	case birthYear == 1966:
-		return 56 + 4 // 56 years and 4 months
+		return 56 // 56 years and 4 months, rounded down
 	case birthYear == 1967:
-		return 56 + 6 // 56 years and 6 months
+		return 56 // 56 years and 6 months, rounded down
 	case birthYear == 1968:
-		return 56 + 8 // 56 years and 8 months
+		return 56 // 56 years and 8 months, rounded down
 	case birthYear == 1969:
-		return 56 + 10 // 56 years and 10 months
+		return 56 // 56 years and 10 months, rounded down
 	case birthYear >= 1970:
 		return 57
 	default:
