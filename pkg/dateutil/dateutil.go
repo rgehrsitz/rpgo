@@ -7,7 +7,8 @@ import (
 // Age calculates the age at a given date
 func Age(birthDate, atDate time.Time) int {
 	age := atDate.Year() - birthDate.Year()
-	if atDate.YearDay() < birthDate.YearDay() {
+	if atDate.Month() < birthDate.Month() || 
+		(atDate.Month() == birthDate.Month() && atDate.Day() < birthDate.Day()) {
 		age--
 	}
 	return age

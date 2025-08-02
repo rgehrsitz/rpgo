@@ -26,6 +26,22 @@ func (ce *CalculationEngine) RunScenario(config *domain.Configuration, scenario 
 	robert := config.PersonalDetails["robert"]
 	dawn := config.PersonalDetails["dawn"]
 
+	// Validate retirement dates are after hire dates
+	if scenario.Robert.RetirementDate.Before(robert.HireDate) {
+		return nil, fmt.Errorf("Robert's retirement date (%s) cannot be before hire date (%s)", 
+			scenario.Robert.RetirementDate.Format("2006-01-02"), robert.HireDate.Format("2006-01-02"))
+	}
+	if scenario.Dawn.RetirementDate.Before(dawn.HireDate) {
+		return nil, fmt.Errorf("Dawn's retirement date (%s) cannot be before hire date (%s)", 
+			scenario.Dawn.RetirementDate.Format("2006-01-02"), dawn.HireDate.Format("2006-01-02"))
+	}
+
+	// Validate inflation and return rates are reasonable
+	if config.GlobalAssumptions.InflationRate.LessThan(decimal.Zero) || config.GlobalAssumptions.InflationRate.GreaterThan(decimal.NewFromFloat(0.20)) {
+		return nil, fmt.Errorf("inflation rate must be between 0%% and 20%%, got %s%%", 
+			config.GlobalAssumptions.InflationRate.Mul(decimal.NewFromInt(100)).StringFixed(2))
+	}
+
 	// Generate annual projections
 	projection := ce.GenerateAnnualProjection(&robert, &dawn, scenario, &config.GlobalAssumptions)
 
@@ -156,8 +172,8 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 				fmt.Printf("  Multiplier: %s\n", pensionCalc.Multiplier.StringFixed(4))
 				fmt.Printf("  Annual pension (before reduction): %s\n", pensionCalc.AnnualPension.StringFixed(2))
 				fmt.Printf("  Survivor election: %s\n", pensionCalc.SurvivorElection.StringFixed(4))
-				fmt.Printf("  Reduced pension: %s\n", pensionCalc.ReducedPension.StringFixed(2))
-				fmt.Printf("  Monthly pension amount: %s\n", pensionRobert.StringFixed(2))
+				fmt.Printf("  Final pension: %s\n", pensionCalc.ReducedPension.StringFixed(2))
+				fmt.Printf("  Monthly pension amount: %s\n", pensionRobert.Div(decimal.NewFromInt(12)).StringFixed(2))
 				fmt.Println()
 			}
 		}
@@ -444,6 +460,14 @@ func (ce *CalculationEngine) updateTSPBalances(traditional, roth, withdrawal, re
 		if traditional.LessThan(decimal.Zero) {
 			traditional = decimal.Zero
 		}
+	}
+
+	// Ensure balances never go negative
+	if traditional.LessThan(decimal.Zero) {
+		traditional = decimal.Zero
+	}
+	if roth.LessThan(decimal.Zero) {
+		roth = decimal.Zero
 	}
 
 	return traditional, roth

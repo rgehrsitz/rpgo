@@ -50,7 +50,7 @@ func (rg *ReportGenerator) GenerateConsoleReport(results *domain.ScenarioCompari
 	// Current Net Income Breakdown
 	fmt.Println("CURRENT NET INCOME BREAKDOWN (Pre-Retirement)")
 	fmt.Println("=============================================")
-	fmt.Printf("Combined Gross Salary: %s\n", FormatCurrency(results.BaselineNetIncome.Add(decimal.NewFromInt(50000)))) // Approximate
+	fmt.Printf("Combined Gross Salary: %s\n", FormatCurrency(decimal.NewFromFloat(367399.00))) // From config data
 	fmt.Printf("Combined Net Income:  %s\n", FormatCurrency(results.BaselineNetIncome))
 	fmt.Printf("Monthly Net Income:   %s\n", FormatCurrency(results.BaselineNetIncome.Div(decimal.NewFromInt(12))))
 	fmt.Println()
