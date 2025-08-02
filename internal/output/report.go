@@ -35,6 +35,14 @@ func GenerateReport(results *domain.ScenarioComparison, format string) error {
 		return generator.GenerateJSONReport(results)
 	case "csv":
 		return generator.GenerateCSVReport(results)
+	case "detailed-csv":
+		return generator.GenerateDetailedCSVReport(results)
+	case "all":
+		// Generate console report with detailed validation AND export CSV
+		if err := generator.GenerateConsoleReport(results); err != nil {
+			return err
+		}
+		return generator.GenerateDetailedCSVReport(results)
 	default:
 		return fmt.Errorf("unsupported format: %s", format)
 	}
@@ -54,6 +62,9 @@ func (rg *ReportGenerator) GenerateConsoleReport(results *domain.ScenarioCompari
 	fmt.Printf("Combined Net Income:  %s\n", FormatCurrency(results.BaselineNetIncome))
 	fmt.Printf("Monthly Net Income:   %s\n", FormatCurrency(results.BaselineNetIncome.Div(decimal.NewFromInt(12))))
 	fmt.Println()
+
+	// Add detailed side-by-side comparison for validation
+	rg.GenerateDetailedComparison(results)
 
 	// Detailed Scenario Analysis
 	for i, scenario := range results.Scenarios {
@@ -232,10 +243,24 @@ func (rg *ReportGenerator) GenerateConsoleReport(results *domain.ScenarioCompari
 	percentageChange := netIncomeChange.Div(currentTakeHome).Mul(decimal.NewFromInt(100))
 	monthlyChange := netIncomeChange.Div(decimal.NewFromInt(12))
 
-	fmt.Printf("Recommended Scenario: %s\n", bestScenario.Name)
+	fmt.Printf("RECOMMENDATION (Dawn retires Aug 30, 2025 - FIXED):\n")
+	fmt.Printf("Best scenario for Robert: %s\n", bestScenario.Name)
 	fmt.Printf("Take-Home Income Change: %s (%s)\n", FormatCurrency(netIncomeChange), FormatPercentage(percentageChange))
 	fmt.Printf("Monthly Change: %s\n", FormatCurrency(monthlyChange))
+	fmt.Println()
+	fmt.Println("KEY CONSIDERATIONS:")
+	fmt.Println("• Dawn's retirement date (Aug 30, 2025) is already submitted and fixed")
+	if strings.Contains(bestScenario.Name, "Dec 2025") {
+		fmt.Println("• Robert should retire in December 2025 (4 months after Dawn)")
+		fmt.Println("• This provides immediate joint retirement benefits")
+		fmt.Println("• Both can start Social Security at 62")
+	} else {
+		fmt.Println("• Robert should wait until February 2027 to retire")
+		fmt.Println("• This allows Robert to qualify for enhanced pension multiplier at age 62")
+		fmt.Println("• Dawn will be in partial retirement mode for 18 months")
+	}
 	fmt.Println("• Evaluate healthcare costs and Medicare coordination")
+	fmt.Println("• Consider the impact of one vs. both incomes during transition period")
 
 	// Add detailed year-by-year breakdown
 	fmt.Println()
@@ -506,4 +531,267 @@ func FormatCurrency(amount decimal.Decimal) string {
 // FormatPercentage formats a decimal as percentage
 func FormatPercentage(amount decimal.Decimal) string {
 	return amount.StringFixed(2) + "%"
+}
+
+// GenerateDetailedComparison creates a side-by-side comparison of working vs retirement income
+func (rg *ReportGenerator) GenerateDetailedComparison(results *domain.ScenarioComparison) {
+	fmt.Println("=================================================================================")
+	fmt.Println("DETAILED INCOME VALIDATION: WORKING vs RETIREMENT")
+	fmt.Println("=================================================================================")
+	
+	// Find the first full retirement year for each scenario
+	for i, scenario := range results.Scenarios {
+		var firstRetirementYear *domain.AnnualCashFlow
+		for _, yearData := range scenario.Projection {
+			if yearData.IsRetired {
+				firstRetirementYear = &yearData
+				break
+			}
+		}
+		
+		if firstRetirementYear == nil {
+			continue
+		}
+		
+		// Create more descriptive scenario title
+		var scenarioTitle string
+		if strings.Contains(scenario.Name, "Dec 2025") {
+			scenarioTitle = fmt.Sprintf("SCENARIO %d: Dawn Aug 2025, Robert Dec 2025", i+1)
+		} else {
+			scenarioTitle = fmt.Sprintf("SCENARIO %d: Dawn Aug 2025, Robert Feb 2027", i+1)
+		}
+		
+		fmt.Printf("\n%s\n", scenarioTitle)
+		fmt.Println(strings.Repeat("=", len(scenarioTitle)))
+		fmt.Println()
+		
+		// Create side-by-side comparison table
+		fmt.Printf("%-35s %15s %15s %15s\n", "COMPONENT", "WORKING", "RETIREMENT", "DIFFERENCE")
+		fmt.Println(strings.Repeat("-", 80))
+		
+		// Calculate working values (these are estimates based on known baseline)
+		workingGross := decimal.NewFromFloat(367399.00) // Robert + Dawn salary
+		workingNetIncome := results.BaselineNetIncome
+		
+		// Income Sources
+		fmt.Println("INCOME SOURCES:")
+		
+		// Salary
+		rg.printComparisonLine("  Salary (Robert + Dawn)", 
+			workingGross, 
+			firstRetirementYear.SalaryRobert.Add(firstRetirementYear.SalaryDawn),
+		)
+		
+		// FERS Pension
+		rg.printComparisonLine("  FERS Pension", 
+			decimal.Zero, 
+			firstRetirementYear.PensionRobert.Add(firstRetirementYear.PensionDawn),
+		)
+		
+		// TSP Withdrawals
+		rg.printComparisonLine("  TSP Withdrawals", 
+			decimal.Zero, 
+			firstRetirementYear.TSPWithdrawalRobert.Add(firstRetirementYear.TSPWithdrawalDawn),
+		)
+		
+		// Social Security
+		rg.printComparisonLine("  Social Security", 
+			decimal.Zero, 
+			firstRetirementYear.SSBenefitRobert.Add(firstRetirementYear.SSBenefitDawn),
+		)
+		
+		// FERS Supplement
+		rg.printComparisonLine("  FERS Supplement", 
+			decimal.Zero, 
+			firstRetirementYear.FERSSupplementRobert.Add(firstRetirementYear.FERSSupplementDawn),
+		)
+		
+		fmt.Println(strings.Repeat("-", 80))
+		
+		// Total Gross
+		rg.printComparisonLine("TOTAL GROSS INCOME", 
+			workingGross, 
+			firstRetirementYear.TotalGrossIncome,
+		)
+		
+		fmt.Println()
+		fmt.Println("DEDUCTIONS & TAXES:")
+		
+		// Calculate working deductions (estimates)
+		workingFederal := decimal.NewFromFloat(67060.18)
+		workingState := decimal.NewFromFloat(11279.15)
+		workingLocal := decimal.NewFromFloat(3673.99)
+		workingFICA := decimal.NewFromFloat(16837.08)
+		workingTSP := decimal.NewFromFloat(69812.52)
+		workingFEHB := decimal.NewFromFloat(12700.74)
+		
+		rg.printComparisonLine("  Federal Tax", 
+			workingFederal, 
+			firstRetirementYear.FederalTax,
+		)
+		
+		rg.printComparisonLine("  State Tax", 
+			workingState, 
+			firstRetirementYear.StateTax,
+		)
+		
+		rg.printComparisonLine("  Local Tax", 
+			workingLocal, 
+			firstRetirementYear.LocalTax,
+		)
+		
+		rg.printComparisonLine("  FICA Tax", 
+			workingFICA, 
+			firstRetirementYear.FICATax,
+		)
+		
+		rg.printComparisonLine("  TSP Contributions", 
+			workingTSP, 
+			firstRetirementYear.TSPContributions,
+		)
+		
+		rg.printComparisonLine("  FEHB Premium", 
+			workingFEHB, 
+			firstRetirementYear.FEHBPremium,
+		)
+		
+		rg.printComparisonLine("  Medicare Premium", 
+			decimal.Zero, 
+			firstRetirementYear.MedicarePremium,
+		)
+		
+		fmt.Println(strings.Repeat("-", 80))
+		
+		// Total Deductions
+		workingTotalDeductions := workingFederal.Add(workingState).Add(workingLocal).Add(workingFICA).Add(workingTSP).Add(workingFEHB)
+		retirementTotalDeductions := firstRetirementYear.FederalTax.Add(firstRetirementYear.StateTax).Add(firstRetirementYear.LocalTax).Add(firstRetirementYear.FICATax).Add(firstRetirementYear.TSPContributions).Add(firstRetirementYear.FEHBPremium).Add(firstRetirementYear.MedicarePremium)
+		
+		rg.printComparisonLine("TOTAL DEDUCTIONS", 
+			workingTotalDeductions, 
+			retirementTotalDeductions,
+		)
+		
+		fmt.Println()
+		fmt.Println(strings.Repeat("=", 80))
+		
+		// Net Income
+		rg.printComparisonLine("NET TAKE-HOME INCOME", 
+			workingNetIncome, 
+			firstRetirementYear.NetIncome,
+		)
+		
+		// Show the difference
+		netDifference := firstRetirementYear.NetIncome.Sub(workingNetIncome)
+		percentChange := netDifference.Div(workingNetIncome).Mul(decimal.NewFromInt(100))
+		
+		fmt.Println()
+		fmt.Printf("KEY INSIGHTS:\n")
+		fmt.Printf("• Working income is reduced by $%.2f in TSP contributions\n", workingTSP.InexactFloat64())
+		fmt.Printf("• Working income is reduced by $%.2f in FICA taxes\n", workingFICA.InexactFloat64())
+		fmt.Printf("• Retirement adds $%.2f in pension income\n", firstRetirementYear.PensionRobert.Add(firstRetirementYear.PensionDawn).InexactFloat64())
+		fmt.Printf("• Retirement adds $%.2f in TSP withdrawals\n", firstRetirementYear.TSPWithdrawalRobert.Add(firstRetirementYear.TSPWithdrawalDawn).InexactFloat64())
+		fmt.Printf("• Retirement adds $%.2f in Social Security\n", firstRetirementYear.SSBenefitRobert.Add(firstRetirementYear.SSBenefitDawn).InexactFloat64())
+		if firstRetirementYear.FERSSupplementRobert.Add(firstRetirementYear.FERSSupplementDawn).GreaterThan(decimal.Zero) {
+			fmt.Printf("• Retirement adds $%.2f in FERS supplement\n", firstRetirementYear.FERSSupplementRobert.Add(firstRetirementYear.FERSSupplementDawn).InexactFloat64())
+		}
+		
+		fmt.Printf("\nNet Effect: %s (%s)\n", FormatCurrency(netDifference), FormatPercentage(percentChange))
+		fmt.Println()
+	}
+}
+
+// printComparisonLine prints a formatted comparison line
+func (rg *ReportGenerator) printComparisonLine(label string, working, retirement decimal.Decimal) {
+	difference := retirement.Sub(working)
+	fmt.Printf("%-35s %15s %15s %15s\n", 
+		label, 
+		FormatCurrency(working), 
+		FormatCurrency(retirement), 
+		FormatCurrency(difference),
+	)
+}
+
+// GenerateDetailedCSVReport generates a comprehensive CSV with all financial data
+func (rg *ReportGenerator) GenerateDetailedCSVReport(results *domain.ScenarioComparison) error {
+	filename := fmt.Sprintf("retirement_detailed_analysis_%s.csv", time.Now().Format("20060102_150405"))
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write header
+	header := []string{
+		"Scenario", "Year", "Robert_Age", "Dawn_Age", "Retirement_Status",
+		"Salary_Robert", "Salary_Dawn", "Pension_Robert", "Pension_Dawn",
+		"TSP_Withdrawal_Robert", "TSP_Withdrawal_Dawn", "SS_Benefit_Robert", "SS_Benefit_Dawn",
+		"FERS_Supplement_Robert", "FERS_Supplement_Dawn", "Total_Gross_Income",
+		"Federal_Tax", "State_Tax", "Local_Tax", "FICA_Tax", "TSP_Contributions",
+		"FEHB_Premium", "Medicare_Premium", "Total_Deductions", "Net_Income",
+		"TSP_Balance_Robert", "TSP_Balance_Dawn", "Total_TSP_Balance",
+		"Net_Income_Change_vs_Current", "Percent_Change_vs_Current",
+	}
+	writer.Write(header)
+
+	// Write current working income as baseline
+	currentRow := []string{
+		"CURRENT_WORKING", "2024", "59", "61", "WORKING",
+		"190779.00", "176620.00", "0.00", "0.00",
+		"0.00", "0.00", "0.00", "0.00",
+		"0.00", "0.00", "367399.00",
+		"67060.18", "11279.15", "3673.99", "16837.08", "69812.52",
+		"12700.74", "0.00", "181363.66", results.BaselineNetIncome.StringFixed(2),
+		"1966168.86", "1525175.90", "3491344.76",
+		"0.00", "0.00",
+	}
+	writer.Write(currentRow)
+
+	// Write scenario data
+	for _, scenario := range results.Scenarios {
+		for j, yearData := range scenario.Projection {
+			if j > 10 { // Limit to first 10 years to keep CSV manageable
+				break
+			}
+			
+			actualYear := 2025 + j
+			retirementStatus := "WORKING"
+			if yearData.IsRetired {
+				retirementStatus = "RETIRED"
+			} else if yearData.SalaryRobert.LessThan(decimal.NewFromFloat(190779)) || yearData.SalaryDawn.LessThan(decimal.NewFromFloat(176620)) {
+				retirementStatus = "PARTIAL_RETIREMENT"
+			}
+
+			// Calculate changes vs current
+			netIncomeChange := yearData.NetIncome.Sub(results.BaselineNetIncome)
+			percentChange := netIncomeChange.Div(results.BaselineNetIncome).Mul(decimal.NewFromInt(100))
+			totalDeductions := yearData.FederalTax.Add(yearData.StateTax).Add(yearData.LocalTax).
+				Add(yearData.FICATax).Add(yearData.TSPContributions).Add(yearData.FEHBPremium).Add(yearData.MedicarePremium)
+
+			row := []string{
+				scenario.Name, strconv.Itoa(actualYear),
+				strconv.Itoa(yearData.AgeRobert), strconv.Itoa(yearData.AgeDawn), retirementStatus,
+				yearData.SalaryRobert.StringFixed(2), yearData.SalaryDawn.StringFixed(2),
+				yearData.PensionRobert.StringFixed(2), yearData.PensionDawn.StringFixed(2),
+				yearData.TSPWithdrawalRobert.StringFixed(2), yearData.TSPWithdrawalDawn.StringFixed(2),
+				yearData.SSBenefitRobert.StringFixed(2), yearData.SSBenefitDawn.StringFixed(2),
+				yearData.FERSSupplementRobert.StringFixed(2), yearData.FERSSupplementDawn.StringFixed(2),
+				yearData.TotalGrossIncome.StringFixed(2),
+				yearData.FederalTax.StringFixed(2), yearData.StateTax.StringFixed(2),
+				yearData.LocalTax.StringFixed(2), yearData.FICATax.StringFixed(2),
+				yearData.TSPContributions.StringFixed(2), yearData.FEHBPremium.StringFixed(2),
+				yearData.MedicarePremium.StringFixed(2), totalDeductions.StringFixed(2),
+				yearData.NetIncome.StringFixed(2),
+				yearData.TSPBalanceRobert.StringFixed(2), yearData.TSPBalanceDawn.StringFixed(2),
+				yearData.TotalTSPBalance().StringFixed(2),
+				netIncomeChange.StringFixed(2), percentChange.StringFixed(2),
+			}
+			writer.Write(row)
+		}
+	}
+
+	fmt.Printf("\nDetailed CSV analysis exported to: %s\n", filename)
+	return nil
 }
