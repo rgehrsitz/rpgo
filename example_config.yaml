@@ -64,13 +64,13 @@ scenarios:
       retirement_date: "2025-12-27T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.02"  # 3.5% withdrawal rate
+      tsp_withdrawal_rate: "0.02"  # 2.0% withdrawal rate (of current balance each year)
     dawn:
       employee_name: "dawn"
       retirement_date: "2025-08-30T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.02"   # 3.0% withdrawal rate
+      tsp_withdrawal_rate: "0.02"   # 2.0% withdrawal rate (of current balance each year)
       
   - name: "Rob Retires at 62 - Feb 2027"
     robert:
@@ -78,10 +78,10 @@ scenarios:
       retirement_date: "2027-02-28T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.02"   # 4.0% withdrawal rate
+      tsp_withdrawal_rate: "0.02"   # 2.0% withdrawal rate (of current balance each year)
     dawn:
       employee_name: "dawn"
       retirement_date: "2025-08-30T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.02"   # 3.0% withdrawal rate
+      tsp_withdrawal_rate: "0.02"   # 2.0% withdrawal rate (of current balance each year)

@@ -104,36 +104,22 @@ func (nbw *NeedBasedWithdrawal) GetStrategyName() string {
 	return "need_based"
 }
 
-// VariablePercentageWithdrawal implements a strategy with a configurable percentage rate
+// VariablePercentageWithdrawal implements a strategy with a configurable percentage rate of current balance
 type VariablePercentageWithdrawal struct {
-	WithdrawalRate   decimal.Decimal
-	InflationRate    decimal.Decimal
-	InitialBalance   decimal.Decimal
-	FirstWithdrawalAmount decimal.Decimal
+	WithdrawalRate decimal.Decimal
 }
 
 // NewVariablePercentageWithdrawal creates a new VariablePercentageWithdrawal strategy
 func NewVariablePercentageWithdrawal(initialBalance decimal.Decimal, withdrawalRate decimal.Decimal, inflationRate decimal.Decimal) *VariablePercentageWithdrawal {
-	initialWithdrawal := initialBalance.Mul(withdrawalRate)
 	return &VariablePercentageWithdrawal{
-		WithdrawalRate:        withdrawalRate,
-		InflationRate:         inflationRate,
-		InitialBalance:        initialBalance,
-		FirstWithdrawalAmount: initialWithdrawal,
+		WithdrawalRate: withdrawalRate,
 	}
 }
 
-// CalculateWithdrawal calculates the withdrawal amount for a given year using the variable percentage
+// CalculateWithdrawal calculates the withdrawal amount for a given year using the variable percentage of current balance
 func (vpw *VariablePercentageWithdrawal) CalculateWithdrawal(currentBalance decimal.Decimal, year int, targetIncome decimal.Decimal, age int, isRMDYear bool, rmdAmount decimal.Decimal) decimal.Decimal {
-	var withdrawal decimal.Decimal
-
-	if year == 1 {
-		withdrawal = vpw.FirstWithdrawalAmount
-	} else {
-		// Inflate previous year's withdrawal
-		inflationFactor := decimal.NewFromFloat(1).Add(vpw.InflationRate)
-		withdrawal = vpw.FirstWithdrawalAmount.Mul(inflationFactor.Pow(decimal.NewFromInt(int64(year - 1))))
-	}
+	// Calculate withdrawal as percentage of current balance (true percentage-based withdrawal)
+	withdrawal := currentBalance.Mul(vpw.WithdrawalRate)
 
 	// Handle RMD (Required Minimum Distribution)
 	if isRMDYear && withdrawal.LessThan(rmdAmount) {
