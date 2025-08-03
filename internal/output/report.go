@@ -722,6 +722,9 @@ func (rg *ReportGenerator) GenerateHTMLReport(results *domain.ScenarioComparison
 	// Add detailed tables
 	html += rg.generateDetailedTablesSection(results)
 
+	// Add break-even analysis section
+	html += rg.generateBreakEvenSection(results)
+
 	// Add risk analysis and recommendations
 	html += rg.generateRiskAnalysisSection(results)
 
@@ -1140,6 +1143,57 @@ func (rg *ReportGenerator) generateDetailedTablesSection(results *domain.Scenari
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>`
+}
+
+// generateBreakEvenSection creates the break-even TSP withdrawal rate analysis
+func (rg *ReportGenerator) generateBreakEvenSection(results *domain.ScenarioComparison) string {
+	// For now, return a placeholder that explains the concept and mentions the CLI command
+	// In a future update, this could calculate and display the actual rates
+	return `
+        <div class="section">
+            <h2>🎯 Break-Even TSP Withdrawal Rate Analysis</h2>
+            <div class="alert alert-info">
+                <strong>What is Break-Even Analysis?</strong> This analysis calculates the exact TSP withdrawal percentage 
+                that would provide the same net income as your current working situation in the first full retirement year.
+            </div>
+            
+            <h3>Key Questions Answered:</h3>
+            <ul>
+                <li><strong>What TSP withdrawal rate maintains our current lifestyle?</strong></li>
+                <li><strong>For Scenario 1:</strong> What rate in 2026 (first full retirement year) matches current net income?</li>
+                <li><strong>For Scenario 2:</strong> What rate in 2028 (first full retirement year) matches current net income?</li>
+                <li><strong>How much buffer do we have?</strong> Can we withdraw less and still maintain our lifestyle?</li>
+            </ul>
+            
+            <h3>How to Get Your Break-Even Analysis:</h3>
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Command Line Tool</div>
+                    <div style="font-family: monospace; background: #f5f5f5; padding: 10px; border-radius: 4px; margin-top: 10px;">
+                        fers-calc break-even example_config.yaml
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">What You'll Get</div>
+                    <div style="margin-top: 10px;">
+                        • Exact withdrawal percentages<br>
+                        • Projected TSP balances<br>
+                        • Income matching validation<br>
+                        • Scenario comparisons
+                    </div>
+                </div>
+            </div>
+            
+            <div class="assumptions">
+                <h4>💡 Why This Matters</h4>
+                <ul>
+                    <li><strong>Lifestyle Maintenance:</strong> Know exactly what withdrawal rate maintains your current standard of living</li>
+                    <li><strong>Conservative Planning:</strong> You can start with lower rates and increase if needed</li>
+                    <li><strong>TSP Longevity:</strong> Lower withdrawal rates mean your TSP continues growing if markets perform well</li>
+                    <li><strong>Flexibility:</strong> Understanding your break-even point gives you options for different spending scenarios</li>
+                </ul>
             </div>
         </div>`
 }
