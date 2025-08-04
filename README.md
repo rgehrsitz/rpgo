@@ -11,6 +11,8 @@ A comprehensive retirement planning calculator for Federal Employees Retirement 
 - **Multiple Scenarios**: Compare multiple retirement scenarios simultaneously
 - **Long-term Projections**: 25+ year projections with COLA adjustments
 - **Multiple Output Formats**: Console, HTML, JSON, and CSV reports
+- **Monte Carlo Simulations**: Probabilistic analysis using historical market data for portfolio sustainability
+- **Historical Data Integration**: Real TSP fund returns, inflation, and COLA data from 1990-2023
 
 ## Recent Regulatory Compliance
 
@@ -54,6 +56,15 @@ go build -o fers-calc cmd/cli/main.go
    ./fers-calc calculate config.yaml --format html
    ```
 
+4. **Run Monte Carlo simulations**:
+   ```bash
+   # Simple portfolio Monte Carlo (uses flags)
+   ./fers-calc historical monte-carlo ./data --simulations 1000 --balance 1000000 --withdrawal 40000
+   
+   # Comprehensive FERS Monte Carlo (uses config file)
+   ./fers-calc monte-carlo config.yaml ./data --simulations 1000
+   ```
+
 ### Command Line Options
 
 ```bash
@@ -68,6 +79,19 @@ go build -o fers-calc cmd/cli/main.go
 
 # Generate example
 ./fers-calc example [output-file]
+
+# Historical data management
+./fers-calc historical load ./data
+./fers-calc historical stats ./data
+./fers-calc historical query ./data 2020 C
+
+# Monte Carlo simulations
+./fers-calc historical monte-carlo ./data --simulations 1000 --balance 1000000 --withdrawal 40000
+./fers-calc historical monte-carlo ./data --strategy guardrails --years 30
+
+# Comprehensive FERS Monte Carlo simulations
+./fers-calc monte-carlo config.yaml ./data --simulations 1000
+./fers-calc monte-carlo config.yaml ./data --simulations 5000 --seed 12345
 ```
 
 ### Output Formats
@@ -173,6 +197,72 @@ scenarios:
 - **RMD Compliance**: Automatic Required Minimum Distribution calculations
 - **Traditional vs Roth**: Optimized withdrawal order (Roth first, then Traditional)
 
+### Monte Carlo Analysis
+
+#### Simple Portfolio Monte Carlo
+- **Historical Data**: Real TSP fund returns, inflation, and COLA data (1990-2023)
+- **Withdrawal Strategies**: Fixed amount, percentage, inflation-adjusted, guardrails
+- **Risk Assessment**: Success rates, percentile analysis, drawdown tracking
+- **Asset Allocation**: Customizable TSP fund allocations (C, S, I, F, G funds)
+- **Parallel Processing**: Efficient simulation execution for 1000+ scenarios
+
+#### Comprehensive FERS Monte Carlo
+- **Full FERS Integration**: Models all retirement components (pension, SS, TSP, taxes, FEHB)
+- **Market Variability**: Historical or statistical market condition generation
+- **Income Sustainability**: Success rates based on complete retirement income
+- **TSP Longevity**: Tracks when TSP balances deplete
+- **Tax Implications**: Includes all federal, state, and local taxes
+- **Healthcare Costs**: Models FEHB premium increases over time
+
+#### Monte Carlo Examples
+
+**Conservative 4% Rule (25 years)**
+```bash
+./fers-calc historical monte-carlo ./data \
+  --simulations 1000 \
+  --balance 1000000 \
+  --withdrawal 40000 \
+  --strategy fixed_amount
+```
+*Result: 99% success rate, median ending balance $6.6M*
+
+**Comprehensive FERS Analysis**
+```bash
+./fers-calc monte-carlo config.yaml ./data \
+  --simulations 1000
+```
+*Result: 100% success rate, median net income $234,681, low risk assessment*
+
+**High-Precision FERS Analysis**
+```bash
+./fers-calc monte-carlo config.yaml ./data \
+  --simulations 5000 \
+  --seed 12345
+```
+*Result: Reproducible results with comprehensive risk analysis*
+
+**Aggressive 6% Rule with Guardrails (Simple Portfolio)**
+```bash
+./fers-calc historical monte-carlo ./data \
+  --simulations 1000 \
+  --balance 500000 \
+  --withdrawal 30000 \
+  --strategy guardrails \
+  --years 30
+```
+*Result: 82% success rate, high risk assessment*
+
+**Inflation-Adjusted Strategy (Simple Portfolio)**
+```bash
+./fers-calc historical monte-carlo ./data \
+  --simulations 500 \
+  --balance 750000 \
+  --withdrawal 35000 \
+  --strategy inflation_adjusted \
+  --years 30
+```
+*Result: 84% success rate, moderate risk assessment*
+
 ### Social Security
 
 - **2025 WEP/GPO Repeal**: No benefit reductions for federal employees
@@ -191,6 +281,10 @@ scenarios:
 ```
 fers-retirement-calculator/
 ├── cmd/cli/                 # Command line interface
+├── data/                   # Historical financial data
+│   ├── tsp-returns/        # TSP fund historical returns
+│   ├── inflation/          # CPI-U inflation rates
+│   └── cola/               # Social Security COLA rates
 ├── internal/
 │   ├── domain/             # Core domain models
 │   ├── calculation/        # Calculation engines
@@ -241,10 +335,11 @@ For issues, questions, or contributions, please use the GitHub issue tracker or 
 
 ## Roadmap
 
-- [ ] Monte Carlo simulation for TSP returns
+- [x] Monte Carlo simulation for TSP returns
+- [x] Historical data integration
+- [ ] Enhanced withdrawal strategies (floor-ceiling, bond tent)
 - [ ] Web interface
 - [ ] Additional state tax support
 - [ ] Medicare Part B premium calculations
 - [ ] Survivor benefit optimization
-- [ ] Historical data integration
 - [ ] Export to financial planning software 

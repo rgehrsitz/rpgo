@@ -1,0 +1,650 @@
+package calculation
+
+import (
+	"fmt"
+	"math"
+	"math/rand"
+	"sync"
+	"time"
+
+	"github.com/rpgo/retirement-calculator/internal/domain"
+	"github.com/shopspring/decimal"
+)
+
+// FERSMonteCarloConfig holds configuration for FERS Monte Carlo simulations
+type FERSMonteCarloConfig struct {
+	// Base configuration (reuses existing domain.Configuration)
+	BaseConfig *domain.Configuration
+
+	// Monte Carlo specific settings
+	NumSimulations int
+	UseHistorical  bool
+	Seed           int64
+
+	// Market variability settings
+	TSPReturnVariability decimal.Decimal // Std dev for TSP returns
+	InflationVariability decimal.Decimal // Std dev for inflation
+	COLAVariability      decimal.Decimal // Std dev for COLA
+	FEHBVariability      decimal.Decimal // Std dev for FEHB increases
+}
+
+// FERSMonteCarloEngine manages FERS Monte Carlo simulations
+type FERSMonteCarloEngine struct {
+	calcEngine     *CalculationEngine
+	historicalData *HistoricalDataManager
+	config         FERSMonteCarloConfig
+}
+
+// FERSMonteCarloResult represents the results of a FERS Monte Carlo simulation
+type FERSMonteCarloResult struct {
+	// Success metrics
+	SuccessRate          decimal.Decimal  `json:"success_rate"`
+	MedianNetIncome      decimal.Decimal  `json:"median_net_income"`
+	NetIncomePercentiles PercentileRanges `json:"net_income_percentiles"`
+
+	// TSP metrics
+	TSPLongevityPercentiles PercentileRanges `json:"tsp_longevity_percentiles"`
+	TSPDepletionRate        decimal.Decimal  `json:"tsp_depletion_rate"`
+
+	// Risk metrics
+	IncomeVolatility  decimal.Decimal `json:"income_volatility"`
+	WorstCaseScenario decimal.Decimal `json:"worst_case_scenario"`
+	BestCaseScenario  decimal.Decimal `json:"best_case_scenario"`
+
+	// Detailed results
+	Simulations      []FERSMonteCarloSimulation `json:"simulations"`
+	MarketConditions []MarketCondition          `json:"market_conditions"`
+
+	// Configuration
+	NumSimulations  int                        `json:"num_simulations"`
+	BaseConfig      *domain.Configuration      `json:"base_config"`
+	AssetAllocation map[string]decimal.Decimal `json:"asset_allocation"`
+}
+
+// FERSMonteCarloSimulation represents a single FERS Monte Carlo simulation
+type FERSMonteCarloSimulation struct {
+	SimulationID     int                       `json:"simulation_id"`
+	MarketConditions MarketCondition           `json:"market_conditions"`
+	ScenarioResults  []*domain.ScenarioSummary `json:"scenario_results"`
+	Success          bool                      `json:"success"`
+	NetIncomeMetrics NetIncomeMetrics          `json:"net_income_metrics"`
+	TSPMetrics       TSPMetrics                `json:"tsp_metrics"`
+}
+
+// MarketCondition represents market conditions for a simulation
+type MarketCondition struct {
+	Year          int                        `json:"year"`
+	TSPReturns    map[string]decimal.Decimal `json:"tsp_returns"`
+	InflationRate decimal.Decimal            `json:"inflation_rate"`
+	COLARate      decimal.Decimal            `json:"cola_rate"`
+	FEHBIncrease  decimal.Decimal            `json:"fehb_increase"`
+}
+
+// NetIncomeMetrics represents net income metrics for a simulation
+type NetIncomeMetrics struct {
+	FirstYearNetIncome decimal.Decimal `json:"first_year_net_income"`
+	Year5NetIncome     decimal.Decimal `json:"year_5_net_income"`
+	Year10NetIncome    decimal.Decimal `json:"year_10_net_income"`
+	MinNetIncome       decimal.Decimal `json:"min_net_income"`
+	MaxNetIncome       decimal.Decimal `json:"max_net_income"`
+	AverageNetIncome   decimal.Decimal `json:"average_net_income"`
+}
+
+// TSPMetrics represents TSP metrics for a simulation
+type TSPMetrics struct {
+	InitialBalance decimal.Decimal `json:"initial_balance"`
+	FinalBalance   decimal.Decimal `json:"final_balance"`
+	Longevity      int             `json:"longevity"`
+	Depleted       bool            `json:"depleted"`
+	MaxDrawdown    decimal.Decimal `json:"max_drawdown"`
+}
+
+// NewFERSMonteCarloEngine creates a new FERS Monte Carlo engine
+func NewFERSMonteCarloEngine(baseConfig *domain.Configuration, historicalData *HistoricalDataManager) *FERSMonteCarloEngine {
+	return &FERSMonteCarloEngine{
+		calcEngine:     NewCalculationEngine(),
+		historicalData: historicalData,
+		config: FERSMonteCarloConfig{
+			BaseConfig:           baseConfig,
+			NumSimulations:       1000,
+			UseHistorical:        true,
+			TSPReturnVariability: decimal.NewFromFloat(0.15),
+			InflationVariability: decimal.NewFromFloat(0.02),
+			COLAVariability:      decimal.NewFromFloat(0.02),
+			FEHBVariability:      decimal.NewFromFloat(0.05),
+		},
+	}
+}
+
+// RunFERSMonteCarlo executes the FERS Monte Carlo simulation
+func (fmce *FERSMonteCarloEngine) RunFERSMonteCarlo(config FERSMonteCarloConfig) (*FERSMonteCarloResult, error) {
+	if fmce.historicalData == nil || !fmce.historicalData.IsLoaded {
+		return nil, fmt.Errorf("historical data not loaded")
+	}
+
+	// Set random seed
+	if config.Seed == 0 {
+		config.Seed = time.Now().UnixNano()
+	}
+	rand.Seed(config.Seed)
+
+	// Update config
+	fmce.config = config
+
+	// Run simulations in parallel
+	simulations := make([]FERSMonteCarloSimulation, config.NumSimulations)
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, 10) // Limit concurrency
+
+	for i := 0; i < config.NumSimulations; i++ {
+		wg.Add(1)
+		go func(simIndex int) {
+			defer wg.Done()
+			semaphore <- struct{}{}        // Acquire semaphore
+			defer func() { <-semaphore }() // Release semaphore
+
+			simulation, err := fmce.runSingleFERSSimulation(simIndex)
+			if err != nil {
+				// Log error but continue with other simulations
+				fmt.Printf("Simulation %d failed: %v\n", simIndex, err)
+				return
+			}
+			simulations[simIndex] = *simulation
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Calculate aggregate results
+	result := fmce.calculateAggregateResults(simulations)
+
+	return result, nil
+}
+
+// runSingleFERSSimulation runs a single FERS Monte Carlo simulation
+func (fmce *FERSMonteCarloEngine) runSingleFERSSimulation(simIndex int) (*FERSMonteCarloSimulation, error) {
+	// Generate market conditions
+	marketConditions := fmce.generateMarketConditions()
+
+	// Create modified configuration (deep copy would be better, but for now we'll modify in place)
+	modifiedConfig := *fmce.config.BaseConfig
+	modifiedConfig.GlobalAssumptions = fmce.applyMarketConditionsToAssumptions(marketConditions)
+
+	// Apply TSP market conditions to the configuration
+	fmce.applyMarketConditionsToTSPCalculations(marketConditions, &modifiedConfig)
+
+	// Run full FERS calculation for each scenario
+	var scenarioResults []*domain.ScenarioSummary
+	for _, scenario := range modifiedConfig.Scenarios {
+		summary, err := fmce.calcEngine.RunScenario(&modifiedConfig, &scenario)
+		if err != nil {
+			return nil, fmt.Errorf("failed to run scenario %s: %w", scenario.Name, err)
+		}
+		scenarioResults = append(scenarioResults, summary)
+	}
+
+	// Calculate metrics
+	netIncomeMetrics := fmce.calculateNetIncomeMetrics(scenarioResults)
+	tspMetrics := fmce.calculateTSPMetrics(scenarioResults)
+
+	// Determine success (simplified: check if any scenario has sustainable income)
+	success := fmce.determineSuccess(scenarioResults)
+
+	return &FERSMonteCarloSimulation{
+		SimulationID:     simIndex,
+		MarketConditions: marketConditions,
+		ScenarioResults:  scenarioResults,
+		Success:          success,
+		NetIncomeMetrics: netIncomeMetrics,
+		TSPMetrics:       tspMetrics,
+	}, nil
+}
+
+// generateMarketConditions generates market conditions for a simulation
+func (fmce *FERSMonteCarloEngine) generateMarketConditions() MarketCondition {
+	if fmce.config.UseHistorical {
+		return fmce.generateHistoricalMarketConditions()
+	}
+	return fmce.generateStatisticalMarketConditions()
+}
+
+// generateHistoricalMarketConditions generates market conditions from historical data
+func (fmce *FERSMonteCarloEngine) generateHistoricalMarketConditions() MarketCondition {
+	// Get random historical year
+	minYear, maxYear, err := fmce.historicalData.GetAvailableYears()
+	if err != nil {
+		// Fallback to statistical if no historical data
+		return fmce.generateStatisticalMarketConditions()
+	}
+
+	randomYear := minYear + rand.Intn(maxYear-minYear+1)
+
+	// Get historical data for that year
+	marketData := MarketCondition{
+		Year:       randomYear,
+		TSPReturns: make(map[string]decimal.Decimal),
+	}
+
+	// Sample TSP fund returns
+	funds := []string{"C", "S", "I", "F", "G"}
+	for _, fund := range funds {
+		if returnRate, err := fmce.historicalData.GetTSPReturn(fund, randomYear); err == nil {
+			marketData.TSPReturns[fund] = returnRate
+		} else {
+			// Fallback to statistical generation
+			marketData.TSPReturns[fund] = fmce.generateStatisticalTSPReturn(fund)
+		}
+	}
+
+	// Sample inflation and COLA
+	if inflation, err := fmce.historicalData.GetInflationRate(randomYear); err == nil {
+		marketData.InflationRate = inflation
+	} else {
+		marketData.InflationRate = fmce.generateStatisticalInflation()
+	}
+
+	if cola, err := fmce.historicalData.GetCOLARate(randomYear); err == nil {
+		marketData.COLARate = cola
+	} else {
+		marketData.COLARate = fmce.generateStatisticalCOLA()
+	}
+
+	// Generate FEHB increase (not in historical data, so use statistical)
+	marketData.FEHBIncrease = fmce.generateStatisticalFEHBIncrease()
+
+	return marketData
+}
+
+// generateStatisticalMarketConditions generates market conditions using statistical distributions
+func (fmce *FERSMonteCarloEngine) generateStatisticalMarketConditions() MarketCondition {
+	marketData := MarketCondition{
+		Year:       rand.Intn(30) + 2025, // Random year between 2025-2055
+		TSPReturns: make(map[string]decimal.Decimal),
+	}
+
+	// Generate TSP fund returns
+	funds := []string{"C", "S", "I", "F", "G"}
+	for _, fund := range funds {
+		marketData.TSPReturns[fund] = fmce.generateStatisticalTSPReturn(fund)
+	}
+
+	marketData.InflationRate = fmce.generateStatisticalInflation()
+	marketData.COLARate = fmce.generateStatisticalCOLA()
+	marketData.FEHBIncrease = fmce.generateStatisticalFEHBIncrease()
+
+	return marketData
+}
+
+// generateStatisticalTSPReturn generates statistical TSP return for a fund
+func (fmce *FERSMonteCarloEngine) generateStatisticalTSPReturn(fund string) decimal.Decimal {
+	// Use historical statistics if available, otherwise use reasonable defaults
+	var mean, stdDev decimal.Decimal
+
+	switch fund {
+	case "C":
+		mean = decimal.NewFromFloat(0.1125)   // 11.25% historical mean
+		stdDev = decimal.NewFromFloat(0.1744) // 17.44% historical std dev
+	case "S":
+		mean = decimal.NewFromFloat(0.1117)   // 11.17% historical mean
+		stdDev = decimal.NewFromFloat(0.1933) // 19.33% historical std dev
+	case "I":
+		mean = decimal.NewFromFloat(0.0634)   // 6.34% historical mean
+		stdDev = decimal.NewFromFloat(0.1863) // 18.63% historical std dev
+	case "F":
+		mean = decimal.NewFromFloat(0.0532)   // 5.32% historical mean
+		stdDev = decimal.NewFromFloat(0.0565) // 5.65% historical std dev
+	case "G":
+		mean = decimal.NewFromFloat(0.0493)   // 4.93% historical mean
+		stdDev = decimal.NewFromFloat(0.0165) // 1.65% historical std dev
+	default:
+		mean = decimal.NewFromFloat(0.08)   // 8% default mean
+		stdDev = decimal.NewFromFloat(0.15) // 15% default std dev
+	}
+
+	// Generate normal distribution using Box-Muller transform
+	u1 := rand.Float64()
+	u2 := rand.Float64()
+	z := fmce.boxMullerTransform(u1, u2)
+
+	// Convert to decimal and apply mean/std dev
+	zDecimal := decimal.NewFromFloat(z)
+	return mean.Add(zDecimal.Mul(stdDev))
+}
+
+// generateStatisticalInflation generates statistical inflation rate
+func (fmce *FERSMonteCarloEngine) generateStatisticalInflation() decimal.Decimal {
+	mean := decimal.NewFromFloat(0.0259)   // 2.59% historical mean
+	stdDev := decimal.NewFromFloat(0.0137) // 1.37% historical std dev
+
+	u1 := rand.Float64()
+	u2 := rand.Float64()
+	z := fmce.boxMullerTransform(u1, u2)
+
+	zDecimal := decimal.NewFromFloat(z)
+	inflation := mean.Add(zDecimal.Mul(stdDev))
+
+	// Ensure inflation is within reasonable bounds (0% to 20%)
+	if inflation.LessThan(decimal.Zero) {
+		inflation = decimal.Zero
+	} else if inflation.GreaterThan(decimal.NewFromFloat(0.20)) {
+		inflation = decimal.NewFromFloat(0.20)
+	}
+
+	return inflation
+}
+
+// generateStatisticalCOLA generates statistical COLA rate
+func (fmce *FERSMonteCarloEngine) generateStatisticalCOLA() decimal.Decimal {
+	mean := decimal.NewFromFloat(0.0255)   // 2.55% historical mean
+	stdDev := decimal.NewFromFloat(0.0182) // 1.82% historical std dev
+
+	u1 := rand.Float64()
+	u2 := rand.Float64()
+	z := fmce.boxMullerTransform(u1, u2)
+
+	zDecimal := decimal.NewFromFloat(z)
+	cola := mean.Add(zDecimal.Mul(stdDev))
+
+	// Ensure COLA is within reasonable bounds (0% to 15%)
+	if cola.LessThan(decimal.Zero) {
+		cola = decimal.Zero
+	} else if cola.GreaterThan(decimal.NewFromFloat(0.15)) {
+		cola = decimal.NewFromFloat(0.15)
+	}
+
+	return cola
+}
+
+// generateStatisticalFEHBIncrease generates statistical FEHB premium increase
+func (fmce *FERSMonteCarloEngine) generateStatisticalFEHBIncrease() decimal.Decimal {
+	mean := decimal.NewFromFloat(0.045)   // 4.5% historical mean
+	stdDev := decimal.NewFromFloat(0.025) // 2.5% historical std dev
+
+	u1 := rand.Float64()
+	u2 := rand.Float64()
+	z := fmce.boxMullerTransform(u1, u2)
+
+	zDecimal := decimal.NewFromFloat(z)
+	return mean.Add(zDecimal.Mul(stdDev))
+}
+
+// boxMullerTransform implements Box-Muller transform for normal distribution
+func (fmce *FERSMonteCarloEngine) boxMullerTransform(u1, u2 float64) float64 {
+	z0 := math.Sqrt(-2*math.Log(u1)) * math.Cos(2*math.Pi*u2)
+	return z0
+}
+
+// applyMarketConditionsToAssumptions applies market conditions to global assumptions
+func (fmce *FERSMonteCarloEngine) applyMarketConditionsToAssumptions(market MarketCondition) domain.GlobalAssumptions {
+	assumptions := fmce.config.BaseConfig.GlobalAssumptions
+
+	// Apply market conditions
+	assumptions.InflationRate = market.InflationRate
+	assumptions.COLAGeneralRate = market.COLARate
+
+	return assumptions
+}
+
+// applyMarketConditionsToTSPCalculations applies market conditions to TSP calculations
+func (fmce *FERSMonteCarloEngine) applyMarketConditionsToTSPCalculations(market MarketCondition, config *domain.Configuration) {
+	// Calculate weighted average TSP return based on asset allocation
+	// For now, use a simple 60/20/10/10 allocation (C/S/I/F) - this could be made configurable
+	assetAllocation := map[string]decimal.Decimal{
+		"C": decimal.NewFromFloat(0.60),
+		"S": decimal.NewFromFloat(0.20),
+		"I": decimal.NewFromFloat(0.10),
+		"F": decimal.NewFromFloat(0.10),
+	}
+
+	var weightedReturn decimal.Decimal
+	for fund, allocation := range assetAllocation {
+		if returnRate, exists := market.TSPReturns[fund]; exists {
+			weightedReturn = weightedReturn.Add(returnRate.Mul(allocation))
+		}
+	}
+
+	// Apply the weighted return to both pre and post retirement TSP return rates
+	config.GlobalAssumptions.TSPReturnPreRetirement = weightedReturn
+	config.GlobalAssumptions.TSPReturnPostRetirement = weightedReturn
+}
+
+// calculateNetIncomeMetrics calculates net income metrics for a simulation
+func (fmce *FERSMonteCarloEngine) calculateNetIncomeMetrics(scenarioResults []*domain.ScenarioSummary) NetIncomeMetrics {
+	if len(scenarioResults) == 0 {
+		return NetIncomeMetrics{}
+	}
+
+	// Use the first scenario for now (could be enhanced to aggregate across scenarios)
+	summary := scenarioResults[0]
+
+	// Calculate min, max, and average net income across the projection period
+	var minNetIncome, maxNetIncome, totalNetIncome decimal.Decimal
+	var count int
+
+	// Use the projection data to calculate variability
+	if len(summary.Projection) > 0 {
+		minNetIncome = summary.Projection[0].NetIncome
+		maxNetIncome = summary.Projection[0].NetIncome
+		totalNetIncome = decimal.Zero
+
+		for _, year := range summary.Projection {
+			netIncome := year.NetIncome
+			if netIncome.LessThan(minNetIncome) {
+				minNetIncome = netIncome
+			}
+			if netIncome.GreaterThan(maxNetIncome) {
+				maxNetIncome = netIncome
+			}
+			totalNetIncome = totalNetIncome.Add(netIncome)
+			count++
+		}
+	} else {
+		// Fallback to first year values if no projection data
+		minNetIncome = summary.FirstYearNetIncome
+		maxNetIncome = summary.FirstYearNetIncome
+		totalNetIncome = summary.FirstYearNetIncome
+		count = 1
+	}
+
+	averageNetIncome := totalNetIncome.Div(decimal.NewFromInt(int64(count)))
+
+	return NetIncomeMetrics{
+		FirstYearNetIncome: summary.FirstYearNetIncome,
+		Year5NetIncome:     summary.Year5NetIncome,
+		Year10NetIncome:    summary.Year10NetIncome,
+		MinNetIncome:       minNetIncome,
+		MaxNetIncome:       maxNetIncome,
+		AverageNetIncome:   averageNetIncome,
+	}
+}
+
+// calculateTSPMetrics calculates TSP metrics for a simulation
+func (fmce *FERSMonteCarloEngine) calculateTSPMetrics(scenarioResults []*domain.ScenarioSummary) TSPMetrics {
+	if len(scenarioResults) == 0 {
+		return TSPMetrics{}
+	}
+
+	// Use the first scenario for now (could be enhanced to aggregate across scenarios)
+	summary := scenarioResults[0]
+
+	return TSPMetrics{
+		InitialBalance: summary.InitialTSPBalance,
+		FinalBalance:   summary.FinalTSPBalance,
+		Longevity:      summary.TSPLongevity,
+		Depleted:       summary.TSPLongevity < len(summary.Projection),
+		MaxDrawdown:    decimal.Zero, // Would need to calculate from projection
+	}
+}
+
+// determineSuccess determines if a simulation is successful
+func (fmce *FERSMonteCarloEngine) determineSuccess(scenarioResults []*domain.ScenarioSummary) bool {
+	if len(scenarioResults) == 0 {
+		return false
+	}
+
+	// Simplified success criteria: check if TSP lasts the full projection
+	// Could be enhanced with more sophisticated criteria
+	for _, summary := range scenarioResults {
+		if summary.TSPLongevity < len(summary.Projection) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// calculateAggregateResults calculates aggregate results across all simulations
+func (fmce *FERSMonteCarloEngine) calculateAggregateResults(simulations []FERSMonteCarloSimulation) *FERSMonteCarloResult {
+	// Count successful simulations
+	successCount := 0
+	for _, sim := range simulations {
+		if sim.Success {
+			successCount++
+		}
+	}
+
+	successRate := decimal.NewFromInt(int64(successCount)).Div(decimal.NewFromInt(int64(len(simulations))))
+
+	// Calculate net income percentiles using average net income for better variability representation
+	var netIncomes []decimal.Decimal
+	for _, sim := range simulations {
+		netIncomes = append(netIncomes, sim.NetIncomeMetrics.AverageNetIncome)
+	}
+
+	netIncomePercentiles := fmce.calculatePercentileRanges(netIncomes)
+
+	// Calculate TSP longevity percentiles
+	var tspLongevities []decimal.Decimal
+	for _, sim := range simulations {
+		tspLongevities = append(tspLongevities, decimal.NewFromInt(int64(sim.TSPMetrics.Longevity)))
+	}
+
+	tspLongevityPercentiles := fmce.calculatePercentileRanges(tspLongevities)
+
+	// Calculate TSP depletion rate
+	depletionCount := 0
+	for _, sim := range simulations {
+		if sim.TSPMetrics.Depleted {
+			depletionCount++
+		}
+	}
+
+	tspDepletionRate := decimal.NewFromInt(int64(depletionCount)).Div(decimal.NewFromInt(int64(len(simulations))))
+
+	// Calculate median net income using average net income across projection period
+	medianNetIncome := fmce.calculateMedian(netIncomes)
+
+	// Calculate income volatility (simplified)
+	incomeVolatility := fmce.calculateStandardDeviation(netIncomes)
+
+	// Find worst and best case scenarios
+	worstCase := fmce.findMin(netIncomes)
+	bestCase := fmce.findMax(netIncomes)
+
+	return &FERSMonteCarloResult{
+		SuccessRate:             successRate,
+		MedianNetIncome:         medianNetIncome,
+		NetIncomePercentiles:    netIncomePercentiles,
+		TSPLongevityPercentiles: tspLongevityPercentiles,
+		TSPDepletionRate:        tspDepletionRate,
+		IncomeVolatility:        incomeVolatility,
+		WorstCaseScenario:       worstCase,
+		BestCaseScenario:        bestCase,
+		Simulations:             simulations,
+		NumSimulations:          len(simulations),
+		BaseConfig:              fmce.config.BaseConfig,
+	}
+}
+
+// Helper functions for statistical calculations
+func (fmce *FERSMonteCarloEngine) calculatePercentileRanges(values []decimal.Decimal) PercentileRanges {
+	if len(values) == 0 {
+		return PercentileRanges{}
+	}
+
+	// Sort values
+	fmce.sortDecimalSlice(values)
+
+	n := len(values)
+	return PercentileRanges{
+		P10: values[n/10],
+		P25: values[n/4],
+		P50: values[n/2],
+		P75: values[3*n/4],
+		P90: values[9*n/10],
+	}
+}
+
+func (fmce *FERSMonteCarloEngine) calculateMedian(values []decimal.Decimal) decimal.Decimal {
+	if len(values) == 0 {
+		return decimal.Zero
+	}
+
+	fmce.sortDecimalSlice(values)
+	return values[len(values)/2]
+}
+
+func (fmce *FERSMonteCarloEngine) calculateStandardDeviation(values []decimal.Decimal) decimal.Decimal {
+	if len(values) == 0 {
+		return decimal.Zero
+	}
+
+	// Calculate mean
+	var sum decimal.Decimal
+	for _, v := range values {
+		sum = sum.Add(v)
+	}
+	mean := sum.Div(decimal.NewFromInt(int64(len(values))))
+
+	// Calculate variance
+	var varianceSum decimal.Decimal
+	for _, v := range values {
+		diff := v.Sub(mean)
+		varianceSum = varianceSum.Add(diff.Mul(diff))
+	}
+	variance := varianceSum.Div(decimal.NewFromInt(int64(len(values))))
+
+	// Calculate standard deviation
+	varianceFloat, _ := variance.Float64()
+	stdDevFloat := math.Sqrt(varianceFloat)
+	return decimal.NewFromFloat(stdDevFloat)
+}
+
+func (fmce *FERSMonteCarloEngine) findMin(values []decimal.Decimal) decimal.Decimal {
+	if len(values) == 0 {
+		return decimal.Zero
+	}
+
+	min := values[0]
+	for _, v := range values {
+		if v.LessThan(min) {
+			min = v
+		}
+	}
+	return min
+}
+
+func (fmce *FERSMonteCarloEngine) findMax(values []decimal.Decimal) decimal.Decimal {
+	if len(values) == 0 {
+		return decimal.Zero
+	}
+
+	max := values[0]
+	for _, v := range values {
+		if v.GreaterThan(max) {
+			max = v
+		}
+	}
+	return max
+}
+
+func (fmce *FERSMonteCarloEngine) sortDecimalSlice(values []decimal.Decimal) {
+	// Simple bubble sort for small arrays
+	for i := 0; i < len(values)-1; i++ {
+		for j := 0; j < len(values)-i-1; j++ {
+			if values[j].GreaterThan(values[j+1]) {
+				values[j], values[j+1] = values[j+1], values[j]
+			}
+		}
+	}
+}
