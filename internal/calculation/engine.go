@@ -11,13 +11,15 @@ import (
 
 // CalculationEngine orchestrates all retirement calculations
 type CalculationEngine struct {
-	TaxCalc *ComprehensiveTaxCalculator
+	TaxCalc      *ComprehensiveTaxCalculator
+	MedicareCalc *MedicareCalculator
 }
 
 // NewCalculationEngine creates a new calculation engine
 func NewCalculationEngine() *CalculationEngine {
 	return &CalculationEngine{
-		TaxCalc: NewComprehensiveTaxCalculator(),
+		TaxCalc:      NewComprehensiveTaxCalculator(),
+		MedicareCalc: NewMedicareCalculator(),
 	}
 }
 
@@ -345,7 +347,8 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		fehbPremium := ce.calculateFEHBPremium(robert, year, dateutil.IsMedicareEligible(robert.BirthDate, projectionDate), assumptions.FEHBPremiumInflation)
 
 		// Calculate Medicare premiums (if applicable)
-		medicarePremium := ce.calculateMedicarePremium(robert, dawn, projectionDate, assumptions)
+		medicarePremium := ce.calculateMedicarePremium(robert, dawn, projectionDate, 
+			pensionRobert, pensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn)
 
 		// Calculate taxes - handle transition years properly
 		// Pass the actual working income and retirement income separately
@@ -512,27 +515,34 @@ func (ce *CalculationEngine) calculateFEHBPremium(employee *domain.Employee, yea
 	return adjustedPremium.Mul(decimal.NewFromInt(26)) // 26 pay periods per year
 }
 
-// calculateMedicarePremium calculates Medicare premiums with IRMAA considerations
-func (ce *CalculationEngine) calculateMedicarePremium(robert, dawn *domain.Employee, projectionDate time.Time, _ *domain.GlobalAssumptions) decimal.Decimal {
+// calculateMedicarePremium calculates Medicare Part B premiums with IRMAA considerations
+// based on current year income (simplified - real IRMAA uses 2-year-old MAGI)
+func (ce *CalculationEngine) calculateMedicarePremium(robert, dawn *domain.Employee, projectionDate time.Time, 
+	pensionRobert, pensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn decimal.Decimal) decimal.Decimal {
 	var totalPremium decimal.Decimal
+	
+	// Estimate MAGI for IRMAA calculation (simplified)
+	// In reality, IRMAA uses MAGI from 2 years prior
+	totalPensionIncome := pensionRobert.Add(pensionDawn)
+	totalTSPWithdrawals := tspWithdrawalRobert.Add(tspWithdrawalDawn)
+	
+	// Calculate taxable portion of Social Security (simplified)
+	totalSSBenefits := ssRobert.Add(ssDawn)
+	otherIncome := totalPensionIncome.Add(totalTSPWithdrawals)
+	taxableSSBenefits := ce.TaxCalc.CalculateSocialSecurityTaxation(totalSSBenefits, otherIncome)
+	
+	// Estimate combined MAGI
+	estimatedMAGI := EstimateMAGI(totalPensionIncome, totalTSPWithdrawals, taxableSSBenefits, decimal.Zero)
 	
 	// Check if Robert is Medicare eligible
 	if dateutil.IsMedicareEligible(robert.BirthDate, projectionDate) {
-		// TODO: Implement proper IRMAA calculation based on AGI
-		// For high AGI (>$250k), IRMAA surcharges will apply
-		// Base Part B premium 2025: ~$185/month
-		// IRMAA tiers can add $70-$500+ per month per person
-		basePremium := decimal.NewFromFloat(185.0) // 2025 estimated base premium
-		irmaaPlaceholder := decimal.NewFromFloat(200.0) // Placeholder for high-income surcharge
-		robertPremium := basePremium.Add(irmaaPlaceholder).Mul(decimal.NewFromInt(12))
+		robertPremium := ce.MedicareCalc.CalculateAnnualPartBCost(estimatedMAGI, true) // Married filing jointly
 		totalPremium = totalPremium.Add(robertPremium)
 	}
 	
 	// Check if Dawn is Medicare eligible  
 	if dateutil.IsMedicareEligible(dawn.BirthDate, projectionDate) {
-		basePremium := decimal.NewFromFloat(185.0)
-		irmaaPlaceholder := decimal.NewFromFloat(200.0) // Placeholder for high-income surcharge
-		dawnPremium := basePremium.Add(irmaaPlaceholder).Mul(decimal.NewFromInt(12))
+		dawnPremium := ce.MedicareCalc.CalculateAnnualPartBCost(estimatedMAGI, true) // Married filing jointly
 		totalPremium = totalPremium.Add(dawnPremium)
 	}
 	
