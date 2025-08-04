@@ -13,6 +13,7 @@ import (
 type CalculationEngine struct {
 	TaxCalc      *ComprehensiveTaxCalculator
 	MedicareCalc *MedicareCalculator
+	Debug        bool // Enable debug output for detailed calculations
 }
 
 // NewCalculationEngine creates a new calculation engine
@@ -38,9 +39,9 @@ func (ce *CalculationEngine) RunScenario(config *domain.Configuration, scenario 
 			scenario.Dawn.RetirementDate.Format("2006-01-02"), dawn.HireDate.Format("2006-01-02"))
 	}
 
-	// Validate inflation and return rates are reasonable
-	if config.GlobalAssumptions.InflationRate.LessThan(decimal.Zero) || config.GlobalAssumptions.InflationRate.GreaterThan(decimal.NewFromFloat(0.20)) {
-		return nil, fmt.Errorf("inflation rate must be between 0%% and 20%%, got %s%%",
+	// Validate inflation and return rates are reasonable (allow deflation but cap extreme values)
+	if config.GlobalAssumptions.InflationRate.LessThan(decimal.NewFromFloat(-0.10)) || config.GlobalAssumptions.InflationRate.GreaterThan(decimal.NewFromFloat(0.20)) {
+		return nil, fmt.Errorf("inflation rate must be between -10%% and 20%%, got %s%%",
 			config.GlobalAssumptions.InflationRate.Mul(decimal.NewFromInt(100)).StringFixed(2))
 	}
 
@@ -162,7 +163,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 			}
 
 			// Debug output for pension calculation
-			if year == robertRetirementYear {
+			if ce.Debug && year == robertRetirementYear {
 				fmt.Printf("DEBUG: Robert's pension calculation for year %d:\n", 2025+year)
 				fmt.Printf("  Retirement date: %s\n", scenario.Robert.RetirementDate.Format("2006-01-02"))
 				fmt.Printf("  Age at retirement: %d\n", robert.Age(scenario.Robert.RetirementDate))
@@ -335,7 +336,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		}
 
 		// Debug TSP balances for Scenario 2 to show extra growth
-		if year == 1 && scenario.Robert.RetirementDate.Year() == 2027 {
+		if ce.Debug && year == 1 && scenario.Robert.RetirementDate.Year() == 2027 {
 			fmt.Printf("DEBUG: TSP Growth in Scenario 2 (year %d):\n", 2025+year)
 			fmt.Printf("  Robert's TSP balance: %s\n", currentTSPTraditionalRobert.Add(currentTSPRothRobert).StringFixed(2))
 			fmt.Printf("  Dawn's TSP balance: %s\n", currentTSPTraditionalDawn.Add(currentTSPRothDawn).StringFixed(2))

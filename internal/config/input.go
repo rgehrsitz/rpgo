@@ -137,8 +137,8 @@ func (ip *InputParser) validateEmployee(name string, employee *domain.Employee) 
 
 // validateGlobalAssumptions validates global assumptions
 func (ip *InputParser) validateGlobalAssumptions(assumptions *domain.GlobalAssumptions) error {
-	if assumptions.InflationRate.LessThan(decimal.Zero) {
-		return fmt.Errorf("inflation rate cannot be negative")
+	if assumptions.InflationRate.LessThan(decimal.NewFromFloat(-0.10)) {
+		return fmt.Errorf("inflation rate cannot be less than -10%% (extreme deflation)")
 	}
 	if assumptions.FEHBPremiumInflation.LessThan(decimal.Zero) {
 		return fmt.Errorf("FEHB premium inflation cannot be negative")

@@ -171,10 +171,10 @@ func TestErrorConditions(t *testing.T) {
 
 	t.Run("Invalid inflation rate", func(t *testing.T) {
 		config := createTestConfiguration()
-		config.GlobalAssumptions.InflationRate = decimal.NewFromFloat(0.50) // 50% inflation - unrealistic
+		config.GlobalAssumptions.InflationRate = decimal.NewFromFloat(0.25) // 25% inflation - beyond valid range
 
 		scenario := &domain.Scenario{
-			Name: "High Inflation Scenario",
+			Name: "Extreme Inflation Scenario",
 			Robert: domain.RetirementScenario{
 				RetirementDate: time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
 			},
@@ -186,7 +186,27 @@ func TestErrorConditions(t *testing.T) {
 		result, err := engine.RunScenario(config, scenario)
 		assert.Error(t, err, "Should error on unrealistic inflation rate")
 		assert.Nil(t, result, "Should not return result on error")
-		assert.Contains(t, err.Error(), "inflation rate must be between", "Error should mention inflation rate bounds")
+		assert.Contains(t, err.Error(), "inflation rate must be between -10% and 20%", "Error should mention inflation rate bounds")
+	})
+
+	t.Run("Historical deflation rate", func(t *testing.T) {
+		config := createTestConfiguration()
+		config.GlobalAssumptions.InflationRate = decimal.NewFromFloat(-0.004) // -0.4% deflation (like 1932)
+
+		scenario := &domain.Scenario{
+			Name: "Historical Deflation Scenario",
+			Robert: domain.RetirementScenario{
+				RetirementDate: time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
+			},
+			Dawn: domain.RetirementScenario{
+				RetirementDate: time.Date(2025, 8, 30, 0, 0, 0, 0, time.UTC),
+			},
+		}
+
+		result, err := engine.RunScenario(config, scenario)
+		assert.NoError(t, err, "Should allow historical deflation rates")
+		assert.NotNil(t, result, "Should return valid result for deflation scenario")
+		assert.Equal(t, "Historical Deflation Scenario", result.Name)
 	})
 }
 

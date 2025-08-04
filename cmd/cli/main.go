@@ -36,6 +36,8 @@ var calculateCmd = &cobra.Command{
 
 		// Run calculations
 		engine := calculation.NewCalculationEngine()
+		debugMode, _ := cmd.Flags().GetBool("debug")
+		engine.Debug = debugMode
 		results, err := engine.RunScenarios(config)
 		if err != nil {
 			log.Fatal(err)
@@ -99,6 +101,8 @@ var breakEvenCmd = &cobra.Command{
 
 		// Run break-even analysis
 		engine := calculation.NewCalculationEngine()
+		debugMode, _ := cmd.Flags().GetBool("debug")
+		engine.Debug = debugMode
 		analysis, err := engine.CalculateBreakEvenAnalysis(config)
 		if err != nil {
 			log.Fatal(err)
@@ -161,9 +165,11 @@ var fersMonteCarloCmd = &cobra.Command{
 		numSimulations, _ := cmd.Flags().GetInt("simulations")
 		useHistorical, _ := cmd.Flags().GetBool("historical")
 		seed, _ := cmd.Flags().GetInt64("seed")
+		debugMode, _ := cmd.Flags().GetBool("debug")
 
 		// Create FERS Monte Carlo engine
 		engine := calculation.NewFERSMonteCarloEngine(baseConfig, hdm)
+		engine.SetDebug(debugMode)
 
 		// Configure Monte Carlo simulation
 		mcConfig := calculation.FERSMonteCarloConfig{
@@ -312,11 +318,16 @@ func init() {
 	calculateCmd.Flags().BoolP("monte-carlo", "m", false, "Run Monte Carlo simulation")
 	calculateCmd.Flags().IntP("simulations", "s", 1000, "Number of Monte Carlo simulations")
 	calculateCmd.Flags().BoolP("verbose", "v", false, "Verbose output")
+	calculateCmd.Flags().Bool("debug", false, "Enable debug output for detailed calculations")
+
+	// Break-even command flags
+	breakEvenCmd.Flags().Bool("debug", false, "Enable debug output for detailed calculations")
 
 	// FERS Monte Carlo command flags
 	fersMonteCarloCmd.Flags().IntP("simulations", "s", 1000, "Number of simulations to run")
 	fersMonteCarloCmd.Flags().BoolP("historical", "d", true, "Use historical data (false for statistical)")
 	fersMonteCarloCmd.Flags().Int64P("seed", "r", 0, "Random seed (0 for auto-generated)")
+	fersMonteCarloCmd.Flags().Bool("debug", false, "Enable debug output for detailed calculations")
 
 	rootCmd.AddCommand(calculateCmd)
 	rootCmd.AddCommand(exampleCmd)

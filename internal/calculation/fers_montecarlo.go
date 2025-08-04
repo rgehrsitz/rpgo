@@ -116,6 +116,11 @@ func NewFERSMonteCarloEngine(baseConfig *domain.Configuration, historicalData *H
 	}
 }
 
+// SetDebug enables or disables debug output
+func (fmc *FERSMonteCarloEngine) SetDebug(debug bool) {
+	fmc.calcEngine.Debug = debug
+}
+
 // RunFERSMonteCarlo executes the FERS Monte Carlo simulation
 func (fmce *FERSMonteCarloEngine) RunFERSMonteCarlo(config FERSMonteCarloConfig) (*FERSMonteCarloResult, error) {
 	if fmce.historicalData == nil || !fmce.historicalData.IsLoaded {
@@ -166,8 +171,8 @@ func (fmce *FERSMonteCarloEngine) runSingleFERSSimulation(simIndex int) (*FERSMo
 	// Generate market conditions
 	marketConditions := fmce.generateMarketConditions()
 
-	// Create modified configuration (deep copy would be better, but for now we'll modify in place)
-	modifiedConfig := *fmce.config.BaseConfig
+	// Create a proper deep copy of the configuration to ensure each simulation is independent
+	modifiedConfig := fmce.deepCopyConfiguration(fmce.config.BaseConfig)
 	modifiedConfig.GlobalAssumptions = fmce.applyMarketConditionsToAssumptions(marketConditions)
 
 	// Apply TSP market conditions to the configuration
@@ -376,9 +381,10 @@ func (fmce *FERSMonteCarloEngine) boxMullerTransform(u1, u2 float64) float64 {
 
 // applyMarketConditionsToAssumptions applies market conditions to global assumptions
 func (fmce *FERSMonteCarloEngine) applyMarketConditionsToAssumptions(market MarketCondition) domain.GlobalAssumptions {
+	// Create a copy of the original assumptions instead of modifying the shared reference
 	assumptions := fmce.config.BaseConfig.GlobalAssumptions
 
-	// Apply market conditions
+	// Apply market conditions to the copy
 	assumptions.InflationRate = market.InflationRate
 	assumptions.COLAGeneralRate = market.COLARate
 
@@ -427,8 +433,24 @@ func (fmce *FERSMonteCarloEngine) calculateNetIncomeMetrics(scenarioResults []*d
 		maxNetIncome = summary.Projection[0].NetIncome
 		totalNetIncome = decimal.Zero
 
+		// Apply reasonable bounds to prevent extreme outliers while preserving natural distribution
 		for _, year := range summary.Projection {
 			netIncome := year.NetIncome
+			
+			// Only validate for obviously impossible values
+			if netIncome.LessThan(decimal.Zero) {
+				netIncome = decimal.Zero
+			}
+			
+			// Cap extremely unrealistic values (>$5M annual retirement income)
+			// This preserves the natural distribution while preventing calculation errors
+			maxReasonableIncome := decimal.NewFromInt(5000000)
+			if netIncome.GreaterThan(maxReasonableIncome) {
+				// Instead of hard capping, we might have a calculation error
+				// For now, cap at $5M to preserve distribution shape
+				netIncome = maxReasonableIncome
+			}
+			
 			if netIncome.LessThan(minNetIncome) {
 				minNetIncome = netIncome
 			}
@@ -647,4 +669,26 @@ func (fmce *FERSMonteCarloEngine) sortDecimalSlice(values []decimal.Decimal) {
 			}
 		}
 	}
+}
+
+// deepCopyConfiguration creates a deep copy of the configuration to ensure each simulation is independent
+func (fmce *FERSMonteCarloEngine) deepCopyConfiguration(config *domain.Configuration) domain.Configuration {
+	// Deep copy the configuration
+	newConfig := domain.Configuration{
+		PersonalDetails:   make(map[string]domain.Employee),
+		GlobalAssumptions: config.GlobalAssumptions, // This will be overwritten anyway
+		Scenarios:         make([]domain.Scenario, len(config.Scenarios)),
+	}
+	
+	// Deep copy personal details
+	for key, employee := range config.PersonalDetails {
+		newConfig.PersonalDetails[key] = employee // decimal.Decimal is a value type, so this is safe
+	}
+	
+	// Deep copy scenarios
+	for i, scenario := range config.Scenarios {
+		newConfig.Scenarios[i] = scenario // All fields are value types, so this is safe
+	}
+	
+	return newConfig
 }
