@@ -343,3 +343,5 @@ For issues, questions, or contributions, please use the GitHub issue tracker or 
 - [ ] Medicare Part B premium calculations
 - [ ] Survivor benefit optimization
 - [ ] Export to financial planning software 
+
+./fers-calc monte-carlo example_config.yaml ./data --simulations 1000
