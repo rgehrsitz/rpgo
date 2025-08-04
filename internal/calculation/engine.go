@@ -30,17 +30,17 @@ func (ce *CalculationEngine) RunScenario(config *domain.Configuration, scenario 
 
 	// Validate retirement dates are after hire dates
 	if scenario.Robert.RetirementDate.Before(robert.HireDate) {
-		return nil, fmt.Errorf("Robert's retirement date (%s) cannot be before hire date (%s)", 
+		return nil, fmt.Errorf("robert's retirement date (%s) cannot be before hire date (%s)",
 			scenario.Robert.RetirementDate.Format("2006-01-02"), robert.HireDate.Format("2006-01-02"))
 	}
 	if scenario.Dawn.RetirementDate.Before(dawn.HireDate) {
-		return nil, fmt.Errorf("Dawn's retirement date (%s) cannot be before hire date (%s)", 
+		return nil, fmt.Errorf("dawn's retirement date (%s) cannot be before hire date (%s)",
 			scenario.Dawn.RetirementDate.Format("2006-01-02"), dawn.HireDate.Format("2006-01-02"))
 	}
 
 	// Validate inflation and return rates are reasonable
 	if config.GlobalAssumptions.InflationRate.LessThan(decimal.Zero) || config.GlobalAssumptions.InflationRate.GreaterThan(decimal.NewFromFloat(0.20)) {
-		return nil, fmt.Errorf("inflation rate must be between 0%% and 20%%, got %s%%", 
+		return nil, fmt.Errorf("inflation rate must be between 0%% and 20%%, got %s%%",
 			config.GlobalAssumptions.InflationRate.Mul(decimal.NewFromInt(100)).StringFixed(2))
 	}
 
@@ -213,7 +213,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 				retirementDate := scenario.Dawn.RetirementDate
 				ssStartDate := time.Date(retirementDate.Year(), retirementDate.Month()+1, 1, 0, 0, 0, 0, time.UTC)
 				monthsOfBenefits := 12 - int(ssStartDate.Month()) + 1 // Sept(9) to Dec(12) = 4 months
-				
+
 				// Prorate SS for partial year
 				ssMonthlyBenefit := ssDawn.Div(decimal.NewFromInt(12))
 				ssDawn = ssMonthlyBenefit.Mul(decimal.NewFromInt(int64(monthsOfBenefits)))
@@ -347,7 +347,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		fehbPremium := ce.calculateFEHBPremium(robert, year, dateutil.IsMedicareEligible(robert.BirthDate, projectionDate), assumptions.FEHBPremiumInflation)
 
 		// Calculate Medicare premiums (if applicable)
-		medicarePremium := ce.calculateMedicarePremium(robert, dawn, projectionDate, 
+		medicarePremium := ce.calculateMedicarePremium(robert, dawn, projectionDate,
 			pensionRobert, pensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn)
 
 		// Calculate taxes - handle transition years properly
@@ -517,35 +517,35 @@ func (ce *CalculationEngine) calculateFEHBPremium(employee *domain.Employee, yea
 
 // calculateMedicarePremium calculates Medicare Part B premiums with IRMAA considerations
 // based on current year income (simplified - real IRMAA uses 2-year-old MAGI)
-func (ce *CalculationEngine) calculateMedicarePremium(robert, dawn *domain.Employee, projectionDate time.Time, 
+func (ce *CalculationEngine) calculateMedicarePremium(robert, dawn *domain.Employee, projectionDate time.Time,
 	pensionRobert, pensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn decimal.Decimal) decimal.Decimal {
 	var totalPremium decimal.Decimal
-	
+
 	// Estimate MAGI for IRMAA calculation (simplified)
 	// In reality, IRMAA uses MAGI from 2 years prior
 	totalPensionIncome := pensionRobert.Add(pensionDawn)
 	totalTSPWithdrawals := tspWithdrawalRobert.Add(tspWithdrawalDawn)
-	
+
 	// Calculate taxable portion of Social Security (simplified)
 	totalSSBenefits := ssRobert.Add(ssDawn)
 	otherIncome := totalPensionIncome.Add(totalTSPWithdrawals)
 	taxableSSBenefits := ce.TaxCalc.CalculateSocialSecurityTaxation(totalSSBenefits, otherIncome)
-	
+
 	// Estimate combined MAGI
 	estimatedMAGI := EstimateMAGI(totalPensionIncome, totalTSPWithdrawals, taxableSSBenefits, decimal.Zero)
-	
+
 	// Check if Robert is Medicare eligible
 	if dateutil.IsMedicareEligible(robert.BirthDate, projectionDate) {
 		robertPremium := ce.MedicareCalc.CalculateAnnualPartBCost(estimatedMAGI, true) // Married filing jointly
 		totalPremium = totalPremium.Add(robertPremium)
 	}
-	
-	// Check if Dawn is Medicare eligible  
+
+	// Check if Dawn is Medicare eligible
 	if dateutil.IsMedicareEligible(dawn.BirthDate, projectionDate) {
 		dawnPremium := ce.MedicareCalc.CalculateAnnualPartBCost(estimatedMAGI, true) // Married filing jointly
 		totalPremium = totalPremium.Add(dawnPremium)
 	}
-	
+
 	return totalPremium
 }
 
@@ -680,7 +680,6 @@ func (ce *CalculationEngine) calculateCurrentNetIncome(robert, dawn *domain.Empl
 	// Calculate net income: gross - taxes - FEHB - TSP contributions
 	netIncome := grossIncome.Sub(federalTax).Sub(stateTax).Sub(localTax).Sub(ficaTax).Sub(fehbPremium).Sub(tspContributions)
 
-
 	// Debug output for verification
 	fmt.Println("CURRENT NET INCOME CALCULATION BREAKDOWN:")
 	fmt.Println("=========================================")
@@ -766,7 +765,7 @@ func (ce *CalculationEngine) generateLongTermAnalysis(scenarios []domain.Scenari
 func (ce *CalculationEngine) CalculateBreakEvenTSPWithdrawalRate(config *domain.Configuration, scenario *domain.Scenario, targetNetIncome decimal.Decimal) (decimal.Decimal, *domain.AnnualCashFlow, error) {
 	robertEmployee := config.PersonalDetails["robert"]
 	dawnEmployee := config.PersonalDetails["dawn"]
-	
+
 	// Find the first year when both are fully retired
 	projectionStartYear := 2025
 	robertRetirementYear := scenario.Robert.RetirementDate.Year() - projectionStartYear
@@ -777,40 +776,40 @@ func (ce *CalculationEngine) CalculateBreakEvenTSPWithdrawalRate(config *domain.
 	}
 	// Add 1 to get the first FULL year after both are retired
 	firstFullRetirementYear++
-	
+
 	// Binary search for the correct TSP withdrawal rate
-	minRate := decimal.NewFromFloat(0.001) // 0.1%
-	maxRate := decimal.NewFromFloat(0.15)  // 15%
+	minRate := decimal.NewFromFloat(0.001)  // 0.1%
+	maxRate := decimal.NewFromFloat(0.15)   // 15%
 	tolerance := decimal.NewFromFloat(1000) // Within $1,000
 	maxIterations := 50
-	
+
 	for i := 0; i < maxIterations; i++ {
 		// Calculate midpoint withdrawal rate
 		testRate := minRate.Add(maxRate).Div(decimal.NewFromInt(2))
-		
+
 		// Create a test scenario with this withdrawal rate
 		testScenario := *scenario
 		testScenario.Robert.TSPWithdrawalStrategy = "variable_percentage"
 		testScenario.Robert.TSPWithdrawalRate = &testRate
 		testScenario.Dawn.TSPWithdrawalStrategy = "variable_percentage"
 		testScenario.Dawn.TSPWithdrawalRate = &testRate
-		
+
 		// Run projection to get the first full retirement year
 		projection := ce.GenerateAnnualProjection(&robertEmployee, &dawnEmployee, &testScenario, &config.GlobalAssumptions)
-		
+
 		// Check if we have enough projection years
 		if firstFullRetirementYear >= len(projection) {
 			return decimal.Zero, nil, fmt.Errorf("first full retirement year (%d) exceeds projection length (%d)", firstFullRetirementYear, len(projection))
 		}
-		
+
 		testYear := projection[firstFullRetirementYear]
 		netIncomeDiff := testYear.NetIncome.Sub(targetNetIncome)
-		
+
 		// Check if we're within tolerance
 		if netIncomeDiff.Abs().LessThan(tolerance) {
 			return testRate, &testYear, nil
 		}
-		
+
 		// Adjust search range
 		if netIncomeDiff.LessThan(decimal.Zero) {
 			// Net income is too low, need higher withdrawal rate
@@ -819,13 +818,13 @@ func (ce *CalculationEngine) CalculateBreakEvenTSPWithdrawalRate(config *domain.
 			// Net income is too high, need lower withdrawal rate
 			maxRate = testRate
 		}
-		
+
 		// Check if search range is too narrow
 		if maxRate.Sub(minRate).LessThan(decimal.NewFromFloat(0.0001)) {
 			break
 		}
 	}
-	
+
 	// Return the best rate found
 	finalRate := minRate.Add(maxRate).Div(decimal.NewFromInt(2))
 	testScenario := *scenario
@@ -833,10 +832,10 @@ func (ce *CalculationEngine) CalculateBreakEvenTSPWithdrawalRate(config *domain.
 	testScenario.Robert.TSPWithdrawalRate = &finalRate
 	testScenario.Dawn.TSPWithdrawalStrategy = "variable_percentage"
 	testScenario.Dawn.TSPWithdrawalRate = &finalRate
-	
+
 	projection := ce.GenerateAnnualProjection(&robertEmployee, &dawnEmployee, &testScenario, &config.GlobalAssumptions)
 	finalYear := projection[firstFullRetirementYear]
-	
+
 	return finalRate, &finalYear, nil
 }
 
@@ -846,26 +845,26 @@ func (ce *CalculationEngine) CalculateBreakEvenAnalysis(config *domain.Configura
 	robertEmployee := config.PersonalDetails["robert"]
 	dawnEmployee := config.PersonalDetails["dawn"]
 	targetNetIncome := ce.calculateCurrentNetIncome(&robertEmployee, &dawnEmployee, &config.GlobalAssumptions)
-	
+
 	results := make([]BreakEvenResult, len(config.Scenarios))
-	
+
 	for i, scenario := range config.Scenarios {
 		rate, yearData, err := ce.CalculateBreakEvenTSPWithdrawalRate(config, &scenario, targetNetIncome)
 		if err != nil {
 			return nil, fmt.Errorf("failed to calculate break-even rate for scenario %s: %v", scenario.Name, err)
 		}
-		
+
 		results[i] = BreakEvenResult{
-			ScenarioName:              scenario.Name,
-			BreakEvenWithdrawalRate:   rate,
-			ProjectedNetIncome:        yearData.NetIncome,
-			ProjectedYear:             yearData.Year + 2024, // Convert to actual year
-			TSPWithdrawalAmount:       yearData.TSPWithdrawalRobert.Add(yearData.TSPWithdrawalDawn),
-			TotalTSPBalance:           yearData.TotalTSPBalance(),
-			CurrentVsBreakEvenDiff:    yearData.NetIncome.Sub(targetNetIncome),
+			ScenarioName:            scenario.Name,
+			BreakEvenWithdrawalRate: rate,
+			ProjectedNetIncome:      yearData.NetIncome,
+			ProjectedYear:           yearData.Year + 2024, // Convert to actual year
+			TSPWithdrawalAmount:     yearData.TSPWithdrawalRobert.Add(yearData.TSPWithdrawalDawn),
+			TotalTSPBalance:         yearData.TotalTSPBalance(),
+			CurrentVsBreakEvenDiff:  yearData.NetIncome.Sub(targetNetIncome),
 		}
 	}
-	
+
 	return &BreakEvenAnalysis{
 		TargetNetIncome: targetNetIncome,
 		Results:         results,
@@ -874,17 +873,17 @@ func (ce *CalculationEngine) CalculateBreakEvenAnalysis(config *domain.Configura
 
 // BreakEvenAnalysis contains the results of break-even TSP withdrawal rate analysis
 type BreakEvenAnalysis struct {
-	TargetNetIncome decimal.Decimal     `json:"target_net_income"`
-	Results         []BreakEvenResult   `json:"results"`
+	TargetNetIncome decimal.Decimal   `json:"target_net_income"`
+	Results         []BreakEvenResult `json:"results"`
 }
 
 // BreakEvenResult contains break-even calculation results for a single scenario
 type BreakEvenResult struct {
-	ScenarioName              string          `json:"scenario_name"`
-	BreakEvenWithdrawalRate   decimal.Decimal `json:"break_even_withdrawal_rate"`
-	ProjectedNetIncome        decimal.Decimal `json:"projected_net_income"`
-	ProjectedYear             int             `json:"projected_year"`
-	TSPWithdrawalAmount       decimal.Decimal `json:"tsp_withdrawal_amount"`
-	TotalTSPBalance           decimal.Decimal `json:"total_tsp_balance"`
-	CurrentVsBreakEvenDiff    decimal.Decimal `json:"current_vs_break_even_diff"`
+	ScenarioName            string          `json:"scenario_name"`
+	BreakEvenWithdrawalRate decimal.Decimal `json:"break_even_withdrawal_rate"`
+	ProjectedNetIncome      decimal.Decimal `json:"projected_net_income"`
+	ProjectedYear           int             `json:"projected_year"`
+	TSPWithdrawalAmount     decimal.Decimal `json:"tsp_withdrawal_amount"`
+	TotalTSPBalance         decimal.Decimal `json:"total_tsp_balance"`
+	CurrentVsBreakEvenDiff  decimal.Decimal `json:"current_vs_break_even_diff"`
 }

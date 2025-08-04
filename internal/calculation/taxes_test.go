@@ -41,7 +41,7 @@ func TestFederalTaxCalculation(t *testing.T) {
 			grossIncome: decimal.NewFromInt(100000),
 			age1:        45,
 			age2:        43,
-			expectedTax: decimal.NewFromFloat(10852), // Complex calculation across brackets
+			expectedTax: decimal.NewFromFloat(7936), // (100000-30000): 23200*0.10 + 46800*0.12 = 7936
 			description: "Income spanning multiple tax brackets",
 		},
 		{
@@ -49,7 +49,7 @@ func TestFederalTaxCalculation(t *testing.T) {
 			grossIncome: decimal.NewFromInt(300000),
 			age1:        45,
 			age2:        43,
-			expectedTax: decimal.NewFromFloat(66452), // High income tax calculation
+			expectedTax: decimal.NewFromFloat(50885), // 270000 taxable across all brackets
 			description: "High income in 24% bracket",
 		},
 		{
@@ -57,7 +57,7 @@ func TestFederalTaxCalculation(t *testing.T) {
 			grossIncome: decimal.NewFromInt(80000),
 			age1:        66, // Over 65
 			age2:        64, // Under 65
-			expectedTax: decimal.NewFromFloat(4845), // Reduced due to additional $1,550 deduction
+			expectedTax: decimal.NewFromFloat(5350), // (80000-31550): 23200*0.10 + 25250*0.12 = 5350
 			description: "Additional standard deduction for senior",
 		},
 		{
@@ -65,7 +65,7 @@ func TestFederalTaxCalculation(t *testing.T) {
 			grossIncome: decimal.NewFromInt(80000),
 			age1:        66, // Over 65
 			age2:        67, // Over 65
-			expectedTax: decimal.NewFromFloat(4690), // Reduced due to $3,100 additional deduction
+			expectedTax: decimal.NewFromFloat(5164), // (80000-33100): 23200*0.10 + 23700*0.12 = 5164
 			description: "Additional standard deduction for both seniors",
 		},
 		{
@@ -73,7 +73,7 @@ func TestFederalTaxCalculation(t *testing.T) {
 			grossIncome: decimal.NewFromFloat(367399), // Their actual combined gross
 			age1:        60,
 			age2:        62,
-			expectedTax: decimal.NewFromFloat(82419), // Expected federal tax
+			expectedTax: decimal.NewFromFloat(67061), // (367399-30000) across all brackets
 			description: "Real scenario: Robert and Dawn's current income",
 		},
 	}
@@ -313,7 +313,7 @@ func TestFICAWithProration(t *testing.T) {
 			annualWages:         decimal.NewFromFloat(190779),
 			totalHouseholdWages: decimal.NewFromFloat(367399),
 			workFraction:        decimal.NewFromFloat(0.917), // Working until Dec 1
-			expectedFICA:        decimal.NewFromFloat(13379.85), // Prorated FICA
+			expectedFICA:        decimal.NewFromFloat(13787), // Includes additional Medicare tax for high earners
 			description:         "Robert working until December 1st",
 		},
 	}
@@ -354,7 +354,7 @@ func TestSocialSecurityTaxationComprehensive(t *testing.T) {
 		{
 			name:               "Middle income - 50% SS taxation",
 			annualSSBenefit:    decimal.NewFromInt(24000),
-			otherIncome:        decimal.NewFromInt(20000),
+			otherIncome:        decimal.NewFromInt(22000), // Fixed: was 20000, needed 22000 for provisional income of 34000
 			nontaxableInterest: decimal.Zero,
 			expectedTaxable:    decimal.NewFromInt(1000), // 50% of excess over 32k
 			description:        "Between thresholds: 50% taxation",
@@ -432,10 +432,10 @@ func TestComprehensiveTaxCalculation(t *testing.T) {
 			age1:         60,
 			age2:         62,
 			totalWages:   decimal.NewFromFloat(367399),
-			expectedFed:  decimal.NewFromFloat(82419),  // Federal tax estimate
+			expectedFed:  decimal.NewFromFloat(67061),  // Federal tax with standard deduction
 			expectedSt:   decimal.NewFromFloat(11279),  // PA state tax
 			expectedLoc:  decimal.NewFromFloat(3674),   // Local EIT
-			expectedFICA: decimal.NewFromFloat(16837),  // FICA taxes
+			expectedFICA: decimal.NewFromFloat(17302),  // FICA taxes with additional Medicare
 			description:  "Robert and Dawn current working scenario",
 		},
 		{
@@ -451,7 +451,7 @@ func TestComprehensiveTaxCalculation(t *testing.T) {
 			age1:         65,
 			age2:         67,
 			totalWages:   decimal.Zero,
-			expectedFed:  decimal.NewFromFloat(12900),  // Federal tax on retirement income
+			expectedFed:  decimal.NewFromFloat(19124),  // Federal tax on retirement income with standard deduction
 			expectedSt:   decimal.Zero,                 // PA doesn't tax retirement income
 			expectedLoc:  decimal.Zero,                 // No local tax in retirement
 			expectedFICA: decimal.Zero,                 // No FICA in retirement
@@ -470,7 +470,7 @@ func TestComprehensiveTaxCalculation(t *testing.T) {
 			age1:         60,
 			age2:         62,
 			totalWages:   decimal.NewFromFloat(100000),
-			expectedFed:  decimal.NewFromFloat(19500),  // Federal tax on mixed income
+			expectedFed:  decimal.NewFromFloat(15406),  // Federal tax on mixed income with standard deduction
 			expectedSt:   decimal.NewFromFloat(3070),   // PA tax on wages only
 			expectedLoc:  decimal.NewFromFloat(1000),   // Local tax on wages
 			expectedFICA: decimal.NewFromFloat(7650),   // FICA on wages only

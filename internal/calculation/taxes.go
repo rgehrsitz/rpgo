@@ -6,7 +6,7 @@ import (
 )
 
 // TAX CALCULATION ASSUMPTIONS:
-// 
+//
 // 1. Federal Tax Brackets: Uses 2025 tax brackets for all projection years
 //    - No inflation indexing applied to future years
 //    - Standard deduction: $30,000 (2025 MFJ estimate)
@@ -78,10 +78,9 @@ func (ftc *FederalTaxCalculator) CalculateFederalTax(grossIncome decimal.Decimal
 		if taxableIncome.LessThanOrEqual(bracket.Min) {
 			break
 		}
-
-		taxableInBracket := decimal.Min(taxableIncome, bracket.Max).Sub(bracket.Min)
-		if taxableInBracket.GreaterThan(decimal.Zero) {
-			totalTax = totalTax.Add(taxableInBracket.Mul(bracket.Rate))
+		incomeInBracket := decimal.Min(taxableIncome, bracket.Max).Sub(bracket.Min)
+		if incomeInBracket.GreaterThan(decimal.Zero) {
+			totalTax = totalTax.Add(incomeInBracket.Mul(bracket.Rate))
 		}
 	}
 
@@ -182,7 +181,7 @@ func (fc *FICACalculator) CalculateFICAWithProration(wages decimal.Decimal, tota
 	// Apply work fraction to wages first
 	proratedWages := wages.Mul(workFraction)
 	proratedHouseholdWages := totalHouseholdWages.Mul(workFraction)
-	
+
 	// Social Security tax (capped per individual, then prorated)
 	ssWages := decimal.Min(proratedWages, fc.SSWageBase)
 	ssTax := ssWages.Mul(fc.SSRate)
