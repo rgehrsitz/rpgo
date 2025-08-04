@@ -183,14 +183,33 @@ var fersMonteCarloCmd = &cobra.Command{
 			fmt.Printf("Seed: %d\n", seed)
 		}
 
-		// Run simulation
-		fmt.Printf("\n🔄 Running simulations...\n")
+		// Run simulation with progress indication
+		fmt.Printf("\n🔄 Running %d simulations...\n", numSimulations)
+		fmt.Printf("   Progress: [")
 		startTime := time.Now()
+
+		// Show progress for large simulations
+		if numSimulations > 100 {
+			for i := 0; i < 10; i++ {
+				fmt.Printf(" ")
+			}
+			fmt.Printf("] 0%%")
+		}
+
 		result, err := engine.RunFERSMonteCarlo(mcConfig)
 		if err != nil {
 			log.Fatal(err)
 		}
 		duration := time.Since(startTime)
+
+		// Clear progress line and show completion
+		if numSimulations > 100 {
+			fmt.Printf("\r   Progress: [")
+			for i := 0; i < 10; i++ {
+				fmt.Printf("█")
+			}
+			fmt.Printf("] 100%%\n")
+		}
 
 		// Display results
 		fmt.Printf("\n📊 SIMULATION RESULTS\n")
@@ -238,6 +257,53 @@ var fersMonteCarloCmd = &cobra.Command{
 			fmt.Printf("  Average Inflation Rate: %s%%\n", calculateAverageInflation(result).Mul(decimal.NewFromInt(100)).StringFixed(2))
 			fmt.Printf("  Average COLA Rate: %s%%\n", calculateAverageCOLA(result).Mul(decimal.NewFromInt(100)).StringFixed(2))
 		}
+
+		// Generate HTML report
+		htmlReport := &output.MonteCarloHTMLReport{
+			Result: result,
+			Config: mcConfig,
+		}
+
+		htmlOutputPath := "monte_carlo_report.html"
+		if err := htmlReport.GenerateHTMLReport(htmlOutputPath); err != nil {
+			fmt.Printf("\n⚠️  Warning: Could not generate HTML report: %v\n", err)
+		} else {
+			fmt.Printf("\n📄 HTML Report Generated: %s\n", htmlOutputPath)
+			fmt.Printf("   Open this file in your web browser for interactive charts and detailed analysis\n")
+		}
+
+		// Generate CSV reports
+		csvReport := &output.MonteCarloCSVReport{
+			Result: result,
+			Config: mcConfig,
+		}
+
+		csvOutputDir := "monte_carlo_csv"
+		if err := csvReport.GenerateAllCSVReports(csvOutputDir); err != nil {
+			fmt.Printf("\n⚠️  Warning: Could not generate CSV reports: %v\n", err)
+		} else {
+			fmt.Printf("\n📊 CSV Reports Generated in: %s/\n", csvOutputDir)
+			fmt.Printf("   - monte_carlo_summary.csv: Aggregate statistics\n")
+			fmt.Printf("   - monte_carlo_detailed.csv: Individual simulation results\n")
+			fmt.Printf("   - monte_carlo_percentiles.csv: Percentile analysis\n")
+		}
+
+		// Summary with color-coded success rate
+		successRateFloat, _ := successRatePercent.Float64()
+
+		fmt.Printf("\n" + strings.Repeat("=", 60) + "\n")
+		fmt.Printf("🎯 QUICK SUMMARY\n")
+		fmt.Printf("Success Rate: ")
+		if successRateFloat >= 90 {
+			fmt.Printf("🟢 %s%% (Excellent)\n", successRatePercent.StringFixed(1))
+		} else if successRateFloat >= 70 {
+			fmt.Printf("🟡 %s%% (Good)\n", successRatePercent.StringFixed(1))
+		} else {
+			fmt.Printf("🔴 %s%% (Needs Attention)\n", successRatePercent.StringFixed(1))
+		}
+		fmt.Printf("Median Income: $%s\n", result.MedianNetIncome.StringFixed(0))
+		fmt.Printf("Risk Level: %s\n", riskLevel)
+		fmt.Printf(strings.Repeat("=", 60) + "\n")
 	},
 }
 
