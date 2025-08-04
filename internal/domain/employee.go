@@ -22,6 +22,9 @@ type Employee struct {
 	FEHBPremiumMonthly            decimal.Decimal `yaml:"fehb_premium_monthly" json:"fehb_premium_monthly"`
 	SurvivorBenefitElectionPercent decimal.Decimal `yaml:"survivor_benefit_election_percent" json:"survivor_benefit_election_percent"`
 	
+	// TSP Asset Allocation (optional - uses default allocation if not specified)
+	TSPAllocation                 *TSPAllocation  `yaml:"tsp_allocation,omitempty" json:"tsp_allocation,omitempty"`
+	
 	// Optional fields for additional context (not used in calculations)
 	PayPlanGrade                  string          `yaml:"pay_plan_grade,omitempty" json:"pay_plan_grade,omitempty"`
 	SSNLast4                      string          `yaml:"ssn_last4,omitempty" json:"ssn_last4,omitempty"`
@@ -48,13 +51,22 @@ type Scenario struct {
 
 // GlobalAssumptions contains all the global parameters for calculations
 type GlobalAssumptions struct {
-	InflationRate              decimal.Decimal `yaml:"inflation_rate" json:"inflation_rate"`
-	FEHBPremiumInflation       decimal.Decimal `yaml:"fehb_premium_inflation" json:"fehb_premium_inflation"`
-	TSPReturnPreRetirement     decimal.Decimal `yaml:"tsp_return_pre_retirement" json:"tsp_return_pre_retirement"`
-	TSPReturnPostRetirement    decimal.Decimal `yaml:"tsp_return_post_retirement" json:"tsp_return_post_retirement"`
-	COLAGeneralRate            decimal.Decimal `yaml:"cola_general_rate" json:"cola_general_rate"`
-	ProjectionYears            int             `yaml:"projection_years" json:"projection_years"`
-	CurrentLocation            Location        `yaml:"current_location" json:"current_location"`
+	InflationRate              decimal.Decimal    `yaml:"inflation_rate" json:"inflation_rate"`
+	FEHBPremiumInflation       decimal.Decimal    `yaml:"fehb_premium_inflation" json:"fehb_premium_inflation"`
+	TSPReturnPreRetirement     decimal.Decimal    `yaml:"tsp_return_pre_retirement" json:"tsp_return_pre_retirement"`
+	TSPReturnPostRetirement    decimal.Decimal    `yaml:"tsp_return_post_retirement" json:"tsp_return_post_retirement"`
+	COLAGeneralRate            decimal.Decimal    `yaml:"cola_general_rate" json:"cola_general_rate"`
+	ProjectionYears            int                `yaml:"projection_years" json:"projection_years"`
+	CurrentLocation            Location           `yaml:"current_location" json:"current_location"`
+	
+	// Monte Carlo Configuration
+	MonteCarloSettings         MonteCarloSettings `yaml:"monte_carlo_settings" json:"monte_carlo_settings"`
+	
+	// Federal Rules and Limits (updated annually)
+	FederalRules               FederalRules       `yaml:"federal_rules" json:"federal_rules"`
+	
+	// TSP Statistical Models (calculated from historical data, but configurable)
+	TSPStatisticalModels       TSPStatisticalModels `yaml:"tsp_statistical_models" json:"tsp_statistical_models"`
 }
 
 // Location represents the geographic location for tax calculations
@@ -62,6 +74,93 @@ type Location struct {
 	State        string `yaml:"state" json:"state"`
 	County       string `yaml:"county" json:"county"`
 	Municipality string `yaml:"municipality" json:"municipality"`
+}
+
+// MonteCarloSettings contains Monte Carlo simulation parameters
+type MonteCarloSettings struct {
+	// Variability parameters for statistical generation
+	TSPReturnVariability    decimal.Decimal `yaml:"tsp_return_variability" json:"tsp_return_variability"`       // Default: 0.15 (15% std dev)
+	InflationVariability    decimal.Decimal `yaml:"inflation_variability" json:"inflation_variability"`         // Default: 0.02 (2% std dev)
+	COLAVariability         decimal.Decimal `yaml:"cola_variability" json:"cola_variability"`                   // Default: 0.02 (2% std dev)
+	FEHBVariability         decimal.Decimal `yaml:"fehb_variability" json:"fehb_variability"`                   // Default: 0.05 (5% std dev)
+	
+	// Income limits and caps
+	MaxReasonableIncome     decimal.Decimal `yaml:"max_reasonable_income" json:"max_reasonable_income"`         // Default: 5000000 ($5M annual cap)
+	
+	// Default TSP asset allocation (used when individual allocations not specified)
+	DefaultTSPAllocation    TSPAllocation   `yaml:"default_tsp_allocation" json:"default_tsp_allocation"`
+}
+
+// TSPAllocation represents asset allocation across TSP funds
+type TSPAllocation struct {
+	CFund decimal.Decimal `yaml:"c_fund" json:"c_fund"` // Default: 0.60 (60% - Large Cap Stock Index)
+	SFund decimal.Decimal `yaml:"s_fund" json:"s_fund"` // Default: 0.20 (20% - Small Cap Stock Index)  
+	IFund decimal.Decimal `yaml:"i_fund" json:"i_fund"` // Default: 0.10 (10% - International Stock Index)
+	FFund decimal.Decimal `yaml:"f_fund" json:"f_fund"` // Default: 0.10 (10% - Fixed Income Index)
+	GFund decimal.Decimal `yaml:"g_fund" json:"g_fund"` // Default: 0.00 (0% - Government Securities)
+}
+
+// FederalRules contains federal rules and limits that change annually
+type FederalRules struct {
+	// Social Security taxation thresholds (2025 values, updated annually)
+	SocialSecurityTaxThresholds SocialSecurityTaxThresholds `yaml:"social_security_tax_thresholds" json:"social_security_tax_thresholds"`
+	
+	// Social Security benefit calculation rules (rarely change, but configurable)
+	SocialSecurityRules         SocialSecurityRules         `yaml:"social_security_rules" json:"social_security_rules"`
+	
+	// FERS rules and matching rates
+	FERSRules                   FERSRules                   `yaml:"fers_rules" json:"fers_rules"`
+}
+
+// SocialSecurityTaxThresholds contains income thresholds for SS taxation (updated annually)
+type SocialSecurityTaxThresholds struct {
+	// 2025 thresholds for determining taxable portion of Social Security benefits
+	MarriedFilingJointly struct {
+		Threshold1 decimal.Decimal `yaml:"threshold_1" json:"threshold_1"` // Default: 32000 (50% taxation begins)
+		Threshold2 decimal.Decimal `yaml:"threshold_2" json:"threshold_2"` // Default: 44000 (85% taxation begins)
+	} `yaml:"married_filing_jointly" json:"married_filing_jointly"`
+	
+	Single struct {
+		Threshold1 decimal.Decimal `yaml:"threshold_1" json:"threshold_1"` // Default: 25000 (50% taxation begins)
+		Threshold2 decimal.Decimal `yaml:"threshold_2" json:"threshold_2"` // Default: 34000 (85% taxation begins)
+	} `yaml:"single" json:"single"`
+}
+
+// SocialSecurityRules contains benefit calculation rules
+type SocialSecurityRules struct {
+	// Early retirement reduction: 5/9 of 1% per month for first 36 months, 5/12 of 1% thereafter
+	EarlyRetirementReduction struct {
+		First36MonthsRate   decimal.Decimal `yaml:"first_36_months_rate" json:"first_36_months_rate"`     // Default: 0.0055556 (5/9 of 1%)
+		AdditionalMonthsRate decimal.Decimal `yaml:"additional_months_rate" json:"additional_months_rate"` // Default: 0.0041667 (5/12 of 1%)
+	} `yaml:"early_retirement_reduction" json:"early_retirement_reduction"`
+	
+	// Delayed retirement credit: 2/3 of 1% per month (8% per year)
+	DelayedRetirementCredit decimal.Decimal `yaml:"delayed_retirement_credit" json:"delayed_retirement_credit"` // Default: 0.0066667 (2/3 of 1%)
+}
+
+// FERSRules contains FERS-specific rules and matching rates
+type FERSRules struct {
+	// TSP matching rates
+	TSPMatchingRate         decimal.Decimal `yaml:"tsp_matching_rate" json:"tsp_matching_rate"`                 // Default: 0.05 (5% maximum match)
+	TSPMatchingThreshold    decimal.Decimal `yaml:"tsp_matching_threshold" json:"tsp_matching_threshold"`       // Default: 0.05 (5% contribution required for full match)
+}
+
+// TSPStatisticalModels contains statistical parameters for each TSP fund
+// These are calculated from historical data but can be overridden
+type TSPStatisticalModels struct {
+	CFund TSPFundStats `yaml:"c_fund" json:"c_fund"` // Large Cap Stock Index
+	SFund TSPFundStats `yaml:"s_fund" json:"s_fund"` // Small Cap Stock Index  
+	IFund TSPFundStats `yaml:"i_fund" json:"i_fund"` // International Stock Index
+	FFund TSPFundStats `yaml:"f_fund" json:"f_fund"` // Fixed Income Index
+	GFund TSPFundStats `yaml:"g_fund" json:"g_fund"` // Government Securities
+}
+
+// TSPFundStats contains statistical parameters for a TSP fund
+type TSPFundStats struct {
+	Mean         decimal.Decimal `yaml:"mean" json:"mean"`                   // Historical mean return
+	StandardDev  decimal.Decimal `yaml:"standard_dev" json:"standard_dev"`   // Historical standard deviation
+	DataSource   string          `yaml:"data_source" json:"data_source"`     // Source of the data (e.g., "TSP.gov 1988-2024")
+	LastUpdated  string          `yaml:"last_updated" json:"last_updated"`   // When these stats were calculated
 }
 
 // Configuration represents the complete input configuration

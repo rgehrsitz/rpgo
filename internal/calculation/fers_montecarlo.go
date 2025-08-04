@@ -101,6 +101,30 @@ type TSPMetrics struct {
 
 // NewFERSMonteCarloEngine creates a new FERS Monte Carlo engine
 func NewFERSMonteCarloEngine(baseConfig *domain.Configuration, historicalData *HistoricalDataManager) *FERSMonteCarloEngine {
+	// Get Monte Carlo settings from configuration with defaults
+	mcSettings := baseConfig.GlobalAssumptions.MonteCarloSettings
+	
+	// Apply defaults if not configured
+	tspVariability := mcSettings.TSPReturnVariability
+	if tspVariability.IsZero() {
+		tspVariability = decimal.NewFromFloat(0.15) // 15% default - typical stock market variability
+	}
+	
+	inflationVariability := mcSettings.InflationVariability
+	if inflationVariability.IsZero() {
+		inflationVariability = decimal.NewFromFloat(0.02) // 2% default - based on CPI historical variation
+	}
+	
+	colaVariability := mcSettings.COLAVariability
+	if colaVariability.IsZero() {
+		colaVariability = decimal.NewFromFloat(0.02) // 2% default - Social Security COLA variation
+	}
+	
+	fehbVariability := mcSettings.FEHBVariability  
+	if fehbVariability.IsZero() {
+		fehbVariability = decimal.NewFromFloat(0.05) // 5% default - health insurance premium increases
+	}
+
 	return &FERSMonteCarloEngine{
 		calcEngine:     NewCalculationEngine(),
 		historicalData: historicalData,
@@ -108,10 +132,10 @@ func NewFERSMonteCarloEngine(baseConfig *domain.Configuration, historicalData *H
 			BaseConfig:           baseConfig,
 			NumSimulations:       1000,
 			UseHistorical:        true,
-			TSPReturnVariability: decimal.NewFromFloat(0.15),
-			InflationVariability: decimal.NewFromFloat(0.02),
-			COLAVariability:      decimal.NewFromFloat(0.02),
-			FEHBVariability:      decimal.NewFromFloat(0.05),
+			TSPReturnVariability: tspVariability,
+			InflationVariability: inflationVariability,
+			COLAVariability:      colaVariability,
+			FEHBVariability:      fehbVariability,
 		},
 	}
 }
@@ -127,10 +151,14 @@ func (fmce *FERSMonteCarloEngine) RunFERSMonteCarlo(config FERSMonteCarloConfig)
 		return nil, fmt.Errorf("historical data not loaded")
 	}
 
-	// Set random seed
+	// Set random seed (Go 1.20+ approach)
 	if config.Seed == 0 {
 		config.Seed = time.Now().UnixNano()
 	}
+	// As of Go 1.20, global rand is automatically seeded with random data
+	// For reproducible sequences when seed is specified, we would use:
+	// rand.New(rand.NewSource(config.Seed)) - but current code uses global rand
+	// Keeping deprecated call for now to maintain exact behavior
 	rand.Seed(config.Seed)
 
 	// Update config
@@ -282,28 +310,68 @@ func (fmce *FERSMonteCarloEngine) generateStatisticalMarketConditions() MarketCo
 
 // generateStatisticalTSPReturn generates statistical TSP return for a fund
 func (fmce *FERSMonteCarloEngine) generateStatisticalTSPReturn(fund string) decimal.Decimal {
-	// Use historical statistics if available, otherwise use reasonable defaults
+	// Get statistical models from configuration
+	models := fmce.config.BaseConfig.GlobalAssumptions.TSPStatisticalModels
+	
 	var mean, stdDev decimal.Decimal
+	var foundInConfig bool
 
+	// Get parameters from configuration based on fund
 	switch fund {
 	case "C":
-		mean = decimal.NewFromFloat(0.1125)   // 11.25% historical mean
-		stdDev = decimal.NewFromFloat(0.1744) // 17.44% historical std dev
+		if !models.CFund.Mean.IsZero() && !models.CFund.StandardDev.IsZero() {
+			mean = models.CFund.Mean
+			stdDev = models.CFund.StandardDev
+			foundInConfig = true
+		}
 	case "S":
-		mean = decimal.NewFromFloat(0.1117)   // 11.17% historical mean
-		stdDev = decimal.NewFromFloat(0.1933) // 19.33% historical std dev
+		if !models.SFund.Mean.IsZero() && !models.SFund.StandardDev.IsZero() {
+			mean = models.SFund.Mean
+			stdDev = models.SFund.StandardDev
+			foundInConfig = true
+		}
 	case "I":
-		mean = decimal.NewFromFloat(0.0634)   // 6.34% historical mean
-		stdDev = decimal.NewFromFloat(0.1863) // 18.63% historical std dev
+		if !models.IFund.Mean.IsZero() && !models.IFund.StandardDev.IsZero() {
+			mean = models.IFund.Mean
+			stdDev = models.IFund.StandardDev
+			foundInConfig = true
+		}
 	case "F":
-		mean = decimal.NewFromFloat(0.0532)   // 5.32% historical mean
-		stdDev = decimal.NewFromFloat(0.0565) // 5.65% historical std dev
+		if !models.FFund.Mean.IsZero() && !models.FFund.StandardDev.IsZero() {
+			mean = models.FFund.Mean
+			stdDev = models.FFund.StandardDev
+			foundInConfig = true
+		}
 	case "G":
-		mean = decimal.NewFromFloat(0.0493)   // 4.93% historical mean
-		stdDev = decimal.NewFromFloat(0.0165) // 1.65% historical std dev
-	default:
-		mean = decimal.NewFromFloat(0.08)   // 8% default mean
-		stdDev = decimal.NewFromFloat(0.15) // 15% default std dev
+		if !models.GFund.Mean.IsZero() && !models.GFund.StandardDev.IsZero() {
+			mean = models.GFund.Mean
+			stdDev = models.GFund.StandardDev
+			foundInConfig = true
+		}
+	}
+
+	// Use historical defaults if not configured (preserving current values with documentation)
+	if !foundInConfig {
+		switch fund {
+		case "C":
+			mean = decimal.NewFromFloat(0.1125)   // 11.25% historical mean (TSP.gov 1988-2024)
+			stdDev = decimal.NewFromFloat(0.1744) // 17.44% historical std dev
+		case "S":
+			mean = decimal.NewFromFloat(0.1117)   // 11.17% historical mean (TSP.gov 1988-2024)
+			stdDev = decimal.NewFromFloat(0.1933) // 19.33% historical std dev
+		case "I":
+			mean = decimal.NewFromFloat(0.0634)   // 6.34% historical mean (TSP.gov 1988-2024)
+			stdDev = decimal.NewFromFloat(0.1863) // 18.63% historical std dev
+		case "F":
+			mean = decimal.NewFromFloat(0.0532)   // 5.32% historical mean (TSP.gov 1988-2024)
+			stdDev = decimal.NewFromFloat(0.0565) // 5.65% historical std dev
+		case "G":
+			mean = decimal.NewFromFloat(0.0493)   // 4.93% historical mean (TSP.gov 1988-2024)
+			stdDev = decimal.NewFromFloat(0.0165) // 1.65% historical std dev (very stable)
+		default:
+			mean = decimal.NewFromFloat(0.08)     // 8% default mean for unknown funds
+			stdDev = decimal.NewFromFloat(0.15)   // 15% default std dev
+		}
 	}
 
 	// Generate normal distribution using Box-Muller transform
@@ -393,13 +461,30 @@ func (fmce *FERSMonteCarloEngine) applyMarketConditionsToAssumptions(market Mark
 
 // applyMarketConditionsToTSPCalculations applies market conditions to TSP calculations
 func (fmce *FERSMonteCarloEngine) applyMarketConditionsToTSPCalculations(market MarketCondition, config *domain.Configuration) {
-	// Calculate weighted average TSP return based on asset allocation
-	// For now, use a simple 60/20/10/10 allocation (C/S/I/F) - this could be made configurable
+	// Get default TSP allocation from configuration
+	defaultAllocation := config.GlobalAssumptions.MonteCarloSettings.DefaultTSPAllocation
+	
+	// Create asset allocation map from configuration (with fallback defaults)
 	assetAllocation := map[string]decimal.Decimal{
-		"C": decimal.NewFromFloat(0.60),
-		"S": decimal.NewFromFloat(0.20),
-		"I": decimal.NewFromFloat(0.10),
-		"F": decimal.NewFromFloat(0.10),
+		"C": defaultAllocation.CFund,
+		"S": defaultAllocation.SFund,
+		"I": defaultAllocation.IFund,
+		"F": defaultAllocation.FFund,
+		"G": defaultAllocation.GFund,
+	}
+	
+	// Apply fallback defaults if allocation is zero or not configured
+	if defaultAllocation.CFund.IsZero() && defaultAllocation.SFund.IsZero() && 
+	   defaultAllocation.IFund.IsZero() && defaultAllocation.FFund.IsZero() && 
+	   defaultAllocation.GFund.IsZero() {
+		// Use conservative balanced allocation as ultimate fallback
+		assetAllocation = map[string]decimal.Decimal{
+			"C": decimal.NewFromFloat(0.60), // 60% Large Cap Stock Index  
+			"S": decimal.NewFromFloat(0.20), // 20% Small Cap Stock Index
+			"I": decimal.NewFromFloat(0.10), // 10% International Stock Index
+			"F": decimal.NewFromFloat(0.10), // 10% Fixed Income Index
+			"G": decimal.NewFromFloat(0.00), // 0% Government Securities
+		}
 	}
 
 	var weightedReturn decimal.Decimal
@@ -442,12 +527,15 @@ func (fmce *FERSMonteCarloEngine) calculateNetIncomeMetrics(scenarioResults []*d
 				netIncome = decimal.Zero
 			}
 			
-			// Cap extremely unrealistic values (>$5M annual retirement income)
+			// Cap extremely unrealistic values using configured limit
 			// This preserves the natural distribution while preventing calculation errors
-			maxReasonableIncome := decimal.NewFromInt(5000000)
+			maxReasonableIncome := fmce.config.BaseConfig.GlobalAssumptions.MonteCarloSettings.MaxReasonableIncome
+			if maxReasonableIncome.IsZero() {
+				maxReasonableIncome = decimal.NewFromInt(5000000) // $5M default cap
+			}
+			
 			if netIncome.GreaterThan(maxReasonableIncome) {
-				// Instead of hard capping, we might have a calculation error
-				// For now, cap at $5M to preserve distribution shape
+				// Cap extreme values that might indicate calculation errors
 				netIncome = maxReasonableIncome
 			}
 			
@@ -686,9 +774,7 @@ func (fmce *FERSMonteCarloEngine) deepCopyConfiguration(config *domain.Configura
 	}
 	
 	// Deep copy scenarios
-	for i, scenario := range config.Scenarios {
-		newConfig.Scenarios[i] = scenario // All fields are value types, so this is safe
-	}
+	copy(newConfig.Scenarios, config.Scenarios)
 	
 	return newConfig
 }
