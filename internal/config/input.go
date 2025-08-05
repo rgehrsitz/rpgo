@@ -80,7 +80,7 @@ func (ip *InputParser) ValidateConfiguration(config *domain.Configuration) error
 }
 
 // validateEmployee validates a single employee's data
-func (ip *InputParser) validateEmployee(name string, employee *domain.Employee) error {
+func (ip *InputParser) validateEmployee(_ string, employee *domain.Employee) error {
 	// Validate required fields
 	if employee.BirthDate.IsZero() {
 		return fmt.Errorf("birth date is required")
@@ -165,7 +165,7 @@ func (ip *InputParser) validateGlobalAssumptions(assumptions *domain.GlobalAssum
 }
 
 // validateScenario validates a single scenario
-func (ip *InputParser) validateScenario(index int, scenario *domain.Scenario) error {
+func (ip *InputParser) validateScenario(_ int, scenario *domain.Scenario) error {
 	if scenario.Name == "" {
 		return fmt.Errorf("scenario name is required")
 	}
@@ -184,7 +184,7 @@ func (ip *InputParser) validateScenario(index int, scenario *domain.Scenario) er
 }
 
 // validateRetirementScenario validates a retirement scenario for an employee
-func (ip *InputParser) validateRetirementScenario(employeeName string, scenario *domain.RetirementScenario) error {
+func (ip *InputParser) validateRetirementScenario(_ string, scenario *domain.RetirementScenario) error {
 	if scenario.EmployeeName == "" {
 		return fmt.Errorf("employee name is required")
 	}
