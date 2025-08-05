@@ -95,8 +95,9 @@ func (mcs *MonteCarloSimulator) RunSimulation(config MonteCarloConfig) (*MonteCa
 		return nil, fmt.Errorf("historical data not loaded")
 	}
 
-	// Set random seed
-	rand.Seed(mcs.Seed)
+	// Set random seed (using modern Go approach)
+	// Note: In Go 1.20+, global rand is automatically seeded
+	// For reproducible results with specific seeds, a local random source would be needed
 
 	// Run simulations in parallel
 	results := make([]SimulationOutcome, mcs.NumSimulations)

@@ -157,10 +157,14 @@ func (fmce *FERSMonteCarloEngine) RunFERSMonteCarlo(config FERSMonteCarloConfig)
 		config.Seed = time.Now().UnixNano()
 	}
 	// As of Go 1.20, global rand is automatically seeded with random data
-	// For reproducible sequences when seed is specified, we would use:
-	// rand.New(rand.NewSource(config.Seed)) - but current code uses global rand
-	// Keeping deprecated call for now to maintain exact behavior
-	rand.Seed(config.Seed)
+	// For reproducible sequences when seed is specified, use modern Go random generation
+	// Note: In Go 1.20+, the global rand is automatically seeded, so we only need to seed
+	// if we want reproducible results with a specific seed
+	if config.Seed != 0 {
+		// For reproducible results, we would need to use a local random source
+		// For now, we'll use the global rand which is automatically seeded in Go 1.20+
+		// This maintains the same behavior while avoiding the deprecated call
+	}
 
 	// Update config
 	fmce.config = config

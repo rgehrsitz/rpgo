@@ -27,11 +27,19 @@ func NewCalculationEngine() *CalculationEngine {
 
 // NewCalculationEngineWithConfig creates a new calculation engine with configurable tax settings
 func NewCalculationEngineWithConfig(federalRules domain.FederalRules) *CalculationEngine {
-	return &CalculationEngine{
+	engine := &CalculationEngine{
 		TaxCalc:             NewComprehensiveTaxCalculatorWithConfig(federalRules),
 		MedicareCalc:        NewMedicareCalculatorWithConfig(federalRules.MedicareConfig),
 		LifecycleFundLoader: NewLifecycleFundLoader("data"),
 	}
+
+	// Load lifecycle fund data
+	if err := engine.LifecycleFundLoader.LoadAllLifecycleFunds(); err != nil {
+		// Log error but don't fail - fall back to default allocations
+		fmt.Printf("Warning: Failed to load lifecycle fund data: %v\n", err)
+	}
+
+	return engine
 }
 
 // RunScenario calculates a complete retirement scenario
@@ -1007,31 +1015,36 @@ func (ce *CalculationEngine) getTSPAllocationForEmployee(employee *domain.Employ
 	}
 }
 
-// calculateTSPReturnWithAllocation calculates TSP return using specific allocation
+// calculateTSPReturnWithAllocation calculates TSP return using specific allocation and statistical models
 func (ce *CalculationEngine) calculateTSPReturnWithAllocation(allocation domain.TSPAllocation, year int) decimal.Decimal {
-	// This would need to be enhanced to use historical fund returns
-	// For now, use a simplified weighted average approach
+	// Use the statistical models from the configuration
+	// For now, we'll use the mean returns from the statistical models
+	// In a full implementation, this would use Monte Carlo sampling from the distributions
 
-	// Get historical returns for each fund (this would need to be implemented)
-	// For now, use the statistical models from the configuration
+	// Default returns based on TSP statistical models (if not available, use conservative estimates)
+	cFundReturn := decimal.NewFromFloat(0.1125) // 11.25% from statistical model
+	sFundReturn := decimal.NewFromFloat(0.1117) // 11.17% from statistical model
+	iFundReturn := decimal.NewFromFloat(0.0634) // 6.34% from statistical model
+	fFundReturn := decimal.NewFromFloat(0.0532) // 5.32% from statistical model
+	gFundReturn := decimal.NewFromFloat(0.0493) // 4.93% from statistical model
 
-	// Weighted return calculation
+	// Weighted return calculation using actual allocation
 	weightedReturn := decimal.Zero
 
-	// C Fund (Large Cap) - typically highest return
-	weightedReturn = weightedReturn.Add(allocation.CFund.Mul(decimal.NewFromFloat(0.08)))
+	// C Fund (Large Cap)
+	weightedReturn = weightedReturn.Add(allocation.CFund.Mul(cFundReturn))
 
-	// S Fund (Small Cap) - higher return, higher volatility
-	weightedReturn = weightedReturn.Add(allocation.SFund.Mul(decimal.NewFromFloat(0.09)))
+	// S Fund (Small Cap)
+	weightedReturn = weightedReturn.Add(allocation.SFund.Mul(sFundReturn))
 
-	// I Fund (International) - moderate return
-	weightedReturn = weightedReturn.Add(allocation.IFund.Mul(decimal.NewFromFloat(0.06)))
+	// I Fund (International)
+	weightedReturn = weightedReturn.Add(allocation.IFund.Mul(iFundReturn))
 
-	// F Fund (Bonds) - lower return, lower volatility
-	weightedReturn = weightedReturn.Add(allocation.FFund.Mul(decimal.NewFromFloat(0.04)))
+	// F Fund (Bonds)
+	weightedReturn = weightedReturn.Add(allocation.FFund.Mul(fFundReturn))
 
-	// G Fund (Government) - guaranteed return
-	weightedReturn = weightedReturn.Add(allocation.GFund.Mul(decimal.NewFromFloat(0.03)))
+	// G Fund (Government)
+	weightedReturn = weightedReturn.Add(allocation.GFund.Mul(gFundReturn))
 
 	return weightedReturn
 }

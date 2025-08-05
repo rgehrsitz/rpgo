@@ -66,10 +66,15 @@ func (lfl *LifecycleFundLoader) loadLifecycleFund(fundName, filename string) err
 		return fmt.Errorf("insufficient data in %s", filePath)
 	}
 
-	// Parse header
+	// Parse header - handle quoted headers
 	header := records[0]
-	if len(header) != 5 {
-		return fmt.Errorf("expected 5 columns in %s, got %d", filePath, len(header))
+	if len(header) != 6 {
+		return fmt.Errorf("expected 6 columns in %s, got %d", filePath, len(header))
+	}
+
+	// Clean up header values (remove quotes if present)
+	for i, col := range header {
+		header[i] = strings.Trim(col, `"`)
 	}
 
 	// Create lifecycle fund
@@ -81,40 +86,40 @@ func (lfl *LifecycleFundLoader) loadLifecycleFund(fundName, filename string) err
 	// Parse data rows
 	for i := 1; i < len(records); i++ {
 		row := records[i]
-		if len(row) != 5 {
+		if len(row) != 6 {
 			continue // Skip malformed rows
 		}
 
 		// Parse date (format: "July 2005", "October 2005", etc.)
-		dateStr := row[0]
+		dateStr := strings.Trim(row[0], `"`) // Remove quotes if present
 		date, err := parseQuarterlyDate(dateStr)
 		if err != nil {
 			continue // Skip rows with invalid dates
 		}
 
-		// Parse allocation percentages
-		gFund, err := parsePercentage(row[1])
+		// Parse allocation percentages - clean up values
+		gFund, err := parsePercentage(strings.Trim(row[1], `"`))
 		if err != nil {
 			continue
 		}
-		fFund, err := parsePercentage(row[2])
+		fFund, err := parsePercentage(strings.Trim(row[2], `"`))
 		if err != nil {
 			continue
 		}
-		cFund, err := parsePercentage(row[3])
+		cFund, err := parsePercentage(strings.Trim(row[3], `"`))
 		if err != nil {
 			continue
 		}
-		sFund, err := parsePercentage(row[4])
+		sFund, err := parsePercentage(strings.Trim(row[4], `"`))
+		if err != nil {
+			continue
+		}
+		iFund, err := parsePercentage(strings.Trim(row[5], `"`))
 		if err != nil {
 			continue
 		}
 
-		// Calculate I Fund as remainder (should be 100% - sum of others)
-		total := gFund.Add(fFund).Add(cFund).Add(sFund)
-		iFund := decimal.NewFromInt(100).Sub(total)
-
-		// Convert to decimal format (0.0 to 1.0)
+		// Convert percentages to decimals (divide by 100)
 		allocation := domain.TSPAllocation{
 			GFund: gFund.Div(decimal.NewFromInt(100)),
 			FFund: fFund.Div(decimal.NewFromInt(100)),
@@ -123,17 +128,17 @@ func (lfl *LifecycleFundLoader) loadLifecycleFund(fundName, filename string) err
 			IFund: iFund.Div(decimal.NewFromInt(100)),
 		}
 
-		// Add to allocation data
-		dateKey := date.Format("2006-01-02")
-		dataPoint := domain.TSPAllocationDataPoint{
-			Date:       dateKey,
+		// Store allocation data
+		yearKey := fmt.Sprintf("%d", date.Year())
+		lifecycleFund.AllocationData[yearKey] = append(lifecycleFund.AllocationData[yearKey], domain.TSPAllocationDataPoint{
+			Date:       date.Format("2006-01-02"),
 			Allocation: allocation,
-		}
-
-		lifecycleFund.AllocationData[dateKey] = append(lifecycleFund.AllocationData[dateKey], dataPoint)
+		})
 	}
 
+	// Store the lifecycle fund
 	lfl.Funds[fundName] = lifecycleFund
+
 	return nil
 }
 

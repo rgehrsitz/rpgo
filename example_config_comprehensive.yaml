@@ -17,22 +17,22 @@ personal_details:
     ss_benefit_70: "5000.00"  # Monthly benefit at age 70
     fehb_premium_per_pay_period: "488.49"  # $488.49 per pay period (will be multiplied by 26 pay periods)
     survivor_benefit_election_percent: "0.00"
-    sick_leave_hours: "1868.0"  # Sick leave hours that count toward pension service credit
+    sick_leave_hours: "1872.0"  # Sick leave hours that count toward pension service credit
     
     # Individual TSP allocation (optional - uses default if not specified)
     # Robert uses L 2030 fund which is aggressive growth
     tsp_allocation:
-      c_fund: "0.55"  # 55% Large Cap Stocks
-      s_fund: "0.25"  # 25% Small Cap Stocks  
-      i_fund: "0.15"  # 15% International Stocks
-      f_fund: "0.05"  # 5% Fixed Income
-      g_fund: "0.00"  # 0% Government Securities
+      c_fund: "0.312"  
+      s_fund: "0.078"   
+      i_fund: "0.210"  
+      f_fund: "0.055"  
+      g_fund: "0.345"  
     
     # TSP Lifecycle Fund (optional - overrides tsp_allocation if specified)
     # If specified, allocation will change over time based on age
-    # tsp_lifecycle_fund:
-    #   fund_name: "L2030"  # Options: "L2030", "L2035", "L2040", "L Income"
-    #   # Allocation data is automatically loaded from CSV files in data/tsp-returns/
+    tsp_lifecycle_fund:
+      fund_name: "L2030"  # Options: "L2030", "L2035", "L2040", "L Income"
+      # Allocation data is automatically loaded from CSV files in data/tsp-returns/
     
   dawn:
     name: "Dawn M. Gehrsitz"
@@ -50,19 +50,19 @@ personal_details:
     survivor_benefit_election_percent: "0.00"
     sick_leave_hours: "1057.5"  # Sick leave hours that count toward pension service credit
     
-    # Dawn switching from L Income to L 2030 (100% future allocation)
+    # Dawn in L-Income
     tsp_allocation:
-      c_fund: "0.55"  # 55% Large Cap Stocks
-      s_fund: "0.25"  # 25% Small Cap Stocks
-      i_fund: "0.15"  # 15% International Stocks
-      f_fund: "0.05"  # 5% Fixed Income
-      g_fund: "0.00"  # 0% Government Securities
+      c_fund: "0.1403" 
+      s_fund: "0.0351"
+      i_fund: "0.0945"  
+      f_fund: "0.0548"  
+      g_fund: "0.6753"  
     
     # TSP Lifecycle Fund (optional - overrides tsp_allocation if specified)
     # If specified, allocation will change over time based on age
-    # tsp_lifecycle_fund:
-    #   fund_name: "L2035"  # Options: "L2030", "L2035", "L2040", "L Income"
-    #   # Allocation data is automatically loaded from CSV files in data/tsp-returns/
+    tsp_lifecycle_fund:
+      fund_name: "L Income"  # Options: "L2030", "L2035", "L2040", "L Income"
+      # Allocation data is automatically loaded from CSV files in data/tsp-returns/
 
 global_assumptions:
   inflation_rate: "0.025"

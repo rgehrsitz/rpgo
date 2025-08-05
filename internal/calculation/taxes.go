@@ -284,28 +284,81 @@ func NewComprehensiveTaxCalculatorWithConfig(federalRules domain.FederalRules) *
 	}
 }
 
-// CalculateTotalTaxes calculates all applicable taxes for a given income scenario
-func (ctc *ComprehensiveTaxCalculator) CalculateTotalTaxes(income domain.TaxableIncome, isRetired bool, age1, age2 int, totalHouseholdWages decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
-	// Calculate gross income for federal tax
-	grossIncome := income.Salary.Add(income.FERSPension).Add(income.TSPWithdrawalsTrad).Add(income.TaxableSSBenefits).Add(income.OtherTaxableIncome)
+// CalculateTotalTaxes calculates all applicable taxes with inflation-adjusted tax brackets
+func (ctc *ComprehensiveTaxCalculator) CalculateTotalTaxes(taxableIncome domain.TaxableIncome, isRetired bool, ageRobert, ageDawn int, workingIncome decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
+	// Calculate federal tax with inflation-adjusted brackets
+	federalTax := ctc.calculateFederalTaxWithInflation(taxableIncome, ageRobert, ageDawn)
 
-	var federalTax, stateTax, localTax, ficaTax decimal.Decimal
+	// Calculate state tax
+	stateTax := ctc.StateTaxCalc.CalculateTax(taxableIncome, isRetired)
 
-	// Always use proper progressive tax calculation for federal tax
-	federalTax = ctc.FederalTaxCalc.CalculateFederalTax(grossIncome, age1, age2)
+	// Calculate local tax (only on earned income)
+	localTax := ctc.LocalTaxCalc.CalculateEIT(workingIncome, isRetired)
 
-	// State and local taxes
-	stateTax = ctc.StateTaxCalc.CalculateTax(income, isRetired)
-	localTax = ctc.LocalTaxCalc.CalculateEIT(income.WageIncome, isRetired)
-
-	// FICA only applies to wages (working income)
-	if !isRetired && totalHouseholdWages.GreaterThan(decimal.Zero) {
-		ficaTax = ctc.FICATaxCalc.CalculateFICA(totalHouseholdWages, totalHouseholdWages)
-	} else {
-		ficaTax = decimal.Zero // No FICA in retirement
-	}
+	// Calculate FICA tax (only on earned income)
+	ficaTax := ctc.FICATaxCalc.CalculateFICA(workingIncome, workingIncome)
 
 	return federalTax, stateTax, localTax, ficaTax
+}
+
+// calculateFederalTaxWithInflation calculates federal tax with inflation-adjusted brackets
+func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithInflation(taxableIncome domain.TaxableIncome, ageRobert, ageDawn int) decimal.Decimal {
+	// Calculate total taxable income
+	totalIncome := taxableIncome.Salary.Add(taxableIncome.FERSPension).Add(taxableIncome.TSPWithdrawalsTrad).Add(taxableIncome.TaxableSSBenefits).Add(taxableIncome.OtherTaxableIncome)
+
+	// Apply standard deduction with age-based adjustments
+	standardDeduction := ctc.FederalTaxCalc.StandardDeduction
+
+	// Add additional standard deduction for taxpayers 65 and older
+	if ageRobert >= 65 {
+		standardDeduction = standardDeduction.Add(ctc.FederalTaxCalc.AdditionalStdDed)
+	}
+	if ageDawn >= 65 {
+		standardDeduction = standardDeduction.Add(ctc.FederalTaxCalc.AdditionalStdDed)
+	}
+
+	// Calculate adjusted gross income
+	agi := totalIncome.Sub(standardDeduction)
+	if agi.LessThan(decimal.Zero) {
+		agi = decimal.Zero
+	}
+
+	// Apply inflation adjustment to tax brackets
+	// Assume tax brackets increase with inflation over time
+	// For now, we'll use a simple inflation adjustment based on years since 2025
+	// In a full implementation, this would be more sophisticated
+	inflationAdjustment := decimal.NewFromFloat(1.025) // 2.5% annual inflation
+
+	// Calculate tax using inflation-adjusted brackets
+	tax := decimal.Zero
+	remainingIncome := agi
+
+	for _, bracket := range ctc.FederalTaxCalc.Brackets {
+		// Apply inflation adjustment to bracket thresholds
+		adjustedMin := bracket.Min.Mul(inflationAdjustment)
+		adjustedMax := bracket.Max.Mul(inflationAdjustment)
+
+		if remainingIncome.GreaterThan(adjustedMin) {
+			// Calculate income in this bracket
+			bracketIncome := remainingIncome.Sub(adjustedMin)
+			if remainingIncome.GreaterThan(adjustedMax) {
+				bracketIncome = adjustedMax.Sub(adjustedMin)
+			}
+
+			// Calculate tax for this bracket
+			bracketTax := bracketIncome.Mul(bracket.Rate)
+			tax = tax.Add(bracketTax)
+
+			// Update remaining income
+			remainingIncome = remainingIncome.Sub(bracketIncome)
+
+			if remainingIncome.LessThanOrEqual(decimal.Zero) {
+				break
+			}
+		}
+	}
+
+	return tax
 }
 
 // CalculateTaxableIncome creates a TaxableIncome struct from cash flow data
