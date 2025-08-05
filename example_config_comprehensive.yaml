@@ -71,7 +71,7 @@ global_assumptions:
     fehb_variability: "0.05"            # 5% std dev - health insurance premium increases
 
     # Income validation limits
-    max_reasonable_income: "5000000"    # $5M annual cap to prevent calculation errors
+    max_reasonable_income: "50000000"    # $50M annual cap to prevent calculation errors
 
     # Default TSP asset allocation (used when individual allocation not specified)
     # Based on typical balanced portfolio for federal employees near retirement
@@ -148,13 +148,13 @@ scenarios:
       retirement_date: "2025-12-27T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.01"  # 1% withdrawal rate (conservative)
+      tsp_withdrawal_rate: "0.04"  # 1% withdrawal rate (conservative)
     dawn:
       employee_name: "dawn"
       retirement_date: "2025-08-30T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.01"  # 1% withdrawal rate (conservative)
+      tsp_withdrawal_rate: "0.04"  # 1% withdrawal rate (conservative)
       
   - name: "Rob Retires at 62 - Feb 2027"
     robert:
@@ -162,10 +162,10 @@ scenarios:
       retirement_date: "2027-02-28T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.01"  # 1% withdrawal rate (conservative)
+      tsp_withdrawal_rate: "0.04"  # 1% withdrawal rate (conservative)
     dawn:
       employee_name: "dawn"
       retirement_date: "2025-08-30T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.01"  # 1% withdrawal rate (conservative)
+      tsp_withdrawal_rate: "0.04"  # 1% withdrawal rate (conservative)

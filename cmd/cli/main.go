@@ -308,6 +308,7 @@ var fersMonteCarloCmd = &cobra.Command{
 			fmt.Printf("🔴 %s%% (Needs Attention)\n", successRatePercent.StringFixed(1))
 		}
 		fmt.Printf("Median Income: $%s\n", result.MedianNetIncome.StringFixed(0))
+		fmt.Printf("Median Final TSP Balance: $%s\n", result.MedianFinalTSPBalance.StringFixed(0))
 		fmt.Printf("Risk Level: %s\n", riskLevel)
 		fmt.Printf(strings.Repeat("=", 60) + "\n")
 	},

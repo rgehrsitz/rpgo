@@ -24,17 +24,17 @@ func (ip *InputParser) LoadFromFile(filename string) (*domain.Configuration, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file %s: %w", filename, err)
 	}
-	
+
 	var config domain.Configuration
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
-	
+
 	// Validate the configuration
 	if err := ip.ValidateConfiguration(&config); err != nil {
 		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
-	
+
 	return &config, nil
 }
 
@@ -44,7 +44,7 @@ func (ip *InputParser) ValidateConfiguration(config *domain.Configuration) error
 	if len(config.PersonalDetails) == 0 {
 		return fmt.Errorf("no personal details provided")
 	}
-	
+
 	// Check for required employees
 	if _, exists := config.PersonalDetails["robert"]; !exists {
 		return fmt.Errorf("robert employee details are required")
@@ -52,30 +52,30 @@ func (ip *InputParser) ValidateConfiguration(config *domain.Configuration) error
 	if _, exists := config.PersonalDetails["dawn"]; !exists {
 		return fmt.Errorf("dawn employee details are required")
 	}
-	
+
 	// Validate each employee
 	for name, employee := range config.PersonalDetails {
 		if err := ip.validateEmployee(name, &employee); err != nil {
 			return fmt.Errorf("employee %s validation failed: %w", name, err)
 		}
 	}
-	
+
 	// Validate global assumptions
 	if err := ip.validateGlobalAssumptions(&config.GlobalAssumptions); err != nil {
 		return fmt.Errorf("global assumptions validation failed: %w", err)
 	}
-	
+
 	// Validate scenarios
 	if len(config.Scenarios) == 0 {
 		return fmt.Errorf("no scenarios provided")
 	}
-	
+
 	for i, scenario := range config.Scenarios {
 		if err := ip.validateScenario(i, &scenario); err != nil {
 			return fmt.Errorf("scenario %d validation failed: %w", i, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -104,13 +104,13 @@ func (ip *InputParser) validateEmployee(name string, employee *domain.Employee) 
 		return fmt.Errorf("TSP contribution percent must be between 0 and 1")
 	}
 	if employee.SSBenefitFRA.LessThanOrEqual(decimal.Zero) {
-		return fmt.Errorf("Social Security benefit at FRA must be positive")
+		return fmt.Errorf("social security benefit at FRA must be positive")
 	}
 	if employee.SSBenefit62.LessThanOrEqual(decimal.Zero) {
-		return fmt.Errorf("Social Security benefit at 62 must be positive")
+		return fmt.Errorf("social security benefit at 62 must be positive")
 	}
 	if employee.SSBenefit70.LessThanOrEqual(decimal.Zero) {
-		return fmt.Errorf("Social Security benefit at 70 must be positive")
+		return fmt.Errorf("social security benefit at 70 must be positive")
 	}
 	if employee.FEHBPremiumMonthly.LessThan(decimal.Zero) {
 		return fmt.Errorf("FEHB premium cannot be negative")
@@ -118,12 +118,12 @@ func (ip *InputParser) validateEmployee(name string, employee *domain.Employee) 
 	if employee.SurvivorBenefitElectionPercent.LessThan(decimal.Zero) || employee.SurvivorBenefitElectionPercent.GreaterThan(decimal.NewFromFloat(1.0)) {
 		return fmt.Errorf("survivor benefit election percent must be between 0 and 1")
 	}
-	
+
 	// Validate date logic
 	if employee.BirthDate.After(employee.HireDate) {
 		return fmt.Errorf("birth date cannot be after hire date")
 	}
-	
+
 	// Validate Social Security benefit progression
 	if employee.SSBenefit62.GreaterThan(employee.SSBenefitFRA) {
 		return fmt.Errorf("SS benefit at 62 cannot be greater than at FRA")
@@ -131,7 +131,7 @@ func (ip *InputParser) validateEmployee(name string, employee *domain.Employee) 
 	if employee.SSBenefitFRA.GreaterThan(employee.SSBenefit70) {
 		return fmt.Errorf("SS benefit at FRA cannot be greater than at 70")
 	}
-	
+
 	return nil
 }
 
@@ -155,12 +155,12 @@ func (ip *InputParser) validateGlobalAssumptions(assumptions *domain.GlobalAssum
 	if assumptions.ProjectionYears <= 0 || assumptions.ProjectionYears > 50 {
 		return fmt.Errorf("projection years must be between 1 and 50")
 	}
-	
+
 	// Validate location
 	if assumptions.CurrentLocation.State == "" {
 		return fmt.Errorf("state is required")
 	}
-	
+
 	return nil
 }
 
@@ -169,17 +169,17 @@ func (ip *InputParser) validateScenario(index int, scenario *domain.Scenario) er
 	if scenario.Name == "" {
 		return fmt.Errorf("scenario name is required")
 	}
-	
+
 	// Validate Robert's scenario
 	if err := ip.validateRetirementScenario("robert", &scenario.Robert); err != nil {
 		return fmt.Errorf("robert scenario validation failed: %w", err)
 	}
-	
+
 	// Validate Dawn's scenario
 	if err := ip.validateRetirementScenario("dawn", &scenario.Dawn); err != nil {
 		return fmt.Errorf("dawn scenario validation failed: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -192,7 +192,7 @@ func (ip *InputParser) validateRetirementScenario(employeeName string, scenario 
 		return fmt.Errorf("retirement date is required")
 	}
 	if scenario.SSStartAge < 62 || scenario.SSStartAge > 70 {
-		return fmt.Errorf("Social Security start age must be between 62 and 70")
+		return fmt.Errorf("social security start age must be between 62 and 70")
 	}
 	if scenario.TSPWithdrawalStrategy != "4_percent_rule" && scenario.TSPWithdrawalStrategy != "need_based" && scenario.TSPWithdrawalStrategy != "variable_percentage" {
 		return fmt.Errorf("TSP withdrawal strategy must be '4_percent_rule', 'need_based', or 'variable_percentage'")
@@ -206,10 +206,10 @@ func (ip *InputParser) validateRetirementScenario(employeeName string, scenario 
 	if scenario.TSPWithdrawalTargetMonthly != nil && scenario.TSPWithdrawalTargetMonthly.LessThanOrEqual(decimal.Zero) {
 		return fmt.Errorf("TSP withdrawal target monthly must be positive")
 	}
-	if scenario.TSPWithdrawalRate != nil && (scenario.TSPWithdrawalRate.LessThanOrEqual(decimal.Zero) || scenario.TSPWithdrawalRate.GreaterThan(decimal.NewFromFloat(0.2))) {
+	if scenario.TSPWithdrawalRate != nil && (scenario.TSPWithdrawalRate.LessThan(decimal.Zero) || scenario.TSPWithdrawalRate.GreaterThan(decimal.NewFromFloat(0.2))) {
 		return fmt.Errorf("TSP withdrawal rate must be between 0 and 20%%")
 	}
-	
+
 	return nil
 }
 
@@ -219,40 +219,40 @@ func (ip *InputParser) CreateExampleConfiguration() *domain.Configuration {
 	robertHireDate, _ := time.Parse("2006-01-02", "1985-03-20")
 	dawnBirthDate, _ := time.Parse("2006-01-02", "1965-08-22")
 	dawnHireDate, _ := time.Parse("2006-01-02", "1988-07-10")
-	
+
 	robertRetirementDate, _ := time.Parse("2006-01-02", "2025-12-31")
 	dawnRetirementDate, _ := time.Parse("2006-01-02", "2025-12-31")
-	
+
 	return &domain.Configuration{
 		PersonalDetails: map[string]domain.Employee{
 			"robert": {
-				Name:                          "Robert",
-				BirthDate:                     robertBirthDate,
-				HireDate:                      robertHireDate,
-				CurrentSalary:                 decimal.NewFromInt(95000),
-				High3Salary:                   decimal.NewFromInt(93000),
-				TSPBalanceTraditional:         decimal.NewFromInt(450000),
-				TSPBalanceRoth:                decimal.NewFromInt(50000),
-				TSPContributionPercent:        decimal.NewFromFloat(0.15),
-				SSBenefitFRA:                  decimal.NewFromInt(2400),
-				SSBenefit62:                   decimal.NewFromInt(1680),
-				SSBenefit70:                   decimal.NewFromInt(2976),
-				FEHBPremiumMonthly:            decimal.NewFromInt(875),
+				Name:                           "Robert",
+				BirthDate:                      robertBirthDate,
+				HireDate:                       robertHireDate,
+				CurrentSalary:                  decimal.NewFromInt(95000),
+				High3Salary:                    decimal.NewFromInt(93000),
+				TSPBalanceTraditional:          decimal.NewFromInt(450000),
+				TSPBalanceRoth:                 decimal.NewFromInt(50000),
+				TSPContributionPercent:         decimal.NewFromFloat(0.15),
+				SSBenefitFRA:                   decimal.NewFromInt(2400),
+				SSBenefit62:                    decimal.NewFromInt(1680),
+				SSBenefit70:                    decimal.NewFromInt(2976),
+				FEHBPremiumMonthly:             decimal.NewFromInt(875),
 				SurvivorBenefitElectionPercent: decimal.Zero,
 			},
 			"dawn": {
-				Name:                          "Dawn",
-				BirthDate:                     dawnBirthDate,
-				HireDate:                      dawnHireDate,
-				CurrentSalary:                 decimal.NewFromInt(87000),
-				High3Salary:                   decimal.NewFromInt(85000),
-				TSPBalanceTraditional:         decimal.NewFromInt(380000),
-				TSPBalanceRoth:                decimal.NewFromInt(45000),
-				TSPContributionPercent:        decimal.NewFromFloat(0.12),
-				SSBenefitFRA:                  decimal.NewFromInt(2200),
-				SSBenefit62:                   decimal.NewFromInt(1540),
-				SSBenefit70:                   decimal.NewFromInt(2728),
-				FEHBPremiumMonthly:            decimal.Zero, // Covered under Robert's FEHB
+				Name:                           "Dawn",
+				BirthDate:                      dawnBirthDate,
+				HireDate:                       dawnHireDate,
+				CurrentSalary:                  decimal.NewFromInt(87000),
+				High3Salary:                    decimal.NewFromInt(85000),
+				TSPBalanceTraditional:          decimal.NewFromInt(380000),
+				TSPBalanceRoth:                 decimal.NewFromInt(45000),
+				TSPContributionPercent:         decimal.NewFromFloat(0.12),
+				SSBenefitFRA:                   decimal.NewFromInt(2200),
+				SSBenefit62:                    decimal.NewFromInt(1540),
+				SSBenefit70:                    decimal.NewFromInt(2728),
+				FEHBPremiumMonthly:             decimal.Zero, // Covered under Robert's FEHB
 				SurvivorBenefitElectionPercent: decimal.Zero,
 			},
 		},
@@ -273,37 +273,37 @@ func (ip *InputParser) CreateExampleConfiguration() *domain.Configuration {
 			{
 				Name: "Early Retirement 2025",
 				Robert: domain.RetirementScenario{
-					EmployeeName:              "robert",
-					RetirementDate:            robertRetirementDate,
-					SSStartAge:                62,
-					TSPWithdrawalStrategy:     "4_percent_rule",
+					EmployeeName:               "robert",
+					RetirementDate:             robertRetirementDate,
+					SSStartAge:                 62,
+					TSPWithdrawalStrategy:      "4_percent_rule",
 					TSPWithdrawalTargetMonthly: nil,
 				},
 				Dawn: domain.RetirementScenario{
-					EmployeeName:              "dawn",
-					RetirementDate:            dawnRetirementDate,
-					SSStartAge:                62,
-					TSPWithdrawalStrategy:     "4_percent_rule",
+					EmployeeName:               "dawn",
+					RetirementDate:             dawnRetirementDate,
+					SSStartAge:                 62,
+					TSPWithdrawalStrategy:      "4_percent_rule",
 					TSPWithdrawalTargetMonthly: nil,
 				},
 			},
 			{
 				Name: "Delayed Retirement 2028",
 				Robert: domain.RetirementScenario{
-					EmployeeName:              "robert",
-					RetirementDate:            robertRetirementDate.AddDate(3, 0, 0),
-					SSStartAge:                67,
-					TSPWithdrawalStrategy:     "need_based",
+					EmployeeName:               "robert",
+					RetirementDate:             robertRetirementDate.AddDate(3, 0, 0),
+					SSStartAge:                 67,
+					TSPWithdrawalStrategy:      "need_based",
 					TSPWithdrawalTargetMonthly: &[]decimal.Decimal{decimal.NewFromInt(3000)}[0],
 				},
 				Dawn: domain.RetirementScenario{
-					EmployeeName:              "dawn",
-					RetirementDate:            dawnRetirementDate.AddDate(3, 0, 0),
-					SSStartAge:                62,
-					TSPWithdrawalStrategy:     "4_percent_rule",
+					EmployeeName:               "dawn",
+					RetirementDate:             dawnRetirementDate.AddDate(3, 0, 0),
+					SSStartAge:                 62,
+					TSPWithdrawalStrategy:      "4_percent_rule",
 					TSPWithdrawalTargetMonthly: nil,
 				},
 			},
 		},
 	}
-} 
+}
