@@ -11,7 +11,7 @@ personal_details:
     ss_benefit_62: "2795.00"  # Monthly benefit at age 62
     ss_benefit_fra: "4012.00"  # Monthly benefit at FRA (67)
     ss_benefit_70: "5000.00"  # Monthly benefit at age 70
-    fehb_premium_monthly: "488.49"  # $488.49 per pay period (will be multiplied by 26 pay periods)
+    fehb_premium_per_pay_period: "488.49"  # $488.49 per pay period (will be multiplied by 26 pay periods)
     survivor_benefit_election_percent: "0.00"
     sick_leave_hours: "1868.0"  # Sick leave hours that count toward pension service credit
     # Additional context from documents:
@@ -35,7 +35,7 @@ personal_details:
     ss_benefit_62: "2527.00"  # Monthly benefit at age 62
     ss_benefit_fra: "3826.00"  # Monthly benefit at FRA (67)
     ss_benefit_70: "4860.00"  # Monthly benefit at age 70
-    fehb_premium_monthly: "0.00"  # Dawn has FSA-HC instead of FEHB ($105.76 per pay period)
+    fehb_premium_per_pay_period: "0.00"  # Dawn has FSA-HC instead of FEHB ($105.76 per pay period)
     survivor_benefit_election_percent: "0.00"
     sick_leave_hours: "1057.5"  # Sick leave hours that count toward pension service credit
     # Additional context from documents:

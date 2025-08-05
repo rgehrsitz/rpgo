@@ -35,7 +35,7 @@ personal_details:
     ss_benefit_fra: 3000.00        # Estimated monthly benefit at Full Retirement Age (FRA)
     ss_benefit_62: 2100.00         # Estimated monthly benefit at age 62
     ss_benefit_70: 4000.00         # Estimated monthly benefit at age 70
-    fehb_premium_monthly: 600.00   # Current monthly FEHB premium (for self and spouse)
+    fehb_premium_per_pay_period: 600.00   # Current FEHB premium per pay period (will be annualized by multiplying by 26)
     survivor_benefit_election_percent: 0.0 # 0% as requested
 
   dawn:
@@ -49,7 +49,7 @@ personal_details:
     ss_benefit_fra: 2500.00
     ss_benefit_62: 1750.00
     ss_benefit_70: 3300.00
-    fehb_premium_monthly: 0.0 # Assumed covered under Robert's FEHB
+    fehb_premium_per_pay_period: 0.0 # Assumed covered under Robert's FEHB
     survivor_benefit_election_percent: 0.0
 
 global_assumptions:

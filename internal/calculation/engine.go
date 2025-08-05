@@ -512,7 +512,7 @@ func (ce *CalculationEngine) growTSPBalance(balance, contribution, returnRate de
 // calculateFEHBPremium calculates FEHB premium for a given year
 func (ce *CalculationEngine) calculateFEHBPremium(employee *domain.Employee, year int, _ bool, premiumInflation decimal.Decimal) decimal.Decimal {
 	inflationFactor := decimal.NewFromFloat(1).Add(premiumInflation)
-	adjustedPremium := employee.FEHBPremiumMonthly.Mul(inflationFactor.Pow(decimal.NewFromInt(int64(year))))
+	adjustedPremium := employee.FEHBPremiumPerPayPeriod.Mul(inflationFactor.Pow(decimal.NewFromInt(int64(year))))
 	return adjustedPremium.Mul(decimal.NewFromInt(26)) // 26 pay periods per year
 }
 
@@ -664,7 +664,7 @@ func (ce *CalculationEngine) calculateCurrentNetIncome(robert, dawn *domain.Empl
 	grossIncome := robert.CurrentSalary.Add(dawn.CurrentSalary)
 
 	// Calculate FEHB premiums (only Robert pays FEHB, Dawn has FSA-HC)
-	fehbPremium := robert.FEHBPremiumMonthly.Mul(decimal.NewFromInt(26)) // 26 pay periods per year
+	fehbPremium := robert.FEHBPremiumPerPayPeriod.Mul(decimal.NewFromInt(26)) // 26 pay periods per year
 
 	// Calculate TSP contributions (pre-tax)
 	tspContributions := robert.TotalAnnualTSPContribution().Add(dawn.TotalAnnualTSPContribution())
@@ -675,8 +675,14 @@ func (ce *CalculationEngine) calculateCurrentNetIncome(robert, dawn *domain.Empl
 	ageRobert := robert.Age(projectionStartDate)
 	ageDawn := dawn.Age(projectionStartDate)
 
+	// Calculate taxes (excluding FICA for now, will calculate separately)
 	currentTaxableIncome := CalculateCurrentTaxableIncome(robert.CurrentSalary, dawn.CurrentSalary)
-	federalTax, stateTax, localTax, ficaTax := ce.TaxCalc.CalculateTotalTaxes(currentTaxableIncome, false, ageRobert, ageDawn, grossIncome)
+	federalTax, stateTax, localTax, _ := ce.TaxCalc.CalculateTotalTaxes(currentTaxableIncome, false, ageRobert, ageDawn, grossIncome)
+
+	// Calculate FICA taxes for each individual separately, as SS wage base applies per individual
+	robertFICA := ce.TaxCalc.FICATaxCalc.CalculateFICA(robert.CurrentSalary, robert.CurrentSalary)
+	dawnFICA := ce.TaxCalc.FICATaxCalc.CalculateFICA(dawn.CurrentSalary, dawn.CurrentSalary)
+	ficaTax := robertFICA.Add(dawnFICA)
 
 	// Calculate net income: gross - taxes - FEHB - TSP contributions
 	netIncome := grossIncome.Sub(federalTax).Sub(stateTax).Sub(localTax).Sub(ficaTax).Sub(fehbPremium).Sub(tspContributions)

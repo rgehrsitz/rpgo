@@ -61,7 +61,7 @@ shared_details:
     county: "Bucks"
     municipality: "Upper Makefield Township"
   fehb_plan: "AETNA High Option"
-  fehb_premium_monthly: 875
+  fehb_premium_per_pay_period: 875 # This is the per-pay-period amount, which will be annualized by multiplying by 26.
   survivor_benefit_election: 0  # 0% survivor benefits elected
 ```
 

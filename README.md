@@ -6,7 +6,7 @@ A comprehensive retirement planning calculator for Federal Employees Retirement 
 
 - **Comprehensive FERS Calculations**: Accurate pension calculations with proper multiplier rules (1.0% standard, 1.1% enhanced for age 62+ with 20+ years)
 - **TSP Modeling**: Support for both Traditional and Roth TSP accounts with multiple withdrawal strategies
-- **Social Security Integration**: Full benefit calculations with 2025 WEP/GPO repeal implementation
+- **Social Security Integration**: Full benefit calculations with 2025 WEP/GPO repeal implementation (2025 wage base: $176,100)
 - **Tax Modeling**: Complete federal, state (Pennsylvania), and local tax calculations
 - **Multiple Scenarios**: Compare multiple retirement scenarios simultaneously
 - **Long-term Projections**: 25+ year projections with COLA adjustments

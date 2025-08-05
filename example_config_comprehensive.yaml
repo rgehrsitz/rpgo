@@ -15,7 +15,7 @@ personal_details:
     ss_benefit_62: "2795.00"  # Monthly benefit at age 62
     ss_benefit_fra: "4012.00"  # Monthly benefit at FRA (67)
     ss_benefit_70: "5000.00"  # Monthly benefit at age 70
-    fehb_premium_monthly: "488.49"  # $488.49 per pay period (will be multiplied by 26 pay periods)
+    fehb_premium_per_pay_period: "488.49"  # $488.49 per pay period (will be multiplied by 26 pay periods)
     survivor_benefit_election_percent: "0.00"
     sick_leave_hours: "1868.0"  # Sick leave hours that count toward pension service credit
     
@@ -170,4 +170,4 @@ scenarios:
       retirement_date: "2025-08-30T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.03"  
+      tsp_withdrawal_rate: "0.03"

@@ -20,7 +20,7 @@ type Employee struct {
 	SSBenefitFRA                   decimal.Decimal `yaml:"ss_benefit_fra" json:"ss_benefit_fra"` // Monthly at Full Retirement Age
 	SSBenefit62                    decimal.Decimal `yaml:"ss_benefit_62" json:"ss_benefit_62"`   // Monthly at age 62
 	SSBenefit70                    decimal.Decimal `yaml:"ss_benefit_70" json:"ss_benefit_70"`   // Monthly at age 70
-	FEHBPremiumMonthly             decimal.Decimal `yaml:"fehb_premium_monthly" json:"fehb_premium_monthly"`
+	FEHBPremiumPerPayPeriod        decimal.Decimal `yaml:"fehb_premium_per_pay_period" json:"fehb_premium_per_pay_period"`
 	SurvivorBenefitElectionPercent decimal.Decimal `yaml:"survivor_benefit_election_percent" json:"survivor_benefit_election_percent"`
 
 	// Sick Leave Credit (for pension calculation)

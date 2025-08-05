@@ -11,7 +11,7 @@ personal_details:
     ss_benefit_fra: 2400
     ss_benefit_62: 1680
     ss_benefit_70: 2976
-    fehb_premium_monthly: 875
+    fehb_premium_per_pay_period: 875
     survivor_benefit_election_percent: 0.0
 
   dawn:
@@ -26,7 +26,7 @@ personal_details:
     ss_benefit_fra: 2200
     ss_benefit_62: 1540
     ss_benefit_70: 2728
-    fehb_premium_monthly: 0.0
+    fehb_premium_per_pay_period: 0.0
     survivor_benefit_election_percent: 0.0
 
 global_assumptions:
@@ -68,4 +68,4 @@ scenarios:
       retirement_date: "2028-12-31T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "4_percent_rule"
-      tsp_withdrawal_target_monthly: null 
+      tsp_withdrawal_target_monthly: null

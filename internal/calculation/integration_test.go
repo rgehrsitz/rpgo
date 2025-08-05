@@ -19,17 +19,17 @@ func TestFullScenarioCalculation(t *testing.T) {
 		scenario := &domain.Scenario{
 			Name: "Both Retire Early - Dec 2025",
 			Robert: domain.RetirementScenario{
-				EmployeeName:              "robert",
-				RetirementDate:            time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
-				SSStartAge:                62,
-				TSPWithdrawalStrategy:     "4_percent_rule",
+				EmployeeName:               "robert",
+				RetirementDate:             time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
+				SSStartAge:                 62,
+				TSPWithdrawalStrategy:      "4_percent_rule",
 				TSPWithdrawalTargetMonthly: &[]decimal.Decimal{decimal.NewFromInt(2000)}[0],
 			},
 			Dawn: domain.RetirementScenario{
-				EmployeeName:              "dawn",
-				RetirementDate:            time.Date(2025, 8, 30, 0, 0, 0, 0, time.UTC),
-				SSStartAge:                62,
-				TSPWithdrawalStrategy:     "4_percent_rule",
+				EmployeeName:               "dawn",
+				RetirementDate:             time.Date(2025, 8, 30, 0, 0, 0, 0, time.UTC),
+				SSStartAge:                 62,
+				TSPWithdrawalStrategy:      "4_percent_rule",
 				TSPWithdrawalTargetMonthly: &[]decimal.Decimal{decimal.NewFromInt(1700)}[0],
 			},
 		}
@@ -69,17 +69,17 @@ func TestFullScenarioCalculation(t *testing.T) {
 		scenario := &domain.Scenario{
 			Name: "Both Retire at Robert's 62 - Feb 2027",
 			Robert: domain.RetirementScenario{
-				EmployeeName:              "robert",
-				RetirementDate:            time.Date(2027, 2, 28, 0, 0, 0, 0, time.UTC),
-				SSStartAge:                62,
-				TSPWithdrawalStrategy:     "4_percent_rule",
+				EmployeeName:               "robert",
+				RetirementDate:             time.Date(2027, 2, 28, 0, 0, 0, 0, time.UTC),
+				SSStartAge:                 62,
+				TSPWithdrawalStrategy:      "4_percent_rule",
 				TSPWithdrawalTargetMonthly: &[]decimal.Decimal{decimal.NewFromInt(2000)}[0],
 			},
 			Dawn: domain.RetirementScenario{
-				EmployeeName:              "dawn",
-				RetirementDate:            time.Date(2025, 8, 30, 0, 0, 0, 0, time.UTC),
-				SSStartAge:                62,
-				TSPWithdrawalStrategy:     "4_percent_rule",
+				EmployeeName:               "dawn",
+				RetirementDate:             time.Date(2025, 8, 30, 0, 0, 0, 0, time.UTC),
+				SSStartAge:                 62,
+				TSPWithdrawalStrategy:      "4_percent_rule",
 				TSPWithdrawalTargetMonthly: &[]decimal.Decimal{decimal.NewFromInt(1700)}[0],
 			},
 		}
@@ -239,7 +239,7 @@ func TestRealWorldDataValidation(t *testing.T) {
 		"Robert's pension should match expected: Expected %s, got %s",
 		expectedRobertPension.StringFixed(2), robertPension.ReducedPension.StringFixed(2))
 
-	// Test Dawn's pension calculation  
+	// Test Dawn's pension calculation
 	dawnPension := CalculateFERSPension(&dawn, time.Date(2025, 8, 30, 0, 0, 0, 0, time.UTC))
 	expectedDawnPension := decimal.NewFromFloat(55262.40) // Calculated: 30.6 * 164000 * 0.011
 	assert.True(t, dawnPension.ReducedPension.Sub(expectedDawnPension).Abs().LessThan(decimal.NewFromInt(1000)),
@@ -305,7 +305,7 @@ func TestProjectionConsistency(t *testing.T) {
 		// Net income should be gross minus deductions
 		calculatedDeductions := year.FederalTax.Add(year.StateTax).Add(year.LocalTax).
 			Add(year.FICATax).Add(year.TSPContributions).Add(year.FEHBPremium).Add(year.MedicarePremium)
-		
+
 		expectedNet := year.TotalGrossIncome.Sub(calculatedDeductions)
 		assert.True(t, expectedNet.Sub(year.NetIncome).Abs().LessThan(decimal.NewFromFloat(0.01)),
 			"Year %d: Net income should equal gross minus deductions: Expected %s, Got %s",
@@ -347,7 +347,7 @@ func createTestConfiguration() *domain.Configuration {
 				SSBenefit62:                    decimal.NewFromInt(2795),
 				SSBenefitFRA:                   decimal.NewFromInt(4012),
 				SSBenefit70:                    decimal.NewFromInt(5000),
-				FEHBPremiumMonthly:             decimal.NewFromFloat(488.49),
+				FEHBPremiumPerPayPeriod:        decimal.NewFromFloat(488.49),
 				SurvivorBenefitElectionPercent: decimal.Zero,
 			},
 			"dawn": {
@@ -362,7 +362,7 @@ func createTestConfiguration() *domain.Configuration {
 				SSBenefit62:                    decimal.NewFromInt(2527),
 				SSBenefitFRA:                   decimal.NewFromInt(3826),
 				SSBenefit70:                    decimal.NewFromInt(4860),
-				FEHBPremiumMonthly:             decimal.Zero, // Dawn has FSA-HC instead
+				FEHBPremiumPerPayPeriod:        decimal.Zero, // Dawn has FSA-HC instead
 				SurvivorBenefitElectionPercent: decimal.Zero,
 			},
 		},
@@ -383,34 +383,34 @@ func createTestConfiguration() *domain.Configuration {
 			{
 				Name: "Both Retire Early - Dec 2025",
 				Robert: domain.RetirementScenario{
-					EmployeeName:              "robert",
-					RetirementDate:            time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
-					SSStartAge:                62,
-					TSPWithdrawalStrategy:     "4_percent_rule",
+					EmployeeName:               "robert",
+					RetirementDate:             time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
+					SSStartAge:                 62,
+					TSPWithdrawalStrategy:      "4_percent_rule",
 					TSPWithdrawalTargetMonthly: &[]decimal.Decimal{decimal.NewFromInt(2000)}[0],
 				},
 				Dawn: domain.RetirementScenario{
-					EmployeeName:              "dawn",
-					RetirementDate:            time.Date(2025, 8, 30, 0, 0, 0, 0, time.UTC),
-					SSStartAge:                62,
-					TSPWithdrawalStrategy:     "4_percent_rule",
+					EmployeeName:               "dawn",
+					RetirementDate:             time.Date(2025, 8, 30, 0, 0, 0, 0, time.UTC),
+					SSStartAge:                 62,
+					TSPWithdrawalStrategy:      "4_percent_rule",
 					TSPWithdrawalTargetMonthly: &[]decimal.Decimal{decimal.NewFromInt(1700)}[0],
 				},
 			},
 			{
 				Name: "Both Retire at Robert's 62 - Feb 2027",
 				Robert: domain.RetirementScenario{
-					EmployeeName:              "robert",
-					RetirementDate:            time.Date(2027, 2, 28, 0, 0, 0, 0, time.UTC),
-					SSStartAge:                62,
-					TSPWithdrawalStrategy:     "4_percent_rule",
+					EmployeeName:               "robert",
+					RetirementDate:             time.Date(2027, 2, 28, 0, 0, 0, 0, time.UTC),
+					SSStartAge:                 62,
+					TSPWithdrawalStrategy:      "4_percent_rule",
 					TSPWithdrawalTargetMonthly: &[]decimal.Decimal{decimal.NewFromInt(2000)}[0],
 				},
 				Dawn: domain.RetirementScenario{
-					EmployeeName:              "dawn",
-					RetirementDate:            time.Date(2025, 8, 30, 0, 0, 0, 0, time.UTC),
-					SSStartAge:                62,
-					TSPWithdrawalStrategy:     "4_percent_rule",
+					EmployeeName:               "dawn",
+					RetirementDate:             time.Date(2025, 8, 30, 0, 0, 0, 0, time.UTC),
+					SSStartAge:                 62,
+					TSPWithdrawalStrategy:      "4_percent_rule",
 					TSPWithdrawalTargetMonthly: &[]decimal.Decimal{decimal.NewFromInt(1700)}[0],
 				},
 			},

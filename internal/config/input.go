@@ -112,8 +112,8 @@ func (ip *InputParser) validateEmployee(_ string, employee *domain.Employee) err
 	if employee.SSBenefit70.LessThanOrEqual(decimal.Zero) {
 		return fmt.Errorf("social security benefit at 70 must be positive")
 	}
-	if employee.FEHBPremiumMonthly.LessThan(decimal.Zero) {
-		return fmt.Errorf("FEHB premium cannot be negative")
+	if employee.FEHBPremiumPerPayPeriod.LessThan(decimal.Zero) {
+		return fmt.Errorf("FEHB premium per pay period cannot be negative")
 	}
 	if employee.SurvivorBenefitElectionPercent.LessThan(decimal.Zero) || employee.SurvivorBenefitElectionPercent.GreaterThan(decimal.NewFromFloat(1.0)) {
 		return fmt.Errorf("survivor benefit election percent must be between 0 and 1")
@@ -237,7 +237,7 @@ func (ip *InputParser) CreateExampleConfiguration() *domain.Configuration {
 				SSBenefitFRA:                   decimal.NewFromInt(2400),
 				SSBenefit62:                    decimal.NewFromInt(1680),
 				SSBenefit70:                    decimal.NewFromInt(2976),
-				FEHBPremiumMonthly:             decimal.NewFromInt(875),
+				FEHBPremiumPerPayPeriod:        decimal.NewFromInt(875),
 				SurvivorBenefitElectionPercent: decimal.Zero,
 			},
 			"dawn": {
@@ -252,7 +252,7 @@ func (ip *InputParser) CreateExampleConfiguration() *domain.Configuration {
 				SSBenefitFRA:                   decimal.NewFromInt(2200),
 				SSBenefit62:                    decimal.NewFromInt(1540),
 				SSBenefit70:                    decimal.NewFromInt(2728),
-				FEHBPremiumMonthly:             decimal.Zero, // Covered under Robert's FEHB
+				FEHBPremiumPerPayPeriod:        decimal.Zero, // Covered under Robert's FEHB
 				SurvivorBenefitElectionPercent: decimal.Zero,
 			},
 		},
