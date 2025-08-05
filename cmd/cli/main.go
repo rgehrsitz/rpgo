@@ -35,7 +35,7 @@ var calculateCmd = &cobra.Command{
 		}
 
 		// Run calculations
-		engine := calculation.NewCalculationEngine()
+		engine := calculation.NewCalculationEngineWithConfig(config.GlobalAssumptions.FederalRules)
 		debugMode, _ := cmd.Flags().GetBool("debug")
 		engine.Debug = debugMode
 		results, err := engine.RunScenarios(config)
@@ -100,7 +100,7 @@ var breakEvenCmd = &cobra.Command{
 		}
 
 		// Run break-even analysis
-		engine := calculation.NewCalculationEngine()
+		engine := calculation.NewCalculationEngineWithConfig(config.GlobalAssumptions.FederalRules)
 		debugMode, _ := cmd.Flags().GetBool("debug")
 		engine.Debug = debugMode
 		analysis, err := engine.CalculateBreakEvenAnalysis(config)

@@ -9,6 +9,7 @@ rpgo
 
 # Test binary, built with `go test -c`
 *.test
+test_*.yaml
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
@@ -76,3 +77,5 @@ coverage.html
 tmp/ 
 
 cli
+example_config_comprehensive.yaml
+test_config_comprehensive_qa.yaml

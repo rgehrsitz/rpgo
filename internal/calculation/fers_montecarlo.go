@@ -127,7 +127,7 @@ func NewFERSMonteCarloEngine(baseConfig *domain.Configuration, historicalData *H
 	}
 
 	return &FERSMonteCarloEngine{
-		calcEngine:     NewCalculationEngine(),
+		calcEngine:     NewCalculationEngineWithConfig(baseConfig.GlobalAssumptions.FederalRules),
 		historicalData: historicalData,
 		config: FERSMonteCarloConfig{
 			BaseConfig:           baseConfig,

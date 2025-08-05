@@ -56,6 +56,26 @@ func NewFederalTaxCalculator2025() *FederalTaxCalculator {
 	}
 }
 
+// NewFederalTaxCalculator creates a new federal tax calculator with configurable values
+func NewFederalTaxCalculator(config domain.FederalTaxConfig) *FederalTaxCalculator {
+	// Convert domain.TaxBracket to calculation.TaxBracket
+	var brackets []TaxBracket
+	for _, bracket := range config.TaxBrackets2025 {
+		brackets = append(brackets, TaxBracket{
+			Min:  bracket.Min,
+			Max:  bracket.Max,
+			Rate: bracket.Rate,
+		})
+	}
+
+	return &FederalTaxCalculator{
+		Year:              2025, // TODO: Make year configurable
+		StandardDeduction: config.StandardDeductionMFJ,
+		AdditionalStdDed:  config.AdditionalStandardDeduction,
+		Brackets:          brackets,
+	}
+}
+
 // CalculateFederalTax calculates federal income tax
 func (ftc *FederalTaxCalculator) CalculateFederalTax(grossIncome decimal.Decimal, age1, age2 int) decimal.Decimal {
 	standardDed := ftc.StandardDeduction
@@ -88,11 +108,22 @@ func (ftc *FederalTaxCalculator) CalculateFederalTax(grossIncome decimal.Decimal
 }
 
 // PennsylvaniaTaxCalculator handles Pennsylvania state tax calculations
-type PennsylvaniaTaxCalculator struct{}
+type PennsylvaniaTaxCalculator struct {
+	Rate decimal.Decimal
+}
 
 // NewPennsylvaniaTaxCalculator creates a new Pennsylvania tax calculator
 func NewPennsylvaniaTaxCalculator() *PennsylvaniaTaxCalculator {
-	return &PennsylvaniaTaxCalculator{}
+	return &PennsylvaniaTaxCalculator{
+		Rate: decimal.NewFromFloat(0.0307), // Default rate
+	}
+}
+
+// NewPennsylvaniaTaxCalculatorWithConfig creates a new Pennsylvania tax calculator with configurable rate
+func NewPennsylvaniaTaxCalculatorWithConfig(config domain.StateLocalTaxConfig) *PennsylvaniaTaxCalculator {
+	return &PennsylvaniaTaxCalculator{
+		Rate: config.PennsylvaniaRate,
+	}
 }
 
 // CalculatePennsylvaniaStateIncomeTax calculates Pennsylvania state income tax
@@ -100,25 +131,34 @@ func NewPennsylvaniaTaxCalculator() *PennsylvaniaTaxCalculator {
 // Key Exclusions: PA does NOT tax FERS pensions, TSP withdrawals, or Social Security benefits
 // Only earned income (salary) is typically taxed
 func (ptc *PennsylvaniaTaxCalculator) CalculateTax(income domain.TaxableIncome, isRetired bool) decimal.Decimal {
-	paRate := decimal.NewFromFloat(0.0307)
-
 	if isRetired {
 		// PA exempts retirement income: pensions, TSP, Social Security
 		// Only tax earned income (wages) and interest income
 		taxablePA := income.WageIncome.Add(income.InterestIncome).Add(income.OtherTaxableIncome)
-		return taxablePA.Mul(paRate)
+		return taxablePA.Mul(ptc.Rate)
 	}
 
-	// While working: tax wages at 3.07%
-	return income.WageIncome.Mul(paRate)
+	// While working: tax wages at configured rate
+	return income.WageIncome.Mul(ptc.Rate)
 }
 
 // UpperMakefieldEITCalculator handles Upper Makefield Township local tax calculations
-type UpperMakefieldEITCalculator struct{}
+type UpperMakefieldEITCalculator struct {
+	Rate decimal.Decimal
+}
 
 // NewUpperMakefieldEITCalculator creates a new Upper Makefield EIT calculator
 func NewUpperMakefieldEITCalculator() *UpperMakefieldEITCalculator {
-	return &UpperMakefieldEITCalculator{}
+	return &UpperMakefieldEITCalculator{
+		Rate: decimal.NewFromFloat(0.01), // Default rate
+	}
+}
+
+// NewUpperMakefieldEITCalculatorWithConfig creates a new Upper Makefield EIT calculator with configurable rate
+func NewUpperMakefieldEITCalculatorWithConfig(config domain.StateLocalTaxConfig) *UpperMakefieldEITCalculator {
+	return &UpperMakefieldEITCalculator{
+		Rate: config.UpperMakefieldEITRate,
+	}
 }
 
 // CalculateEIT calculates the Earned Income Tax for Upper Makefield Township
@@ -128,8 +168,7 @@ func (ume *UpperMakefieldEITCalculator) CalculateEIT(wageIncome decimal.Decimal,
 		return decimal.Zero // EIT only applies to earned income
 	}
 
-	eitRate := decimal.NewFromFloat(0.01) // 1% on earned income
-	return wageIncome.Mul(eitRate)
+	return wageIncome.Mul(ume.Rate)
 }
 
 // FICACalculator handles FICA tax calculations
@@ -151,6 +190,18 @@ func NewFICACalculator2025() *FICACalculator {
 		MedicareRate:        decimal.NewFromFloat(0.0145),
 		AdditionalRate:      decimal.NewFromFloat(0.009),
 		HighIncomeThreshold: decimal.NewFromInt(250000), // MFJ
+	}
+}
+
+// NewFICACalculator creates a new FICA calculator with configurable values
+func NewFICACalculator(config domain.FICATaxConfig) *FICACalculator {
+	return &FICACalculator{
+		Year:                2025, // TODO: Make year configurable
+		SSWageBase:          config.SocialSecurityWageBase,
+		SSRate:              config.SocialSecurityRate,
+		MedicareRate:        config.MedicareRate,
+		AdditionalRate:      config.AdditionalMedicareRate,
+		HighIncomeThreshold: config.HighIncomeThresholdMFJ,
 	}
 }
 
@@ -218,6 +269,17 @@ func NewComprehensiveTaxCalculator() *ComprehensiveTaxCalculator {
 		StateTaxCalc:   NewPennsylvaniaTaxCalculator(),
 		LocalTaxCalc:   NewUpperMakefieldEITCalculator(),
 		FICATaxCalc:    NewFICACalculator2025(),
+		SSTaxCalc:      NewSSTaxCalculator(),
+	}
+}
+
+// NewComprehensiveTaxCalculatorWithConfig creates a new comprehensive tax calculator with configurable values
+func NewComprehensiveTaxCalculatorWithConfig(federalRules domain.FederalRules) *ComprehensiveTaxCalculator {
+	return &ComprehensiveTaxCalculator{
+		FederalTaxCalc: NewFederalTaxCalculator(federalRules.FederalTaxConfig),
+		StateTaxCalc:   NewPennsylvaniaTaxCalculatorWithConfig(federalRules.StateLocalTaxConfig),
+		LocalTaxCalc:   NewUpperMakefieldEITCalculatorWithConfig(federalRules.StateLocalTaxConfig),
+		FICATaxCalc:    NewFICACalculator(federalRules.FICATaxConfig),
 		SSTaxCalc:      NewSSTaxCalculator(),
 	}
 }

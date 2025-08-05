@@ -8,7 +8,7 @@ personal_details:
     birth_date: "1965-02-25T00:00:00Z"
     hire_date: "1987-06-22T00:00:00Z"  # Service Computation Date (SCD Leave)
     current_salary: "190779.00"
-    high_3_salary: "190000.00"  # Corrected from documents
+    high_3_salary: "186572.00"  # Corrected from documents
     tsp_balance_traditional: "1966168.86"
     tsp_balance_roth: "0.00"
     tsp_contribution_percent: "0.128"  # $24,501.54 / $190,779.00
@@ -27,6 +27,12 @@ personal_details:
       i_fund: "0.15"  # 15% International Stocks
       f_fund: "0.05"  # 5% Fixed Income
       g_fund: "0.00"  # 0% Government Securities
+    
+    # TSP Lifecycle Fund (optional - overrides tsp_allocation if specified)
+    # If specified, allocation will change over time based on age
+    # tsp_lifecycle_fund:
+    #   fund_name: "L2030"  # Options: "L2030", "L2035", "L2040", "L Income"
+    #   # Allocation data is automatically loaded from CSV files in data/tsp-returns/
     
   dawn:
     name: "Dawn M. Gehrsitz"
@@ -51,6 +57,12 @@ personal_details:
       i_fund: "0.15"  # 15% International Stocks
       f_fund: "0.05"  # 5% Fixed Income
       g_fund: "0.00"  # 0% Government Securities
+    
+    # TSP Lifecycle Fund (optional - overrides tsp_allocation if specified)
+    # If specified, allocation will change over time based on age
+    # tsp_lifecycle_fund:
+    #   fund_name: "L2035"  # Options: "L2030", "L2035", "L2040", "L Income"
+    #   # Allocation data is automatically loaded from CSV files in data/tsp-returns/
 
 global_assumptions:
   inflation_rate: "0.025"
@@ -109,6 +121,77 @@ global_assumptions:
     fers_rules:
       tsp_matching_rate: "0.05"        # 5% maximum agency matching contribution
       tsp_matching_threshold: "0.05"   # 5% employee contribution required for full match
+
+    # Federal income tax configuration - 2025 values
+    # Source: IRS Revenue Procedure 2024-XX (updated annually)
+    federal_tax_config:
+      standard_deduction_mfj: "30000"                    # 2025 MFJ standard deduction
+      additional_standard_deduction_65_plus: "1550"      # Additional deduction per person 65+
+      tax_brackets_2025:
+        - min: "0"
+          max: "23200"
+          rate: "0.10"
+        - min: "23201"
+          max: "94300"
+          rate: "0.12"
+        - min: "94301"
+          max: "201050"
+          rate: "0.22"
+        - min: "201051"
+          max: "383900"
+          rate: "0.24"
+        - min: "383901"
+          max: "487450"
+          rate: "0.32"
+        - min: "487451"
+          max: "731200"
+          rate: "0.35"
+        - min: "731201"
+          max: "999999999"
+          rate: "0.37"
+
+    # State and local tax configuration
+    # Source: Pennsylvania Department of Revenue and local tax authorities
+    state_local_tax_config:
+      pennsylvania_rate: "0.0307"           # 3.07% flat state tax rate
+      upper_makefield_eit_rate: "0.01"      # 1% EIT on earned income only
+
+    # FICA tax configuration - 2025 values
+    # Source: Social Security Administration and IRS
+    fica_tax_config:
+      social_security_wage_base: "176100"   # 2025 SS wage base
+      social_security_rate: "0.062"         # 6.2% Social Security tax
+      medicare_rate: "0.0145"               # 1.45% Medicare tax
+      additional_medicare_rate: "0.009"     # 0.9% additional Medicare tax
+      high_income_threshold_mfj: "250000"   # MFJ threshold for additional Medicare tax
+
+    # Medicare Part B premium configuration - 2025 values
+    # Source: Centers for Medicare & Medicaid Services (CMS)
+    medicare_config:
+      base_premium_2025: "185.00"           # 2025 base Part B premium
+      irmaa_thresholds:
+        - income_threshold_single: "103000"  # First IRMAA tier (single)
+          income_threshold_joint: "206000"   # First IRMAA tier (MFJ)
+          monthly_surcharge: "69.90"         # Additional monthly premium
+        - income_threshold_single: "129000"  # Second IRMAA tier (single)
+          income_threshold_joint: "258000"   # Second IRMAA tier (MFJ)
+          monthly_surcharge: "174.70"        # Additional monthly premium
+        - income_threshold_single: "161000"  # Third IRMAA tier (single)
+          income_threshold_joint: "322000"   # Third IRMAA tier (MFJ)
+          monthly_surcharge: "279.50"        # Additional monthly premium
+        - income_threshold_single: "193000"  # Fourth IRMAA tier (single)
+          income_threshold_joint: "386000"   # Fourth IRMAA tier (MFJ)
+          monthly_surcharge: "384.30"        # Additional monthly premium
+        - income_threshold_single: "500000"  # Fifth IRMAA tier (single)
+          income_threshold_joint: "750000"   # Fifth IRMAA tier (MFJ)
+          monthly_surcharge: "489.10"        # Additional monthly premium
+
+    # FEHB (Federal Employees Health Benefits) configuration
+    # Source: OPM FEHB Program and agency policies
+    fehb_config:
+      pay_periods_per_year: 26               # Bi-weekly pay periods
+      retirement_calculation_method: "same_as_active"  # Premiums same as active duty
+      retirement_premium_multiplier: "1.0"   # No change in retirement (1.0 = same as active)
 
   # TSP Statistical Models - calculated from historical data
   # Source: TSP.gov historical performance data, updated annually

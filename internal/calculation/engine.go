@@ -11,9 +11,10 @@ import (
 
 // CalculationEngine orchestrates all retirement calculations
 type CalculationEngine struct {
-	TaxCalc      *ComprehensiveTaxCalculator
-	MedicareCalc *MedicareCalculator
-	Debug        bool // Enable debug output for detailed calculations
+	TaxCalc             *ComprehensiveTaxCalculator
+	MedicareCalc        *MedicareCalculator
+	LifecycleFundLoader *LifecycleFundLoader
+	Debug               bool // Enable debug output for detailed calculations
 }
 
 // NewCalculationEngine creates a new calculation engine
@@ -21,6 +22,15 @@ func NewCalculationEngine() *CalculationEngine {
 	return &CalculationEngine{
 		TaxCalc:      NewComprehensiveTaxCalculator(),
 		MedicareCalc: NewMedicareCalculator(),
+	}
+}
+
+// NewCalculationEngineWithConfig creates a new calculation engine with configurable tax settings
+func NewCalculationEngineWithConfig(federalRules domain.FederalRules) *CalculationEngine {
+	return &CalculationEngine{
+		TaxCalc:             NewComprehensiveTaxCalculatorWithConfig(federalRules),
+		MedicareCalc:        NewMedicareCalculatorWithConfig(federalRules.MedicareConfig),
+		LifecycleFundLoader: NewLifecycleFundLoader("data"),
 	}
 }
 
@@ -46,7 +56,7 @@ func (ce *CalculationEngine) RunScenario(config *domain.Configuration, scenario 
 	}
 
 	// Generate annual projections
-	projection := ce.GenerateAnnualProjection(&robert, &dawn, scenario, &config.GlobalAssumptions)
+	projection := ce.GenerateAnnualProjection(&robert, &dawn, scenario, &config.GlobalAssumptions, config.GlobalAssumptions.FederalRules)
 
 	// Create scenario summary
 	summary := &domain.ScenarioSummary{
@@ -87,7 +97,7 @@ func (ce *CalculationEngine) RunScenario(config *domain.Configuration, scenario 
 }
 
 // GenerateAnnualProjection generates annual cash flow projections for a scenario
-func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Employee, scenario *domain.Scenario, assumptions *domain.GlobalAssumptions) []domain.AnnualCashFlow {
+func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Employee, scenario *domain.Scenario, assumptions *domain.GlobalAssumptions, federalRules domain.FederalRules) []domain.AnnualCashFlow {
 	projection := make([]domain.AnnualCashFlow, assumptions.ProjectionYears)
 
 	// Determine retirement year (0-based index)
@@ -314,25 +324,87 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 
 		// Update TSP balances
 		if isRobertRetired {
-			currentTSPTraditionalRobert, currentTSPRothRobert = ce.updateTSPBalances(
-				currentTSPTraditionalRobert, currentTSPRothRobert, tspWithdrawalRobert,
-				assumptions.TSPReturnPostRetirement,
-			)
+			// Post-retirement TSP growth with withdrawals
+			// Use lifecycle fund allocation if available, otherwise use default return rate
+			if robert.TSPLifecycleFund != nil {
+				// Apply withdrawal first
+				if tspWithdrawalRobert.GreaterThan(currentTSPTraditionalRobert) {
+					// Take from Roth if traditional is insufficient
+					remainingWithdrawal := tspWithdrawalRobert.Sub(currentTSPTraditionalRobert)
+					currentTSPTraditionalRobert = decimal.Zero
+					if remainingWithdrawal.GreaterThan(currentTSPRothRobert) {
+						currentTSPRothRobert = decimal.Zero
+					} else {
+						currentTSPRothRobert = currentTSPRothRobert.Sub(remainingWithdrawal)
+					}
+				} else {
+					currentTSPTraditionalRobert = currentTSPTraditionalRobert.Sub(tspWithdrawalRobert)
+				}
+
+				// Apply growth using lifecycle fund allocation
+				allocation := ce.getTSPAllocationForEmployee(robert, projectionDate)
+				weightedReturn := ce.calculateTSPReturnWithAllocation(allocation, projectionDate.Year())
+
+				currentTSPTraditionalRobert = currentTSPTraditionalRobert.Mul(decimal.NewFromFloat(1).Add(weightedReturn))
+				currentTSPRothRobert = currentTSPRothRobert.Mul(decimal.NewFromFloat(1).Add(weightedReturn))
+			} else {
+				currentTSPTraditionalRobert, currentTSPRothRobert = ce.updateTSPBalances(
+					currentTSPTraditionalRobert, currentTSPRothRobert, tspWithdrawalRobert,
+					assumptions.TSPReturnPostRetirement,
+				)
+			}
 		} else {
 			// Pre-retirement TSP growth with contributions
-			currentTSPTraditionalRobert = ce.growTSPBalance(currentTSPTraditionalRobert, robert.TotalAnnualTSPContribution(), assumptions.TSPReturnPreRetirement)
-			currentTSPRothRobert = ce.growTSPBalance(currentTSPRothRobert, decimal.Zero, assumptions.TSPReturnPreRetirement)
+			// Use lifecycle fund allocation if available, otherwise use default return rate
+			if robert.TSPLifecycleFund != nil {
+				currentTSPTraditionalRobert = ce.growTSPBalanceWithAllocation(robert, currentTSPTraditionalRobert, robert.TotalAnnualTSPContribution(), projectionDate)
+				currentTSPRothRobert = ce.growTSPBalanceWithAllocation(robert, currentTSPRothRobert, decimal.Zero, projectionDate)
+			} else {
+				currentTSPTraditionalRobert = ce.growTSPBalance(currentTSPTraditionalRobert, robert.TotalAnnualTSPContribution(), assumptions.TSPReturnPreRetirement)
+				currentTSPRothRobert = ce.growTSPBalance(currentTSPRothRobert, decimal.Zero, assumptions.TSPReturnPreRetirement)
+			}
 		}
 
 		if isDawnRetired {
-			currentTSPTraditionalDawn, currentTSPRothDawn = ce.updateTSPBalances(
-				currentTSPTraditionalDawn, currentTSPRothDawn, tspWithdrawalDawn,
-				assumptions.TSPReturnPostRetirement,
-			)
+			// Post-retirement TSP growth with withdrawals
+			// Use lifecycle fund allocation if available, otherwise use default return rate
+			if dawn.TSPLifecycleFund != nil {
+				// Apply withdrawal first
+				if tspWithdrawalDawn.GreaterThan(currentTSPTraditionalDawn) {
+					// Take from Roth if traditional is insufficient
+					remainingWithdrawal := tspWithdrawalDawn.Sub(currentTSPTraditionalDawn)
+					currentTSPTraditionalDawn = decimal.Zero
+					if remainingWithdrawal.GreaterThan(currentTSPRothDawn) {
+						currentTSPRothDawn = decimal.Zero
+					} else {
+						currentTSPRothDawn = currentTSPRothDawn.Sub(remainingWithdrawal)
+					}
+				} else {
+					currentTSPTraditionalDawn = currentTSPTraditionalDawn.Sub(tspWithdrawalDawn)
+				}
+
+				// Apply growth using lifecycle fund allocation
+				allocation := ce.getTSPAllocationForEmployee(dawn, projectionDate)
+				weightedReturn := ce.calculateTSPReturnWithAllocation(allocation, projectionDate.Year())
+
+				currentTSPTraditionalDawn = currentTSPTraditionalDawn.Mul(decimal.NewFromFloat(1).Add(weightedReturn))
+				currentTSPRothDawn = currentTSPRothDawn.Mul(decimal.NewFromFloat(1).Add(weightedReturn))
+			} else {
+				currentTSPTraditionalDawn, currentTSPRothDawn = ce.updateTSPBalances(
+					currentTSPTraditionalDawn, currentTSPRothDawn, tspWithdrawalDawn,
+					assumptions.TSPReturnPostRetirement,
+				)
+			}
 		} else {
 			// Pre-retirement TSP growth with contributions
-			currentTSPTraditionalDawn = ce.growTSPBalance(currentTSPTraditionalDawn, dawn.TotalAnnualTSPContribution(), assumptions.TSPReturnPreRetirement)
-			currentTSPRothDawn = ce.growTSPBalance(currentTSPRothDawn, decimal.Zero, assumptions.TSPReturnPreRetirement)
+			// Use lifecycle fund allocation if available, otherwise use default return rate
+			if dawn.TSPLifecycleFund != nil {
+				currentTSPTraditionalDawn = ce.growTSPBalanceWithAllocation(dawn, currentTSPTraditionalDawn, dawn.TotalAnnualTSPContribution(), projectionDate)
+				currentTSPRothDawn = ce.growTSPBalanceWithAllocation(dawn, currentTSPRothDawn, decimal.Zero, projectionDate)
+			} else {
+				currentTSPTraditionalDawn = ce.growTSPBalance(currentTSPTraditionalDawn, dawn.TotalAnnualTSPContribution(), assumptions.TSPReturnPreRetirement)
+				currentTSPRothDawn = ce.growTSPBalance(currentTSPRothDawn, decimal.Zero, assumptions.TSPReturnPreRetirement)
+			}
 		}
 
 		// Debug TSP balances for Scenario 2 to show extra growth
@@ -345,7 +417,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		}
 
 		// Calculate FEHB premiums
-		fehbPremium := ce.calculateFEHBPremium(robert, year, dateutil.IsMedicareEligible(robert.BirthDate, projectionDate), assumptions.FEHBPremiumInflation)
+		fehbPremium := ce.calculateFEHBPremium(robert, year, dateutil.IsMedicareEligible(robert.BirthDate, projectionDate), assumptions.FEHBPremiumInflation, federalRules.FEHBConfig)
 
 		// Calculate Medicare premiums (if applicable)
 		medicarePremium := ce.calculateMedicarePremium(robert, dawn, projectionDate,
@@ -509,11 +581,23 @@ func (ce *CalculationEngine) growTSPBalance(balance, contribution, returnRate de
 	return balance.Add(contribution).Mul(decimal.NewFromFloat(1).Add(returnRate))
 }
 
+// growTSPBalanceWithAllocation calculates TSP balance growth using lifecycle fund allocation data
+func (ce *CalculationEngine) growTSPBalanceWithAllocation(employee *domain.Employee, balance, contribution decimal.Decimal, targetDate time.Time) decimal.Decimal {
+	// Get the appropriate allocation for this date
+	allocation := ce.getTSPAllocationForEmployee(employee, targetDate)
+
+	// Calculate weighted return based on allocation
+	weightedReturn := ce.calculateTSPReturnWithAllocation(allocation, targetDate.Year())
+
+	// Apply growth with the weighted return
+	return balance.Add(contribution).Mul(decimal.NewFromFloat(1).Add(weightedReturn))
+}
+
 // calculateFEHBPremium calculates FEHB premium for a given year
-func (ce *CalculationEngine) calculateFEHBPremium(employee *domain.Employee, year int, _ bool, premiumInflation decimal.Decimal) decimal.Decimal {
+func (ce *CalculationEngine) calculateFEHBPremium(employee *domain.Employee, year int, _ bool, premiumInflation decimal.Decimal, fehbConfig domain.FEHBConfig) decimal.Decimal {
 	inflationFactor := decimal.NewFromFloat(1).Add(premiumInflation)
 	adjustedPremium := employee.FEHBPremiumPerPayPeriod.Mul(inflationFactor.Pow(decimal.NewFromInt(int64(year))))
-	return adjustedPremium.Mul(decimal.NewFromInt(26)) // 26 pay periods per year
+	return adjustedPremium.Mul(decimal.NewFromInt(int64(fehbConfig.PayPeriodsPerYear)))
 }
 
 // calculateMedicarePremium calculates Medicare Part B premiums with IRMAA considerations
@@ -802,7 +886,7 @@ func (ce *CalculationEngine) CalculateBreakEvenTSPWithdrawalRate(config *domain.
 		testScenario.Dawn.TSPWithdrawalRate = &testRate
 
 		// Run projection to get the first full retirement year
-		projection := ce.GenerateAnnualProjection(&robertEmployee, &dawnEmployee, &testScenario, &config.GlobalAssumptions)
+		projection := ce.GenerateAnnualProjection(&robertEmployee, &dawnEmployee, &testScenario, &config.GlobalAssumptions, config.GlobalAssumptions.FederalRules)
 
 		// Check if we have enough projection years
 		if firstFullRetirementYear >= len(projection) {
@@ -840,7 +924,7 @@ func (ce *CalculationEngine) CalculateBreakEvenTSPWithdrawalRate(config *domain.
 	testScenario.Dawn.TSPWithdrawalStrategy = "variable_percentage"
 	testScenario.Dawn.TSPWithdrawalRate = &finalRate
 
-	projection := ce.GenerateAnnualProjection(&robertEmployee, &dawnEmployee, &testScenario, &config.GlobalAssumptions)
+	projection := ce.GenerateAnnualProjection(&robertEmployee, &dawnEmployee, &testScenario, &config.GlobalAssumptions, config.GlobalAssumptions.FederalRules)
 	finalYear := projection[firstFullRetirementYear]
 
 	return finalRate, &finalYear, nil
@@ -893,4 +977,61 @@ type BreakEvenResult struct {
 	TSPWithdrawalAmount     decimal.Decimal `json:"tsp_withdrawal_amount"`
 	TotalTSPBalance         decimal.Decimal `json:"total_tsp_balance"`
 	CurrentVsBreakEvenDiff  decimal.Decimal `json:"current_vs_break_even_diff"`
+}
+
+// getTSPAllocationForEmployee returns the TSP allocation for an employee at a specific date
+func (ce *CalculationEngine) getTSPAllocationForEmployee(employee *domain.Employee, targetDate time.Time) domain.TSPAllocation {
+	// If employee has a lifecycle fund specified, use that
+	if employee.TSPLifecycleFund != nil {
+		allocation, err := ce.LifecycleFundLoader.GetAllocationAtDate(employee.TSPLifecycleFund.FundName, targetDate)
+		if err == nil && allocation != nil {
+			return *allocation
+		}
+		// Fall back to default if lifecycle fund lookup fails
+	}
+
+	// If employee has a specific allocation, use that
+	if employee.TSPAllocation != nil {
+		return *employee.TSPAllocation
+	}
+
+	// Use default allocation from global assumptions
+	// This would need to be passed in from the configuration
+	// For now, return a conservative default
+	return domain.TSPAllocation{
+		CFund: decimal.NewFromFloat(0.60),
+		SFund: decimal.NewFromFloat(0.20),
+		IFund: decimal.NewFromFloat(0.10),
+		FFund: decimal.NewFromFloat(0.10),
+		GFund: decimal.NewFromFloat(0.00),
+	}
+}
+
+// calculateTSPReturnWithAllocation calculates TSP return using specific allocation
+func (ce *CalculationEngine) calculateTSPReturnWithAllocation(allocation domain.TSPAllocation, year int) decimal.Decimal {
+	// This would need to be enhanced to use historical fund returns
+	// For now, use a simplified weighted average approach
+
+	// Get historical returns for each fund (this would need to be implemented)
+	// For now, use the statistical models from the configuration
+
+	// Weighted return calculation
+	weightedReturn := decimal.Zero
+
+	// C Fund (Large Cap) - typically highest return
+	weightedReturn = weightedReturn.Add(allocation.CFund.Mul(decimal.NewFromFloat(0.08)))
+
+	// S Fund (Small Cap) - higher return, higher volatility
+	weightedReturn = weightedReturn.Add(allocation.SFund.Mul(decimal.NewFromFloat(0.09)))
+
+	// I Fund (International) - moderate return
+	weightedReturn = weightedReturn.Add(allocation.IFund.Mul(decimal.NewFromFloat(0.06)))
+
+	// F Fund (Bonds) - lower return, lower volatility
+	weightedReturn = weightedReturn.Add(allocation.FFund.Mul(decimal.NewFromFloat(0.04)))
+
+	// G Fund (Government) - guaranteed return
+	weightedReturn = weightedReturn.Add(allocation.GFund.Mul(decimal.NewFromFloat(0.03)))
+
+	return weightedReturn
 }

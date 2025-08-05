@@ -3,6 +3,7 @@ package calculation
 import (
 	"time"
 
+	"github.com/rpgo/retirement-calculator/internal/domain"
 	"github.com/shopspring/decimal"
 )
 
@@ -54,11 +55,29 @@ func NewMedicareCalculator() *MedicareCalculator {
 	}
 }
 
+// NewMedicareCalculatorWithConfig creates a new Medicare calculator with configurable values
+func NewMedicareCalculatorWithConfig(config domain.MedicareConfig) *MedicareCalculator {
+	// Convert domain.MedicareIRMAAThreshold to calculation.IRMAAThreshold
+	var thresholds []IRMAAThreshold
+	for _, threshold := range config.IRMAAThresholds {
+		thresholds = append(thresholds, IRMAAThreshold{
+			IncomeThresholdSingle: threshold.IncomeThresholdSingle,
+			IncomeThresholdJoint:  threshold.IncomeThresholdJoint,
+			MonthlySurcharge:      threshold.MonthlySurcharge,
+		})
+	}
+
+	return &MedicareCalculator{
+		BasePremium2025: config.BasePremium2025,
+		IRMAAThresholds: thresholds,
+	}
+}
+
 // CalculatePartBPremium calculates Medicare Part B premium including IRMAA surcharge
 // based on Modified Adjusted Gross Income (MAGI) from 2 years prior
 func (mc *MedicareCalculator) CalculatePartBPremium(magi decimal.Decimal, isMarriedFilingJointly bool) decimal.Decimal {
 	premium := mc.BasePremium2025
-	
+
 	// Find applicable IRMAA surcharge
 	for _, threshold := range mc.IRMAAThresholds {
 		var applicableThreshold decimal.Decimal
@@ -67,14 +86,14 @@ func (mc *MedicareCalculator) CalculatePartBPremium(magi decimal.Decimal, isMarr
 		} else {
 			applicableThreshold = threshold.IncomeThresholdSingle
 		}
-		
+
 		if magi.GreaterThan(applicableThreshold) {
 			premium = premium.Add(threshold.MonthlySurcharge)
 		} else {
 			break // Stop at first threshold not exceeded
 		}
 	}
-	
+
 	return premium
 }
 

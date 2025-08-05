@@ -29,6 +29,10 @@ type Employee struct {
 	// TSP Asset Allocation (optional - uses default allocation if not specified)
 	TSPAllocation *TSPAllocation `yaml:"tsp_allocation,omitempty" json:"tsp_allocation,omitempty"`
 
+	// TSP Lifecycle Fund (optional - overrides tsp_allocation if specified)
+	// If specified, allocation will change over time based on age
+	TSPLifecycleFund *TSPLifecycleFund `yaml:"tsp_lifecycle_fund,omitempty" json:"tsp_lifecycle_fund,omitempty"`
+
 	// Optional fields for additional context (not used in calculations)
 	PayPlanGrade string `yaml:"pay_plan_grade,omitempty" json:"pay_plan_grade,omitempty"`
 	SSNLast4     string `yaml:"ssn_last4,omitempty" json:"ssn_last4,omitempty"`
@@ -145,6 +149,18 @@ type TSPAllocation struct {
 	GFund decimal.Decimal `yaml:"g_fund" json:"g_fund"` // Default: 0.00 (0% - Government Securities)
 }
 
+// TSPLifecycleFund represents a TSP Lifecycle Fund with age-based allocation changes
+type TSPLifecycleFund struct {
+	FundName       string                              `yaml:"fund_name" json:"fund_name"`             // e.g., "L2030", "L2035", "L2040", "L Income"
+	AllocationData map[string][]TSPAllocationDataPoint `yaml:"allocation_data" json:"allocation_data"` // Quarterly allocation data
+}
+
+// TSPAllocationDataPoint represents allocation at a specific date
+type TSPAllocationDataPoint struct {
+	Date       string        `yaml:"date" json:"date"` // Format: "YYYY-MM-DD"
+	Allocation TSPAllocation `yaml:"allocation" json:"allocation"`
+}
+
 // FederalRules contains federal rules and limits that change annually
 type FederalRules struct {
 	// Social Security taxation thresholds (2025 values, updated annually)
@@ -155,6 +171,21 @@ type FederalRules struct {
 
 	// FERS rules and matching rates
 	FERSRules FERSRules `yaml:"fers_rules" json:"fers_rules"`
+
+	// Federal tax configuration (updated annually)
+	FederalTaxConfig FederalTaxConfig `yaml:"federal_tax_config" json:"federal_tax_config"`
+
+	// State and local tax configuration
+	StateLocalTaxConfig StateLocalTaxConfig `yaml:"state_local_tax_config" json:"state_local_tax_config"`
+
+	// FICA tax configuration (updated annually)
+	FICATaxConfig FICATaxConfig `yaml:"fica_tax_config" json:"fica_tax_config"`
+
+	// Medicare configuration (updated annually)
+	MedicareConfig MedicareConfig `yaml:"medicare_config" json:"medicare_config"`
+
+	// FEHB configuration
+	FEHBConfig FEHBConfig `yaml:"fehb_config" json:"fehb_config"`
 }
 
 // SocialSecurityTaxThresholds contains income thresholds for SS taxation (updated annually)
@@ -188,6 +219,75 @@ type FERSRules struct {
 	// TSP matching rates
 	TSPMatchingRate      decimal.Decimal `yaml:"tsp_matching_rate" json:"tsp_matching_rate"`           // Default: 0.05 (5% maximum match)
 	TSPMatchingThreshold decimal.Decimal `yaml:"tsp_matching_threshold" json:"tsp_matching_threshold"` // Default: 0.05 (5% contribution required for full match)
+}
+
+// FederalTaxConfig contains federal income tax configuration (updated annually)
+type FederalTaxConfig struct {
+	// Standard deduction amounts
+	StandardDeductionMFJ        decimal.Decimal `yaml:"standard_deduction_mfj" json:"standard_deduction_mfj"`                               // Default: 30000 (2025 MFJ)
+	AdditionalStandardDeduction decimal.Decimal `yaml:"additional_standard_deduction_65_plus" json:"additional_standard_deduction_65_plus"` // Default: 1550 (per person 65+)
+
+	// Tax brackets for 2025 (updated annually)
+	TaxBrackets2025 []TaxBracket `yaml:"tax_brackets_2025" json:"tax_brackets_2025"`
+}
+
+// TaxBracket represents a federal tax bracket
+type TaxBracket struct {
+	Min  decimal.Decimal `yaml:"min" json:"min"`   // Minimum income for bracket
+	Max  decimal.Decimal `yaml:"max" json:"max"`   // Maximum income for bracket (use 999999999 for top bracket)
+	Rate decimal.Decimal `yaml:"rate" json:"rate"` // Tax rate for this bracket
+}
+
+// StateLocalTaxConfig contains state and local tax configuration
+type StateLocalTaxConfig struct {
+	// Pennsylvania state tax (flat rate)
+	PennsylvaniaRate decimal.Decimal `yaml:"pennsylvania_rate" json:"pennsylvania_rate"` // Default: 0.0307 (3.07%)
+
+	// Upper Makefield Township EIT (local tax)
+	UpperMakefieldEITRate decimal.Decimal `yaml:"upper_makefield_eit_rate" json:"upper_makefield_eit_rate"` // Default: 0.01 (1% on earned income)
+}
+
+// FICATaxConfig contains FICA tax configuration (updated annually)
+type FICATaxConfig struct {
+	// Social Security tax
+	SocialSecurityWageBase decimal.Decimal `yaml:"social_security_wage_base" json:"social_security_wage_base"` // Default: 176100 (2025)
+	SocialSecurityRate     decimal.Decimal `yaml:"social_security_rate" json:"social_security_rate"`           // Default: 0.062 (6.2%)
+
+	// Medicare tax
+	MedicareRate decimal.Decimal `yaml:"medicare_rate" json:"medicare_rate"` // Default: 0.0145 (1.45%)
+
+	// Additional Medicare tax (for high earners)
+	AdditionalMedicareRate decimal.Decimal `yaml:"additional_medicare_rate" json:"additional_medicare_rate"`   // Default: 0.009 (0.9%)
+	HighIncomeThresholdMFJ decimal.Decimal `yaml:"high_income_threshold_mfj" json:"high_income_threshold_mfj"` // Default: 250000 (MFJ)
+}
+
+// MedicareConfig contains Medicare Part B premium configuration (updated annually)
+type MedicareConfig struct {
+	// Base Part B premium
+	BasePremium2025 decimal.Decimal `yaml:"base_premium_2025" json:"base_premium_2025"` // Default: 185.00 (2025)
+
+	// IRMAA (Income-Related Monthly Adjustment Amount) thresholds
+	IRMAAThresholds []MedicareIRMAAThreshold `yaml:"irmaa_thresholds" json:"irmaa_thresholds"`
+}
+
+// MedicareIRMAAThreshold represents an IRMAA income threshold and corresponding surcharge
+type MedicareIRMAAThreshold struct {
+	IncomeThresholdSingle decimal.Decimal `yaml:"income_threshold_single" json:"income_threshold_single"` // For single filers
+	IncomeThresholdJoint  decimal.Decimal `yaml:"income_threshold_joint" json:"income_threshold_joint"`   // For married filing jointly
+	MonthlySurcharge      decimal.Decimal `yaml:"monthly_surcharge" json:"monthly_surcharge"`             // Additional monthly premium per person
+}
+
+// FEHBConfig contains FEHB (Federal Employees Health Benefits) configuration
+type FEHBConfig struct {
+	// Pay periods per year (typically 26 for bi-weekly pay)
+	PayPeriodsPerYear int `yaml:"pay_periods_per_year" json:"pay_periods_per_year"` // Default: 26
+
+	// Retirement premium calculation method
+	// Options: "same_as_active", "reduced_rate", "custom_multiplier"
+	RetirementCalculationMethod string `yaml:"retirement_calculation_method" json:"retirement_calculation_method"` // Default: "same_as_active"
+
+	// Custom multiplier for retirement premiums (if using custom_multiplier method)
+	RetirementPremiumMultiplier decimal.Decimal `yaml:"retirement_premium_multiplier" json:"retirement_premium_multiplier"` // Default: 1.0
 }
 
 // TSPStatisticalModels contains statistical parameters for each TSP fund
