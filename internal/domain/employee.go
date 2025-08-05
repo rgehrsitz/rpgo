@@ -23,6 +23,9 @@ type Employee struct {
 	FEHBPremiumMonthly             decimal.Decimal `yaml:"fehb_premium_monthly" json:"fehb_premium_monthly"`
 	SurvivorBenefitElectionPercent decimal.Decimal `yaml:"survivor_benefit_election_percent" json:"survivor_benefit_election_percent"`
 
+	// Sick Leave Credit (for pension calculation)
+	SickLeaveHours decimal.Decimal `yaml:"sick_leave_hours,omitempty" json:"sick_leave_hours,omitempty"`
+
 	// TSP Asset Allocation (optional - uses default allocation if not specified)
 	TSPAllocation *TSPAllocation `yaml:"tsp_allocation,omitempty" json:"tsp_allocation,omitempty"`
 
@@ -221,10 +224,21 @@ func (e *Employee) Age(atDate time.Time) int {
 	return age
 }
 
-// YearsOfService calculates the years of service at a given date
+// YearsOfService calculates the years of service at a given date, including sick leave credit
 func (e *Employee) YearsOfService(atDate time.Time) decimal.Decimal {
+	// Calculate basic service time from hire date to retirement/calculation date
 	serviceDuration := atDate.Sub(e.HireDate)
 	years := decimal.NewFromFloat(serviceDuration.Hours() / 24 / 365.25)
+
+	// Add sick leave credit if available
+	// FERS Rule: Unused sick leave at retirement counts toward service computation
+	// 1 day of sick leave = 1 day of service credit (8 hours = 1 day)
+	if e.SickLeaveHours.GreaterThan(decimal.Zero) {
+		sickLeaveDays := e.SickLeaveHours.Div(decimal.NewFromInt(8))
+		sickLeaveYears := sickLeaveDays.Div(decimal.NewFromFloat(365.25))
+		years = years.Add(sickLeaveYears)
+	}
+
 	return years.Round(4) // Round to 4 decimal places for precision
 }
 

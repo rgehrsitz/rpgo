@@ -17,6 +17,7 @@ personal_details:
     ss_benefit_70: "5000.00"  # Monthly benefit at age 70
     fehb_premium_monthly: "488.49"  # $488.49 per pay period (will be multiplied by 26 pay periods)
     survivor_benefit_election_percent: "0.00"
+    sick_leave_hours: "1868.0"  # Sick leave hours that count toward pension service credit
     
     # Individual TSP allocation (optional - uses default if not specified)
     # Robert uses L 2030 fund which is aggressive growth
@@ -41,6 +42,7 @@ personal_details:
     ss_benefit_70: "4860.00"  # Monthly benefit at age 70
     fehb_premium_monthly: "0.00"  # Dawn has FSA-HC instead of FEHB ($105.76 per pay period)
     survivor_benefit_election_percent: "0.00"
+    sick_leave_hours: "1057.5"  # Sick leave hours that count toward pension service credit
     
     # Dawn switching from L Income to L 2030 (100% future allocation)
     tsp_allocation:
@@ -148,13 +150,13 @@ scenarios:
       retirement_date: "2025-12-27T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.04"  # 1% withdrawal rate (conservative)
+      tsp_withdrawal_rate: "0.03" 
     dawn:
       employee_name: "dawn"
       retirement_date: "2025-08-30T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.04"  # 1% withdrawal rate (conservative)
+      tsp_withdrawal_rate: "0.03" 
       
   - name: "Rob Retires at 62 - Feb 2027"
     robert:
@@ -162,10 +164,10 @@ scenarios:
       retirement_date: "2027-02-28T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.04"  # 1% withdrawal rate (conservative)
+      tsp_withdrawal_rate: "0.03"  
     dawn:
       employee_name: "dawn"
       retirement_date: "2025-08-30T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.04"  # 1% withdrawal rate (conservative)
+      tsp_withdrawal_rate: "0.03"  

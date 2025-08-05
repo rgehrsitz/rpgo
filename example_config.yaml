@@ -13,6 +13,7 @@ personal_details:
     ss_benefit_70: "5000.00"  # Monthly benefit at age 70
     fehb_premium_monthly: "488.49"  # $488.49 per pay period (will be multiplied by 26 pay periods)
     survivor_benefit_election_percent: "0.00"
+    sick_leave_hours: "1868.0"  # Sick leave hours that count toward pension service credit
     # Additional context from documents:
     # - Annual Leave: 180 hrs current balance
     # - Sick Leave: 1,868 hrs (will count toward service for pension)
@@ -36,6 +37,7 @@ personal_details:
     ss_benefit_70: "4860.00"  # Monthly benefit at age 70
     fehb_premium_monthly: "0.00"  # Dawn has FSA-HC instead of FEHB ($105.76 per pay period)
     survivor_benefit_election_percent: "0.00"
+    sick_leave_hours: "1057.5"  # Sick leave hours that count toward pension service credit
     # Additional context from documents:
     # - Annual Leave: 135 hrs current balance
     # - Sick Leave: 1,057.5 hrs (will count toward service for pension)
