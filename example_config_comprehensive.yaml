@@ -70,7 +70,7 @@ global_assumptions:
   tsp_return_pre_retirement: "0.07"  # Conservative estimate for L 2030 funds
   tsp_return_post_retirement: "0.05"
   cola_general_rate: "0.025"
-  projection_years: 25
+  projection_years: 30
   current_location:
     state: "PA"
     county: "Bucks"
@@ -233,13 +233,13 @@ scenarios:
       retirement_date: "2025-12-27T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.03" 
+      tsp_withdrawal_rate: "0.00" 
     dawn:
       employee_name: "dawn"
       retirement_date: "2025-08-30T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.03" 
+      tsp_withdrawal_rate: "0.00" 
       
   - name: "Rob Retires at 62 - Feb 2027"
     robert:
@@ -247,10 +247,10 @@ scenarios:
       retirement_date: "2027-02-28T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.03"  
+      tsp_withdrawal_rate: "0.00"  
     dawn:
       employee_name: "dawn"
       retirement_date: "2025-08-30T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.03"
+      tsp_withdrawal_rate: "0.00"
