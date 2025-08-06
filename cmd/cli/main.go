@@ -316,8 +316,6 @@ var fersMonteCarloCmd = &cobra.Command{
 
 func init() {
 	calculateCmd.Flags().StringP("format", "f", "console", "Output format (console, html, json, csv)")
-	calculateCmd.Flags().BoolP("monte-carlo", "m", false, "Run Monte Carlo simulation")
-	calculateCmd.Flags().IntP("simulations", "s", 1000, "Number of Monte Carlo simulations")
 	calculateCmd.Flags().BoolP("verbose", "v", false, "Verbose output")
 	calculateCmd.Flags().Bool("debug", false, "Enable debug output for detailed calculations")
 

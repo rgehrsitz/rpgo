@@ -67,12 +67,20 @@ go build -o fers-calc cmd/cli/main.go
 
 ### Command Line Options
 
+To help you understand the core commands, here's a breakdown:
+
+- **`./fers-calc calculate [input-file]`**: Runs a single, deterministic retirement projection based on the fixed assumptions in your input configuration file. This provides a detailed report for one specific set of conditions.
+
+- **`./fers-calc historical monte-carlo [data-path] [flags]`**: Executes simple portfolio Monte Carlo simulations. This command is focused on assessing the sustainability of a specific investment balance with a defined withdrawal strategy, using historical (or statistical) market data. It does not model the full FERS retirement system.
+
+- **`./fers-calc monte-carlo [config-file] [data-path]`**: Runs comprehensive FERS Monte Carlo simulations. This command integrates your full retirement configuration (pension, Social Security, TSP, taxes, FEHB) with historical market data to run thousands of scenarios, providing a probabilistic assessment of your complete retirement plan's success.
+
 ```bash
 # Basic calculation
 ./fers-calc calculate [input-file]
 
 # With options
-./fers-calc calculate [input-file] --format html --verbose
+./fers-calc calculate [input-file] --format html --verbose --debug
 
 # Validate configuration
 ./fers-calc validate [input-file]
@@ -80,18 +88,21 @@ go build -o fers-calc cmd/cli/main.go
 # Generate example
 ./fers-calc example [output-file]
 
+# Break-even analysis
+./fers-calc break-even [input-file]
+
 # Historical data management
 ./fers-calc historical load ./data
 ./fers-calc historical stats ./data
 ./fers-calc historical query ./data 2020 C
 
-# Monte Carlo simulations
-./fers-calc historical monte-carlo ./data --simulations 1000 --balance 1000000 --withdrawal 40000
-./fers-calc historical monte-carlo ./data --strategy guardrails --years 30
+# Simple Portfolio Monte Carlo simulations
+./fers-calc historical monte-carlo ./data --simulations 1000 --balance 1000000 --withdrawal 40000 --historical true
+./fers-calc historical monte-carlo ./data --strategy guardrails --years 30 --historical true
 
 # Comprehensive FERS Monte Carlo simulations
-./fers-calc monte-carlo config.yaml ./data --simulations 1000
-./fers-calc monte-carlo config.yaml ./data --simulations 5000 --seed 12345
+./fers-calc monte-carlo config.yaml ./data --simulations 1000 --historical true
+./fers-calc monte-carlo config.yaml ./data --simulations 5000 --seed 12345 --historical true --debug
 ```
 
 ### Output Formats

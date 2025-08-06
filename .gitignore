@@ -78,4 +78,6 @@ tmp/
 
 cli
 example_config_comprehensive.yaml
-test_config_comprehensive_qa.yaml
+
+# Crush directory
+.crush/
