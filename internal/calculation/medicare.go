@@ -116,9 +116,9 @@ func (mc *MedicareCalculator) CalculateAnnualPartBCost(estimatedMAGI decimal.Dec
 
 // calculateIRMAASurcharge calculates IRMAA surcharge based on MAGI
 func (mc *MedicareCalculator) calculateIRMAASurcharge(estimatedMAGI decimal.Decimal, isMarriedFilingJointly bool) decimal.Decimal {
-	var surcharge decimal.Decimal
+	var totalSurcharge decimal.Decimal
 
-	// Apply IRMAA thresholds based on filing status
+	// Apply IRMAA thresholds cumulatively based on filing status
 	for _, threshold := range mc.IRMAAThresholds {
 		var incomeThreshold decimal.Decimal
 		if isMarriedFilingJointly {
@@ -128,13 +128,14 @@ func (mc *MedicareCalculator) calculateIRMAASurcharge(estimatedMAGI decimal.Deci
 		}
 
 		if estimatedMAGI.GreaterThan(incomeThreshold) {
-			surcharge = threshold.MonthlySurcharge
+			// Cumulatively add surcharges for each exceeded tier
+			totalSurcharge = totalSurcharge.Add(threshold.MonthlySurcharge)
 		} else {
 			break
 		}
 	}
 
-	return surcharge
+	return totalSurcharge
 }
 
 // CalculateMedicarePremiumWithInflation calculates Medicare premium with inflation adjustment
