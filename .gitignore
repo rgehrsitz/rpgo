@@ -54,8 +54,8 @@ build/
 .env.*.local
 
 # Output files from the calculator
-output/
-reports/
+# output/
+# reports/
 *.html
 *.csv
 *.json
