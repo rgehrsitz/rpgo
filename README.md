@@ -31,8 +31,8 @@ A comprehensive retirement planning calculator for Federal Employees Retirement 
 ### Build from Source
 
 ```bash
-git clone https://github.com/rpgo/retirement-calculator.git
-cd retirement-calculator
+git clone https://github.com/rgehrsitz/rpgo.git
+cd rpgo
 go mod tidy
 go build -o fers-calc cmd/cli/main.go
 ```
@@ -97,12 +97,12 @@ To help you understand the core commands, here's a breakdown:
 ./fers-calc historical query ./data 2020 C
 
 # Simple Portfolio Monte Carlo simulations
-./fers-calc historical monte-carlo ./data --simulations 1000 --balance 1000000 --withdrawal 40000 --historical true
-./fers-calc historical monte-carlo ./data --strategy guardrails --years 30 --historical true
+./fers-calc historical monte-carlo ./data --simulations 1000 --balance 1000000 --withdrawal 40000
+./fers-calc historical monte-carlo ./data --strategy guardrails --years 30
 
 # Comprehensive FERS Monte Carlo simulations
-./fers-calc monte-carlo config.yaml ./data --simulations 1000 --historical true
-./fers-calc monte-carlo config.yaml ./data --simulations 5000 --seed 12345 --historical true --debug
+./fers-calc monte-carlo config.yaml ./data --simulations 1000
+./fers-calc monte-carlo config.yaml ./data --simulations 5000 --seed 12345 --debug
 ```
 
 ### Output Formats
@@ -290,7 +290,7 @@ scenarios:
 ## Project Structure
 
 ```
-fers-retirement-calculator/
+rpgo/
 ├── cmd/cli/                 # Command line interface
 ├── data/                   # Historical financial data
 │   ├── tsp-returns/        # TSP fund historical returns
@@ -353,6 +353,4 @@ For issues, questions, or contributions, please use the GitHub issue tracker or 
 - [ ] Additional state tax support
 - [ ] Medicare Part B premium calculations
 - [ ] Survivor benefit optimization
-- [ ] Export to financial planning software 
-
-./fers-calc monte-carlo example_config.yaml ./data --simulations 1000
+- [ ] Export to financial planning software
