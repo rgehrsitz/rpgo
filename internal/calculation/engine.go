@@ -1,6 +1,7 @@
 package calculation
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -8,31 +9,50 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+type NetIncomeCalculator struct {
+	TaxCalc *ComprehensiveTaxCalculator
+	Logger  Logger
+}
+
+func NewNetIncomeCalculator(taxCalc *ComprehensiveTaxCalculator, logger Logger) *NetIncomeCalculator {
+	return &NetIncomeCalculator{
+		TaxCalc: taxCalc,
+		Logger:  logger,
+	}
+}
+
 // CalculationEngine orchestrates all retirement calculations
 type CalculationEngine struct {
 	TaxCalc             *ComprehensiveTaxCalculator
 	MedicareCalc        *MedicareCalculator
 	LifecycleFundLoader *LifecycleFundLoader
+	NetIncomeCalc       *NetIncomeCalculator
 	Debug               bool // Enable debug output for detailed calculations
 	Logger              Logger
 }
 
 // NewCalculationEngine creates a new calculation engine
 func NewCalculationEngine() *CalculationEngine {
+	taxCalc := NewComprehensiveTaxCalculator()
+	logger := NopLogger{}
 	return &CalculationEngine{
-		TaxCalc:      NewComprehensiveTaxCalculator(),
-		MedicareCalc: NewMedicareCalculator(),
-		Logger:       NopLogger{},
+		TaxCalc:       taxCalc,
+		MedicareCalc:  NewMedicareCalculator(),
+		NetIncomeCalc: NewNetIncomeCalculator(taxCalc, logger),
+		Logger:        logger,
 	}
 }
 
 // NewCalculationEngineWithConfig creates a new calculation engine with configurable tax settings
 func NewCalculationEngineWithConfig(federalRules domain.FederalRules) *CalculationEngine {
+	taxCalc := NewComprehensiveTaxCalculatorWithConfig(federalRules)
+	logger := NopLogger{}
 	engine := &CalculationEngine{
-		TaxCalc:             NewComprehensiveTaxCalculatorWithConfig(federalRules),
+		TaxCalc:             taxCalc,
 		MedicareCalc:        NewMedicareCalculatorWithConfig(federalRules.MedicareConfig),
 		LifecycleFundLoader: NewLifecycleFundLoader("data"),
-		Logger:              NopLogger{},
+		NetIncomeCalc:       NewNetIncomeCalculator(taxCalc, logger),
+		Logger:              logger,
 	}
 
 	// Load lifecycle fund data
@@ -54,7 +74,7 @@ func (ce *CalculationEngine) SetLogger(l Logger) {
 }
 
 // RunScenario calculates a complete retirement scenario
-func (ce *CalculationEngine) RunScenario(config *domain.Configuration, scenario *domain.Scenario) (*domain.ScenarioSummary, error) {
+func (ce *CalculationEngine) RunScenario(ctx context.Context, config *domain.Configuration, scenario *domain.Scenario) (*domain.ScenarioSummary, error) {
 	robert := config.PersonalDetails["robert"]
 	dawn := config.PersonalDetails["dawn"]
 
@@ -135,11 +155,12 @@ func (ce *CalculationEngine) RunScenario(config *domain.Configuration, scenario 
 // RunScenarios runs all scenarios and returns a comparison
 func (ce *CalculationEngine) RunScenarios(config *domain.Configuration) (*domain.ScenarioComparison, error) {
 	scenarios := make([]domain.ScenarioSummary, len(config.Scenarios))
+	ctx := context.Background()
 
 	for i, scenario := range config.Scenarios {
-		summary, err := ce.RunScenario(config, &scenario)
+		summary, err := ce.RunScenario(ctx, config, &scenario)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("RunScenario failed: %w", err)
 		}
 		scenarios[i] = *summary
 	}
@@ -147,7 +168,7 @@ func (ce *CalculationEngine) RunScenarios(config *domain.Configuration) (*domain
 	// Calculate baseline (current net income)
 	robert := config.PersonalDetails["robert"]
 	dawn := config.PersonalDetails["dawn"]
-	baselineNetIncome := ce.calculateCurrentNetIncome(&robert, &dawn, &config.GlobalAssumptions)
+	baselineNetIncome := ce.NetIncomeCalc.Calculate(&robert, &dawn, ce.Debug)
 
 	comparison := &domain.ScenarioComparison{
 		BaselineNetIncome: baselineNetIncome,
@@ -161,8 +182,7 @@ func (ce *CalculationEngine) RunScenarios(config *domain.Configuration) (*domain
 	return comparison, nil
 }
 
-// calculateCurrentNetIncome calculates current net income
-func (ce *CalculationEngine) calculateCurrentNetIncome(robert, dawn *domain.Employee, _ *domain.GlobalAssumptions) decimal.Decimal {
+func (nic *NetIncomeCalculator) Calculate(robert, dawn *domain.Employee, debug bool) decimal.Decimal {
 	// Calculate gross income
 	grossIncome := robert.CurrentSalary.Add(dawn.CurrentSalary)
 
@@ -180,36 +200,36 @@ func (ce *CalculationEngine) calculateCurrentNetIncome(robert, dawn *domain.Empl
 
 	// Calculate taxes (excluding FICA for now, will calculate separately)
 	currentTaxableIncome := CalculateCurrentTaxableIncome(robert.CurrentSalary, dawn.CurrentSalary)
-	federalTax, stateTax, localTax, _ := ce.TaxCalc.CalculateTotalTaxes(currentTaxableIncome, false, ageRobert, ageDawn, grossIncome)
+	federalTax, stateTax, localTax, _ := nic.TaxCalc.CalculateTotalTaxes(currentTaxableIncome, false, ageRobert, ageDawn, grossIncome)
 
 	// Calculate FICA taxes for each individual separately, as SS wage base applies per individual
-	robertFICA := ce.TaxCalc.FICATaxCalc.CalculateFICA(robert.CurrentSalary, robert.CurrentSalary)
-	dawnFICA := ce.TaxCalc.FICATaxCalc.CalculateFICA(dawn.CurrentSalary, dawn.CurrentSalary)
+	robertFICA := nic.TaxCalc.FICATaxCalc.CalculateFICA(robert.CurrentSalary, robert.CurrentSalary)
+	dawnFICA := nic.TaxCalc.FICATaxCalc.CalculateFICA(dawn.CurrentSalary, dawn.CurrentSalary)
 	ficaTax := robertFICA.Add(dawnFICA)
 
 	// Calculate net income: gross - taxes - FEHB - TSP contributions
 	netIncome := grossIncome.Sub(federalTax).Sub(stateTax).Sub(localTax).Sub(ficaTax).Sub(fehbPremium).Sub(tspContributions)
 
 	// Debug output for verification
-	if ce.Debug {
-		ce.Logger.Debugf("CURRENT NET INCOME CALCULATION BREAKDOWN:")
-		ce.Logger.Debugf("=========================================")
-		ce.Logger.Debugf("Robert's Salary:        $%s", robert.CurrentSalary.StringFixed(2))
-		ce.Logger.Debugf("Dawn's Salary:          $%s", dawn.CurrentSalary.StringFixed(2))
-		ce.Logger.Debugf("Combined Gross Income:  $%s", grossIncome.StringFixed(2))
-		ce.Logger.Debugf("")
-		ce.Logger.Debugf("DEDUCTIONS:")
-		ce.Logger.Debugf("  Federal Tax:          $%s", federalTax.StringFixed(2))
-		ce.Logger.Debugf("  State Tax:            $%s", stateTax.StringFixed(2))
-		ce.Logger.Debugf("  Local Tax:            $%s", localTax.StringFixed(2))
-		ce.Logger.Debugf("  FICA Tax:             $%s", ficaTax.StringFixed(2))
-		ce.Logger.Debugf("  FEHB Premium (Robert): $%s", fehbPremium.StringFixed(2))
-		ce.Logger.Debugf("  TSP Contributions:    $%s", tspContributions.StringFixed(2))
-		ce.Logger.Debugf("  Total Deductions:     $%s", federalTax.Add(stateTax).Add(localTax).Add(ficaTax).Add(fehbPremium).Add(tspContributions).StringFixed(2))
-		ce.Logger.Debugf("")
-		ce.Logger.Debugf("CURRENT NET TAKE-HOME:  $%s", netIncome.StringFixed(2))
-		ce.Logger.Debugf("Monthly Take-Home:      $%s", netIncome.Div(decimal.NewFromInt(12)).StringFixed(2))
-		ce.Logger.Debugf("")
+	if debug {
+		nic.Logger.Debugf("CURRENT NET INCOME CALCULATION BREAKDOWN:")
+		nic.Logger.Debugf("=========================================")
+		nic.Logger.Debugf("Robert's Salary:        $%s", robert.CurrentSalary.StringFixed(2))
+		nic.Logger.Debugf("Dawn's Salary:          $%s", dawn.CurrentSalary.StringFixed(2))
+		nic.Logger.Debugf("Combined Gross Income:  $%s", grossIncome.StringFixed(2))
+		nic.Logger.Debugf("")
+		nic.Logger.Debugf("DEDUCTIONS:")
+		nic.Logger.Debugf("  Federal Tax:          $%s", federalTax.StringFixed(2))
+		nic.Logger.Debugf("  State Tax:            $%s", stateTax.StringFixed(2))
+		nic.Logger.Debugf("  Local Tax:            $%s", localTax.StringFixed(2))
+		nic.Logger.Debugf("  FICA Tax:             $%s", ficaTax.StringFixed(2))
+		nic.Logger.Debugf("  FEHB Premium (Robert): $%s", fehbPremium.StringFixed(2))
+		nic.Logger.Debugf("  TSP Contributions:    $%s", tspContributions.StringFixed(2))
+		nic.Logger.Debugf("  Total Deductions:     $%s", federalTax.Add(stateTax).Add(localTax).Add(ficaTax).Add(fehbPremium).Add(tspContributions).StringFixed(2))
+		nic.Logger.Debugf("")
+		nic.Logger.Debugf("CURRENT NET TAKE-HOME:  $%s", netIncome.StringFixed(2))
+		nic.Logger.Debugf("Monthly Take-Home:      $%s", netIncome.Div(decimal.NewFromInt(12)).StringFixed(2))
+		nic.Logger.Debugf("")
 	}
 
 	return netIncome

@@ -90,7 +90,7 @@ func (ce *CalculationEngine) CalculateBreakEvenAnalysis(config *domain.Configura
 	// Calculate current net income as the target
 	robertEmployee := config.PersonalDetails["robert"]
 	dawnEmployee := config.PersonalDetails["dawn"]
-	targetNetIncome := ce.calculateCurrentNetIncome(&robertEmployee, &dawnEmployee, &config.GlobalAssumptions)
+	targetNetIncome := ce.NetIncomeCalc.Calculate(&robertEmployee, &dawnEmployee, ce.Debug)
 
 	results := make([]BreakEvenResult, len(config.Scenarios))
 

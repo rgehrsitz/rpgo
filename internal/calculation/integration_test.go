@@ -1,6 +1,7 @@
 package calculation
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -34,7 +35,7 @@ func TestFullScenarioCalculation(t *testing.T) {
 			},
 		}
 
-		result, err := engine.RunScenario(config, scenario)
+		result, err := engine.RunScenario(context.Background(), config, scenario)
 		assert.NoError(t, err, "Scenario calculation should not error")
 		assert.NotNil(t, result, "Should return valid result")
 
@@ -84,7 +85,7 @@ func TestFullScenarioCalculation(t *testing.T) {
 			},
 		}
 
-		result, err := engine.RunScenario(config, scenario)
+		result, err := engine.RunScenario(context.Background(), config, scenario)
 		assert.NoError(t, err, "Scenario calculation should not error")
 		assert.NotNil(t, result, "Should return valid result")
 
@@ -163,7 +164,7 @@ func TestErrorConditions(t *testing.T) {
 			},
 		}
 
-		result, err := engine.RunScenario(config, scenario)
+		result, err := engine.RunScenario(context.Background(), config, scenario)
 		assert.Error(t, err, "Should error on invalid retirement date")
 		assert.Nil(t, result, "Should not return result on error")
 		assert.Contains(t, err.Error(), "cannot be before hire date", "Error should mention hire date")
@@ -183,7 +184,7 @@ func TestErrorConditions(t *testing.T) {
 			},
 		}
 
-		result, err := engine.RunScenario(config, scenario)
+		result, err := engine.RunScenario(context.Background(), config, scenario)
 		assert.Error(t, err, "Should error on unrealistic inflation rate")
 		assert.Nil(t, result, "Should not return result on error")
 		assert.Contains(t, err.Error(), "inflation rate must be between -10% and 20%", "Error should mention inflation rate bounds")
@@ -203,7 +204,7 @@ func TestErrorConditions(t *testing.T) {
 			},
 		}
 
-		result, err := engine.RunScenario(config, scenario)
+		result, err := engine.RunScenario(context.Background(), config, scenario)
 		assert.NoError(t, err, "Should allow historical deflation rates")
 		assert.NotNil(t, result, "Should return valid result for deflation scenario")
 		assert.Equal(t, "Historical Deflation Scenario", result.Name)
@@ -217,7 +218,7 @@ func TestShortProjectionGuards(t *testing.T) {
 	config.GlobalAssumptions.ProjectionYears = 3
 	engine := NewCalculationEngine()
 	scenario := &config.Scenarios[0]
-	summary, err := engine.RunScenario(config, scenario)
+	summary, err := engine.RunScenario(context.Background(), config, scenario)
 	assert.NoError(t, err)
 	assert.NotNil(t, summary)
 	// Year5/Year10 should be zero due to insufficient years
@@ -235,10 +236,10 @@ func TestRealWorldDataValidation(t *testing.T) {
 	// Test current net income calculation
 	robert := config.PersonalDetails["robert"]
 	dawn := config.PersonalDetails["dawn"]
-	currentNetIncome := engine.calculateCurrentNetIncome(
+	currentNetIncome := engine.NetIncomeCalc.Calculate(
 		&robert,
 		&dawn,
-		&config.GlobalAssumptions,
+		engine.Debug,
 	)
 
 	// Should match expected current net income (relaxed tolerance for complex calculation)
@@ -294,7 +295,7 @@ func TestProjectionConsistency(t *testing.T) {
 		},
 	}
 
-	result, err := engine.RunScenario(config, scenario)
+	result, err := engine.RunScenario(context.Background(), config, scenario)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 

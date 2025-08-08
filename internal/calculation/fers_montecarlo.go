@@ -1,6 +1,7 @@
 package calculation
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/rand"
@@ -222,7 +223,7 @@ func (fmce *FERSMonteCarloEngine) runSingleFERSSimulation(simIndex int) (*FERSMo
 	// Run full FERS calculation for each scenario
 	var scenarioResults []*domain.ScenarioSummary
 	for _, scenario := range modifiedConfig.Scenarios {
-		summary, err := fmce.calcEngine.RunScenario(&modifiedConfig, &scenario)
+		summary, err := fmce.calcEngine.RunScenario(context.Background(), &modifiedConfig, &scenario)
 		if err != nil {
 			return nil, fmt.Errorf("failed to run scenario %s: %w", scenario.Name, err)
 		}
