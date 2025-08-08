@@ -1,6 +1,8 @@
 package calculation
 
 import (
+	"time"
+
 	"github.com/rpgo/retirement-calculator/internal/domain"
 	"github.com/shopspring/decimal"
 )
@@ -323,10 +325,10 @@ func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithInflation(taxableI
 		agi = decimal.Zero
 	}
 
-    // Apply inflation adjustment to tax brackets
-    // Note: For current tests and 2025 calculations, we do not adjust brackets
-    // Set to 1.0 to keep bracket thresholds unchanged
-    inflationAdjustment := decimal.NewFromFloat(1.0)
+	// Apply inflation adjustment to tax brackets
+	// Note: For current tests and 2025 calculations, we do not adjust brackets
+	// Set to 1.0 to keep bracket thresholds unchanged
+	inflationAdjustment := decimal.NewFromFloat(1.0)
 
 	// Calculate tax using inflation-adjusted brackets
 	tax := decimal.Zero
@@ -397,4 +399,77 @@ func (ctc *ComprehensiveTaxCalculator) CalculateSocialSecurityTaxation(ssBenefit
 
 	// Calculate taxable portion
 	return ctc.SSTaxCalc.CalculateTaxableSocialSecurity(ssBenefits, provisionalIncome)
+}
+
+// calculateTaxes calculates all applicable taxes
+func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, _ *domain.Scenario, year int, isRetired bool, pensionRobert, pensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn decimal.Decimal, _ *domain.GlobalAssumptions, workingIncomeRobert, workingIncomeDawn decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
+	projectionStartYear := ProjectionBaseYear
+	projectionDate := time.Date(projectionStartYear, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(year, 0, 0)
+	ageRobert := robert.Age(projectionDate)
+	ageDawn := dawn.Age(projectionDate)
+
+	// Check if this is a transition year (has both working and retirement income)
+	isTransitionYear := (workingIncomeRobert.GreaterThan(decimal.Zero) || workingIncomeDawn.GreaterThan(decimal.Zero)) &&
+		(pensionRobert.GreaterThan(decimal.Zero) || pensionDawn.GreaterThan(decimal.Zero) || tspWithdrawalRobert.GreaterThan(decimal.Zero) || tspWithdrawalDawn.GreaterThan(decimal.Zero) || ssRobert.GreaterThan(decimal.Zero) || ssDawn.GreaterThan(decimal.Zero))
+
+	if isTransitionYear {
+		// Transition year: combine working and retirement income
+		totalWorkingIncome := workingIncomeRobert.Add(workingIncomeDawn)
+		totalRetirementIncome := pensionRobert.Add(pensionDawn).Add(tspWithdrawalRobert).Add(tspWithdrawalDawn)
+
+		// Calculate Social Security taxation
+		totalSSBenefits := ssRobert.Add(ssDawn)
+		taxableSS := ce.TaxCalc.CalculateSocialSecurityTaxation(totalSSBenefits, totalRetirementIncome)
+
+		// Create taxable income structure for transition year
+		taxableIncome := domain.TaxableIncome{
+			Salary:             totalWorkingIncome,
+			FERSPension:        pensionRobert.Add(pensionDawn),
+			TSPWithdrawalsTrad: tspWithdrawalRobert.Add(tspWithdrawalDawn),
+			TaxableSSBenefits:  taxableSS,
+			OtherTaxableIncome: decimal.Zero,
+			WageIncome:         totalWorkingIncome,
+			InterestIncome:     decimal.Zero,
+		}
+
+		// Calculate taxes for transition year (FICA only on working income, with proration)
+		federalTax, stateTax, localTax, _ := ce.TaxCalc.CalculateTotalTaxes(taxableIncome, false, ageRobert, ageDawn, totalWorkingIncome)
+
+		// Calculate FICA only on actual working income (no proration needed since we already have working income)
+		robertFICA := ce.TaxCalc.FICATaxCalc.CalculateFICA(workingIncomeRobert, totalWorkingIncome)
+		dawnFICA := ce.TaxCalc.FICATaxCalc.CalculateFICA(workingIncomeDawn, totalWorkingIncome)
+		ficaTax := robertFICA.Add(dawnFICA)
+
+		return federalTax, stateTax, localTax, ficaTax
+	} else if isRetired {
+		// Fully retired year
+		// Calculate other income (excluding Social Security)
+		otherIncome := pensionRobert.Add(pensionDawn).Add(tspWithdrawalRobert).Add(tspWithdrawalDawn)
+
+		// Calculate Social Security taxation
+		totalSSBenefits := ssRobert.Add(ssDawn)
+		taxableSS := ce.TaxCalc.CalculateSocialSecurityTaxation(totalSSBenefits, otherIncome)
+
+		// Create taxable income structure
+		taxableIncome := domain.TaxableIncome{
+			Salary:             decimal.Zero, // No salary in retirement
+			FERSPension:        pensionRobert.Add(pensionDawn),
+			TSPWithdrawalsTrad: tspWithdrawalRobert.Add(tspWithdrawalDawn), // Assuming all TSP withdrawals are from traditional
+			TaxableSSBenefits:  taxableSS,
+			OtherTaxableIncome: decimal.Zero,
+			WageIncome:         decimal.Zero,
+			InterestIncome:     decimal.Zero,
+		}
+
+		// Calculate taxes (no FICA in retirement)
+		federalTax, stateTax, localTax, _ := ce.TaxCalc.CalculateTotalTaxes(taxableIncome, isRetired, ageRobert, ageDawn, decimal.Zero)
+
+		return federalTax, stateTax, localTax, decimal.Zero
+	} else {
+		// Pre-retirement: calculate current working income
+		currentTaxableIncome := CalculateCurrentTaxableIncome(robert.CurrentSalary, dawn.CurrentSalary)
+		federalTax, stateTax, localTax, ficaTax := ce.TaxCalc.CalculateTotalTaxes(currentTaxableIncome, isRetired, ageRobert, ageDawn, robert.CurrentSalary.Add(dawn.CurrentSalary))
+
+		return federalTax, stateTax, localTax, ficaTax
+	}
 }

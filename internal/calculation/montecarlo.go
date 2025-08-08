@@ -5,7 +5,6 @@ import (
 	"math"
 	"math/rand"
 	"sync"
-	"time"
 
 	"github.com/shopspring/decimal"
 )
@@ -77,7 +76,7 @@ type PercentileRanges struct {
 // NewMonteCarloSimulator creates a new Monte Carlo simulator
 func NewMonteCarloSimulator(historicalData *HistoricalDataManager, config MonteCarloConfig) *MonteCarloSimulator {
 	if config.Seed == 0 {
-		config.Seed = time.Now().UnixNano()
+		config.Seed = seedFunc()
 	}
 
 	return &MonteCarloSimulator{

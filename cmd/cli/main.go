@@ -14,6 +14,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// simpleCLILogger implements calculation.Logger using the standard log package
+type simpleCLILogger struct{}
+
+func (simpleCLILogger) Debugf(format string, args ...any) { log.Printf("DEBUG: "+format, args...) }
+func (simpleCLILogger) Infof(format string, args ...any)  { log.Printf("INFO: "+format, args...) }
+func (simpleCLILogger) Warnf(format string, args ...any)  { log.Printf("WARN: "+format, args...) }
+func (simpleCLILogger) Errorf(format string, args ...any) { log.Printf("ERROR: "+format, args...) }
+
 var rootCmd = &cobra.Command{
 	Use:   "fers-calc",
 	Short: "FERS Retirement Calculator",
@@ -37,6 +45,9 @@ var calculateCmd = &cobra.Command{
 		// Run calculations
 		engine := calculation.NewCalculationEngineWithConfig(config.GlobalAssumptions.FederalRules)
 		debugMode, _ := cmd.Flags().GetBool("debug")
+		if debugMode {
+			engine.SetLogger(simpleCLILogger{})
+		}
 		engine.Debug = debugMode
 		results, err := engine.RunScenarios(config)
 		if err != nil {
@@ -102,6 +113,9 @@ var breakEvenCmd = &cobra.Command{
 		// Run break-even analysis
 		engine := calculation.NewCalculationEngineWithConfig(config.GlobalAssumptions.FederalRules)
 		debugMode, _ := cmd.Flags().GetBool("debug")
+		if debugMode {
+			engine.SetLogger(simpleCLILogger{})
+		}
 		engine.Debug = debugMode
 		analysis, err := engine.CalculateBreakEvenAnalysis(config)
 		if err != nil {
@@ -169,7 +183,13 @@ var fersMonteCarloCmd = &cobra.Command{
 
 		// Create FERS Monte Carlo engine
 		engine := calculation.NewFERSMonteCarloEngine(baseConfig, hdm)
-		engine.SetDebug(debugMode)
+		// Set logger on underlying calculation engine if debug enabled
+		if debugMode {
+			engine.SetLogger(simpleCLILogger{})
+			engine.SetDebug(true)
+		} else {
+			engine.SetDebug(false)
+		}
 
 		// Configure Monte Carlo simulation
 		mcConfig := calculation.FERSMonteCarloConfig{

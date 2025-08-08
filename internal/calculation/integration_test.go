@@ -210,6 +210,23 @@ func TestErrorConditions(t *testing.T) {
 	})
 }
 
+// Ensure short projections (<5 or <10 years) do not panic and guard Year5/Year10.
+func TestShortProjectionGuards(t *testing.T) {
+	config := createTestConfiguration()
+	// Force a very short projection
+	config.GlobalAssumptions.ProjectionYears = 3
+	engine := NewCalculationEngine()
+	scenario := &config.Scenarios[0]
+	summary, err := engine.RunScenario(config, scenario)
+	assert.NoError(t, err)
+	assert.NotNil(t, summary)
+	// Year5/Year10 should be zero due to insufficient years
+	assert.True(t, summary.Year5NetIncome.IsZero())
+	assert.True(t, summary.Year10NetIncome.IsZero())
+	// First year should still be populated
+	assert.True(t, summary.FirstYearNetIncome.GreaterThan(decimal.Zero))
+}
+
 // TestRealWorldDataValidation tests calculations against real-world expected values
 func TestRealWorldDataValidation(t *testing.T) {
 	config := createTestConfiguration()

@@ -14,10 +14,9 @@ The FERS Retirement Calculator provides a comprehensive command-line interface f
 **Description**: Calculate retirement scenarios using deterministic projections.
 
 **Flags**:
-- `--format, -f`: Output format (console, html, json, csv) [default: console]
-- `--monte-carlo, -m`: Run Monte Carlo simulation [default: false]
-- `--simulations, -s`: Number of Monte Carlo simulations [default: 1000]
+- `--format, -f`: Output format (console, console-lite, csv, detailed-csv, html, json, all) [default: console]
 - `--verbose, -v`: Verbose output [default: false]
+- `--debug`: Enable debug logging (detailed calculation breakdowns)
 
 **Examples**:
 ```bash
@@ -27,8 +26,8 @@ The FERS Retirement Calculator provides a comprehensive command-line interface f
 # Generate HTML report
 ./fers-calc calculate config.yaml --format html
 
-# Run with Monte Carlo
-./fers-calc calculate config.yaml --monte-carlo --simulations 500
+# Enable detailed debug logging
+./fers-calc calculate config.yaml --debug
 ```
 
 ### `example` - Generate Example Configuration
@@ -62,6 +61,9 @@ The FERS Retirement Calculator provides a comprehensive command-line interface f
 
 **Description**: Calculate break-even TSP withdrawal rates to match current net income.
 
+**Flags**:
+- `--debug`: Enable debug logging
+
 **Example**:
 ```bash
 ./fers-calc break-even config.yaml
@@ -78,6 +80,7 @@ The FERS Retirement Calculator provides a comprehensive command-line interface f
 - `--simulations, -s`: Number of simulations to run [default: 1000]
 - `--historical, -d`: Use historical data (false for statistical) [default: true]
 - `--seed, -r`: Random seed (0 for auto-generated) [default: 0]
+- `--debug`: Enable debug logging
 
 **Examples**:
 ```bash
@@ -299,6 +302,29 @@ The FERS Retirement Calculator provides a comprehensive command-line interface f
 ```
 
 ## Output Interpretation
+
+## Output formats and aliases
+
+Supported formats (use with `--format`):
+- `console` (verbose console summary)
+- `console-lite` (compact console summary)
+- `csv` (summary CSV)
+- `detailed-csv` (full year-by-year CSV)
+- `html` (HTML report)
+- `json` (structured JSON)
+- `all` (writes multiple outputs: verbose text + detailed CSV)
+
+Aliases (mapped to canonical names):
+- `console-verbose` → `console`
+- `verbose` → `console`
+- `csv-detailed` → `detailed-csv`
+- `csv-summary` → `csv`
+- `html-report` → `html`
+- `json-pretty` → `json`
+
+Notes:
+- Output files are saved with timestamped filenames in the current directory (for example: `retirement_report_YYYYMMDD_HHMMSS.ext`).
+- If an unknown format is provided, the error will list supported formats and aliases.
 
 ### Monte Carlo Results
 

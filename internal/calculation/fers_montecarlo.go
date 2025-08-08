@@ -5,7 +5,6 @@ import (
 	"math"
 	"math/rand"
 	"sync"
-	"time"
 
 	"github.com/rpgo/retirement-calculator/internal/domain"
 	"github.com/shopspring/decimal"
@@ -146,6 +145,13 @@ func (fmc *FERSMonteCarloEngine) SetDebug(debug bool) {
 	fmc.calcEngine.Debug = debug
 }
 
+// SetLogger sets the logger for the underlying calculation engine used by Monte Carlo.
+func (fmc *FERSMonteCarloEngine) SetLogger(l Logger) {
+	if fmc.calcEngine != nil {
+		fmc.calcEngine.SetLogger(l)
+	}
+}
+
 // RunFERSMonteCarlo executes the FERS Monte Carlo simulation
 func (fmce *FERSMonteCarloEngine) RunFERSMonteCarlo(config FERSMonteCarloConfig) (*FERSMonteCarloResult, error) {
 	if fmce.historicalData == nil || !fmce.historicalData.IsLoaded {
@@ -154,7 +160,7 @@ func (fmce *FERSMonteCarloEngine) RunFERSMonteCarlo(config FERSMonteCarloConfig)
 
 	// Set random seed (Go 1.20+ approach)
 	if config.Seed == 0 {
-		config.Seed = time.Now().UnixNano()
+		config.Seed = seedFunc()
 	}
 	// As of Go 1.20, global rand is automatically seeded with random data
 	// For reproducible sequences when seed is specified, use modern Go random generation
@@ -184,7 +190,9 @@ func (fmce *FERSMonteCarloEngine) RunFERSMonteCarlo(config FERSMonteCarloConfig)
 			simulation, err := fmce.runSingleFERSSimulation(simIndex)
 			if err != nil {
 				// Log error but continue with other simulations
-				fmt.Printf("Simulation %d failed: %v\n", simIndex, err)
+				if fmce.calcEngine != nil && fmce.calcEngine.Logger != nil {
+					fmce.calcEngine.Logger.Errorf("Simulation %d failed: %v", simIndex, err)
+				}
 				return
 			}
 			simulations[simIndex] = *simulation

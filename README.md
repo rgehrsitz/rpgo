@@ -105,6 +105,24 @@ To help you understand the core commands, here's a breakdown:
 ./fers-calc monte-carlo config.yaml ./data --simulations 5000 --seed 12345 --debug
 ```
 
+#### Logging and Debug Mode
+
+- Use `--debug` on CLI commands (calculate, break-even, monte-carlo) to enable detailed debug logs.
+- Debug logs are generated via an internal Logger interface; the CLI wires a simple logger that prints level-prefixed lines (DEBUG/INFO/WARN/ERROR).
+- When `--debug` is off, a no-op logger is used to keep output clean.
+
+#### Output formats and aliases
+
+Supported `--format` values:
+- `console`, `console-lite`, `csv`, `detailed-csv`, `html`, `json`, `all`
+
+Aliases map to canonical names:
+- `console-verbose` → `console`; `verbose` → `console`
+- `csv-detailed` → `detailed-csv`; `csv-summary` → `csv`
+- `html-report` → `html`; `json-pretty` → `json`
+
+Outputs are saved to timestamped files like `retirement_report_YYYYMMDD_HHMMSS.ext`.
+
 ### Output Formats
 
 - `console`: Formatted text output (default)

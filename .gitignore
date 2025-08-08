@@ -81,3 +81,5 @@ example_config_comprehensive.yaml
 
 # Crush directory
 .crush/
+
+*.console

@@ -1,6 +1,8 @@
 package calculation
 
 import (
+	"time"
+
 	"github.com/rpgo/retirement-calculator/internal/domain"
 	"github.com/rpgo/retirement-calculator/pkg/dateutil"
 	"github.com/shopspring/decimal"
@@ -205,6 +207,137 @@ func (rmd *RMDCalculator) CalculateRMD(traditionalBalance decimal.Decimal, age i
 	}
 
 	return decimal.Zero
+}
+
+// createTSPStrategy creates a TSP withdrawal strategy based on scenario configuration
+func (ce *CalculationEngine) createTSPStrategy(scenario *domain.RetirementScenario, initialBalance decimal.Decimal, inflationRate decimal.Decimal) TSPWithdrawalStrategy {
+	switch scenario.TSPWithdrawalStrategy {
+	case "4_percent_rule":
+		return NewFourPercentRule(initialBalance, inflationRate)
+	case "need_based":
+		if scenario.TSPWithdrawalTargetMonthly != nil {
+			return NewNeedBasedWithdrawal(*scenario.TSPWithdrawalTargetMonthly)
+		}
+		// Fallback to 4% rule if target not specified
+		return NewFourPercentRule(initialBalance, inflationRate)
+	case "variable_percentage":
+		if scenario.TSPWithdrawalRate != nil {
+			return NewVariablePercentageWithdrawal(initialBalance, *scenario.TSPWithdrawalRate, inflationRate)
+		}
+		// Fallback to 4% rule if rate not specified
+		return NewFourPercentRule(initialBalance, inflationRate)
+	default:
+		// Default to 4% rule
+		return NewFourPercentRule(initialBalance, inflationRate)
+	}
+}
+
+// updateTSPBalances updates TSP balances after withdrawal
+func (ce *CalculationEngine) updateTSPBalances(traditional, roth, withdrawal, returnRate decimal.Decimal) (decimal.Decimal, decimal.Decimal) {
+	// Apply growth first
+	traditional = traditional.Mul(decimal.NewFromFloat(1).Add(returnRate))
+	roth = roth.Mul(decimal.NewFromFloat(1).Add(returnRate))
+
+	// Withdraw from Roth first, then traditional
+	if withdrawal.LessThanOrEqual(roth) {
+		roth = roth.Sub(withdrawal)
+	} else {
+		remainingWithdrawal := withdrawal.Sub(roth)
+		roth = decimal.Zero
+		traditional = traditional.Sub(remainingWithdrawal)
+		if traditional.LessThan(decimal.Zero) {
+			traditional = decimal.Zero
+		}
+	}
+
+	// Ensure balances never go negative
+	if traditional.LessThan(decimal.Zero) {
+		traditional = decimal.Zero
+	}
+	if roth.LessThan(decimal.Zero) {
+		roth = decimal.Zero
+	}
+
+	return traditional, roth
+}
+
+// growTSPBalance grows a TSP balance with contributions and returns
+func (ce *CalculationEngine) growTSPBalance(balance, contribution, returnRate decimal.Decimal) decimal.Decimal {
+	return balance.Add(contribution).Mul(decimal.NewFromFloat(1).Add(returnRate))
+}
+
+// growTSPBalanceWithAllocation calculates TSP balance growth using lifecycle fund allocation data
+func (ce *CalculationEngine) growTSPBalanceWithAllocation(employee *domain.Employee, balance, contribution decimal.Decimal, targetDate time.Time) decimal.Decimal {
+	// Get the appropriate allocation for this date
+	allocation := ce.getTSPAllocationForEmployee(employee, targetDate)
+
+	// Calculate weighted return based on allocation
+	weightedReturn := ce.calculateTSPReturnWithAllocation(allocation, targetDate.Year())
+
+	// Apply growth with the weighted return
+	return balance.Add(contribution).Mul(decimal.NewFromFloat(1).Add(weightedReturn))
+}
+
+// getTSPAllocationForEmployee returns the TSP allocation for an employee at a specific date
+func (ce *CalculationEngine) getTSPAllocationForEmployee(employee *domain.Employee, targetDate time.Time) domain.TSPAllocation {
+	// If employee has a lifecycle fund specified, use that
+	if employee.TSPLifecycleFund != nil {
+		allocation, err := ce.LifecycleFundLoader.GetAllocationAtDate(employee.TSPLifecycleFund.FundName, targetDate)
+		if err == nil && allocation != nil {
+			return *allocation
+		}
+		// Fall back to default if lifecycle fund lookup fails
+	}
+
+	// If employee has a specific allocation, use that
+	if employee.TSPAllocation != nil {
+		return *employee.TSPAllocation
+	}
+
+	// Use default allocation from global assumptions
+	// This would need to be passed in from the configuration
+	// For now, return a conservative default
+	return domain.TSPAllocation{
+		CFund: decimal.NewFromFloat(0.60),
+		SFund: decimal.NewFromFloat(0.20),
+		IFund: decimal.NewFromFloat(0.10),
+		FFund: decimal.NewFromFloat(0.10),
+		GFund: decimal.NewFromFloat(0.00),
+	}
+}
+
+// calculateTSPReturnWithAllocation calculates TSP return using specific allocation and statistical models
+func (ce *CalculationEngine) calculateTSPReturnWithAllocation(allocation domain.TSPAllocation, year int) decimal.Decimal {
+	// Use the statistical models from the configuration
+	// For now, we'll use the mean returns from the statistical models
+	// In a full implementation, this would use Monte Carlo sampling from the distributions
+
+	// Default returns based on TSP statistical models (if not available, use conservative estimates)
+	cFundReturn := decimal.NewFromFloat(0.1125) // 11.25% from statistical model
+	sFundReturn := decimal.NewFromFloat(0.1117) // 11.17% from statistical model
+	iFundReturn := decimal.NewFromFloat(0.0634) // 6.34% from statistical model
+	fFundReturn := decimal.NewFromFloat(0.0532) // 5.32% from statistical model
+	gFundReturn := decimal.NewFromFloat(0.0493) // 4.93% from statistical model
+
+	// Weighted return calculation using actual allocation
+	weightedReturn := decimal.Zero
+
+	// C Fund (Large Cap)
+	weightedReturn = weightedReturn.Add(allocation.CFund.Mul(cFundReturn))
+
+	// S Fund (Small Cap)
+	weightedReturn = weightedReturn.Add(allocation.SFund.Mul(sFundReturn))
+
+	// I Fund (International)
+	weightedReturn = weightedReturn.Add(allocation.IFund.Mul(iFundReturn))
+
+	// F Fund (Bonds)
+	weightedReturn = weightedReturn.Add(allocation.FFund.Mul(fFundReturn))
+
+	// G Fund (Government)
+	weightedReturn = weightedReturn.Add(allocation.GFund.Mul(gFundReturn))
+
+	return weightedReturn
 }
 
 // SimulateTSPGrowthPreRetirement simulates TSP growth before retirement

@@ -83,7 +83,7 @@ func ProjectSocialSecurityBenefits(employee *domain.Employee, ssStartAge int, pr
 	currentBenefit := initialBenefit
 
 	for year := 0; year < projectionYears; year++ {
-		projectionDate := time.Now().AddDate(year, 0, 0)
+		projectionDate := nowFunc().AddDate(year, 0, 0)
 		age := employee.Age(projectionDate)
 
 		// Check if Social Security has started
