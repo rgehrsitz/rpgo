@@ -16,7 +16,7 @@ func (c CSVSummarizer) Name() string { return "csv" }
 func (c CSVSummarizer) Format(results *domain.ScenarioComparison) ([]byte, error) {
 	buf := &bytes.Buffer{}
 	w := csv.NewWriter(buf)
-	header := []string{"Scenario", "FirstYearNetIncome", "Year5NetIncome", "Year10NetIncome", "TSPLongevity", "TotalLifetimeIncomePV", "InitialTSPBalance", "FinalTSPBalance"}
+	header := []string{"Scenario", "FirstYearNetIncome", "Year5NetIncome", "Year10NetIncome", "TSPLongevity", "TotalLifetimeIncomePV", "InitialTSPBalance", "FinalTSPBalance", "NetIncome2030", "NetIncome2035", "NetIncome2040", "PreRetirementNet2030", "PreRetirementNet2035", "PreRetirementNet2040"}
 	if err := w.Write(header); err != nil {
 		return nil, err
 	}
@@ -32,6 +32,12 @@ func (c CSVSummarizer) Format(results *domain.ScenarioComparison) ([]byte, error
 			sc.TotalLifetimeIncome.StringFixed(2),
 			sc.InitialTSPBalance.StringFixed(2),
 			sc.FinalTSPBalance.StringFixed(2),
+			sc.NetIncome2030.StringFixed(2),
+			sc.NetIncome2035.StringFixed(2),
+			sc.NetIncome2040.StringFixed(2),
+			sc.PreRetirementNet2030.StringFixed(2),
+			sc.PreRetirementNet2035.StringFixed(2),
+			sc.PreRetirementNet2040.StringFixed(2),
 		}
 		if err := w.Write(row); err != nil {
 			return nil, err

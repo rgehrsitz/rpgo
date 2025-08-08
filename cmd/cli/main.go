@@ -42,8 +42,21 @@ var calculateCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
+		// Load historical data if available
+		var hdm *calculation.HistoricalDataManager
+		dataPath := "data" // Default path, could be made configurable
+		if _, err := os.Stat(dataPath); err == nil {
+			hdm = calculation.NewHistoricalDataManager(dataPath)
+			if loadErr := hdm.LoadAllData(); loadErr != nil {
+				fmt.Printf("Warning: Could not load historical data from %s: %v\n", dataPath, loadErr)
+				fmt.Printf("Falling back to statistical models...\n")
+				hdm = nil
+			}
+		}
+
 		// Run calculations
 		engine := calculation.NewCalculationEngineWithConfig(config.GlobalAssumptions.FederalRules)
+		engine.HistoricalData = hdm // Set the historical data manager
 		debugMode, _ := cmd.Flags().GetBool("debug")
 		if debugMode {
 			engine.SetLogger(simpleCLILogger{})
@@ -110,8 +123,21 @@ var breakEvenCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
+		// Load historical data if available
+		var hdm *calculation.HistoricalDataManager
+		dataPath := "data" // Default path, could be made configurable
+		if _, err := os.Stat(dataPath); err == nil {
+			hdm = calculation.NewHistoricalDataManager(dataPath)
+			if loadErr := hdm.LoadAllData(); loadErr != nil {
+				fmt.Printf("Warning: Could not load historical data from %s: %v\n", dataPath, loadErr)
+				fmt.Printf("Falling back to statistical models...\n")
+				hdm = nil
+			}
+		}
+
 		// Run break-even analysis
 		engine := calculation.NewCalculationEngineWithConfig(config.GlobalAssumptions.FederalRules)
+		engine.HistoricalData = hdm // Set the historical data manager
 		debugMode, _ := cmd.Flags().GetBool("debug")
 		if debugMode {
 			engine.SetLogger(simpleCLILogger{})

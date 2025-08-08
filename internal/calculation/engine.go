@@ -111,12 +111,30 @@ func (ce *CalculationEngine) RunScenario(ctx context.Context, config *domain.Con
 	if len(projection) > 9 {
 		year10 = projection[9].NetIncome
 	}
+
+	// Calculate absolute calendar year comparisons for apples-to-apples analysis
+	netIncome2030 := ce.getNetIncomeForYear(projection, 2030)
+	netIncome2035 := ce.getNetIncomeForYear(projection, 2035)
+	netIncome2040 := ce.getNetIncomeForYear(projection, 2040)
+	
+	// Calculate pre-retirement baseline projections with COLA growth
+	currentNetIncome := ce.NetIncomeCalc.Calculate(&robert, &dawn, ce.Debug)
+	preRetirement2030 := ce.projectPreRetirementNetIncome(currentNetIncome, 2030, config.GlobalAssumptions.COLAGeneralRate)
+	preRetirement2035 := ce.projectPreRetirementNetIncome(currentNetIncome, 2035, config.GlobalAssumptions.COLAGeneralRate)
+	preRetirement2040 := ce.projectPreRetirementNetIncome(currentNetIncome, 2040, config.GlobalAssumptions.COLAGeneralRate)
+
 	summary := &domain.ScenarioSummary{
-		Name:               scenario.Name,
-		FirstYearNetIncome: first,
-		Year5NetIncome:     year5,
-		Year10NetIncome:    year10,
-		Projection:         projection,
+		Name:                 scenario.Name,
+		FirstYearNetIncome:   first,
+		Year5NetIncome:       year5,
+		Year10NetIncome:      year10,
+		Projection:           projection,
+		NetIncome2030:        netIncome2030,
+		NetIncome2035:        netIncome2035,
+		NetIncome2040:        netIncome2040,
+		PreRetirementNet2030: preRetirement2030,
+		PreRetirementNet2035: preRetirement2035,
+		PreRetirementNet2040: preRetirement2040,
 	}
 
 	// Calculate total lifetime income (present value)
@@ -143,9 +161,70 @@ func (ce *CalculationEngine) RunScenario(ctx context.Context, config *domain.Con
 	if len(projection) > 0 {
 		summary.InitialTSPBalance = projection[0].TSPBalanceRobert.Add(projection[0].TSPBalanceDawn)
 		summary.FinalTSPBalance = projection[len(projection)-1].TSPBalanceRobert.Add(projection[len(projection)-1].TSPBalanceDawn)
+		
+		// Calculate success rate for deterministic scenarios based on TSP sustainability
+		summary.SuccessRate = ce.calculateDeterministicSuccessRate(projection, summary.TSPLongevity)
 	}
 
 	return summary, nil
+}
+
+// getNetIncomeForYear finds the net income for a specific calendar year in the projection
+func (ce *CalculationEngine) getNetIncomeForYear(projection []domain.AnnualCashFlow, targetYear int) decimal.Decimal {
+	for _, year := range projection {
+		if year.Date.Year() == targetYear {
+			return year.NetIncome
+		}
+	}
+	return decimal.Zero // Year not found in projection
+}
+
+
+// projectPreRetirementNetIncome projects current net income to future year with COLA growth
+func (ce *CalculationEngine) projectPreRetirementNetIncome(currentNet decimal.Decimal, targetYear int, colaRate decimal.Decimal) decimal.Decimal {
+	currentYear := 2025 // Base year
+	yearsToProject := targetYear - currentYear
+	
+	if yearsToProject <= 0 {
+		return currentNet
+	}
+	
+	// Apply COLA growth for the number of years
+	growthFactor := decimal.NewFromFloat(1).Add(colaRate).Pow(decimal.NewFromInt(int64(yearsToProject)))
+	
+	return currentNet.Mul(growthFactor)
+}
+
+// calculateDeterministicSuccessRate calculates success rate based on TSP sustainability and growth
+func (ce *CalculationEngine) calculateDeterministicSuccessRate(projection []domain.AnnualCashFlow, tspLongevity int) decimal.Decimal {
+	if len(projection) == 0 {
+		return decimal.Zero
+	}
+
+	projectionLength := len(projection)
+	
+	// If TSP lasts the full projection period, success rate is 100%
+	if tspLongevity >= projectionLength {
+		// Additional check: TSP should be growing or stable, not just lasting
+		firstTSP := projection[0].TSPBalanceRobert.Add(projection[0].TSPBalanceDawn)
+		lastTSP := projection[projectionLength-1].TSPBalanceRobert.Add(projection[projectionLength-1].TSPBalanceDawn)
+		
+		if lastTSP.GreaterThanOrEqual(firstTSP) {
+			return decimal.NewFromFloat(100.0) // 100% success - TSP lasted and grew
+		} else {
+			return decimal.NewFromFloat(95.0) // 95% success - TSP lasted but declined
+		}
+	}
+	
+	// If TSP depletes before end of projection, calculate percentage based on longevity
+	successRate := decimal.NewFromInt(int64(tspLongevity)).Div(decimal.NewFromInt(int64(projectionLength))).Mul(decimal.NewFromFloat(100.0))
+	
+	// Minimum 10% success rate for any scenario that makes it past year 1
+	if successRate.LessThan(decimal.NewFromFloat(10.0)) && tspLongevity > 1 {
+		return decimal.NewFromFloat(10.0)
+	}
+	
+	return successRate
 }
 
 // GenerateAnnualProjection generates annual cash flow projections for a scenario
@@ -174,6 +253,7 @@ func (ce *CalculationEngine) RunScenarios(config *domain.Configuration) (*domain
 	comparison := &domain.ScenarioComparison{
 		BaselineNetIncome: baselineNetIncome,
 		Scenarios:         scenarios,
+		Assumptions:       config.GlobalAssumptions.GenerateAssumptions(),
 	}
 
 	// Generate impact analysis

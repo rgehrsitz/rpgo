@@ -11,7 +11,7 @@ personal_details:
     high_3_salary: "186572.00"  # Corrected from documents
     tsp_balance_traditional: "1966168.86"
     tsp_balance_roth: "0.00"
-    tsp_contribution_percent: "0.128"  # $24,501.54 / $190,779.00
+    tsp_contribution_percent: "0.128" 
     ss_benefit_62: "2795.00"  # Monthly benefit at age 62
     ss_benefit_fra: "4012.00"  # Monthly benefit at FRA (67)
     ss_benefit_70: "5000.00"  # Monthly benefit at age 70
@@ -42,7 +42,7 @@ personal_details:
     high_3_salary: "164000.00"  # Corrected from documents
     tsp_balance_traditional: "1525175.90"
     tsp_balance_roth: "0.00"
-    tsp_contribution_percent: "0.153"  # $26,962.00 / $176,620.00
+    tsp_contribution_percent: "0.153"  
     ss_benefit_62: "2527.00"  # Monthly benefit at age 62
     ss_benefit_fra: "3826.00"  # Monthly benefit at FRA (67)
     ss_benefit_70: "4860.00"  # Monthly benefit at age 70
@@ -66,10 +66,10 @@ personal_details:
 
 global_assumptions:
   inflation_rate: "0.025"
-  fehb_premium_inflation: "0.04"
-  tsp_return_pre_retirement: "0.07"  # Conservative estimate for L 2030 funds
-  tsp_return_post_retirement: "0.05"
-  cola_general_rate: "0.025"
+  fehb_premium_inflation: "0.06"
+  tsp_return_pre_retirement: "0.06"  # Conservative estimate for L 2030 funds
+  tsp_return_post_retirement: "0.04"
+  cola_general_rate: "0.02"
   projection_years: 30
   current_location:
     state: "PA"
@@ -233,13 +233,13 @@ scenarios:
       retirement_date: "2025-12-27T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.00" 
+      tsp_withdrawal_rate: "0.01" 
     dawn:
       employee_name: "dawn"
       retirement_date: "2025-08-30T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.00" 
+      tsp_withdrawal_rate: "0.01" 
       
   - name: "Rob Retires at 62 - Feb 2027"
     robert:
@@ -247,10 +247,10 @@ scenarios:
       retirement_date: "2027-02-28T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.00"  
+      tsp_withdrawal_rate: "0.01" 
     dawn:
       employee_name: "dawn"
       retirement_date: "2025-08-30T00:00:00Z"
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
-      tsp_withdrawal_rate: "0.00"
+      tsp_withdrawal_rate: "0.01" 

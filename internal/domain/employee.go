@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -116,6 +117,18 @@ type GlobalAssumptions struct {
 
 	// TSP Statistical Models (calculated from historical data, but configurable)
 	TSPStatisticalModels TSPStatisticalModels `yaml:"tsp_statistical_models" json:"tsp_statistical_models"`
+}
+
+// GenerateAssumptions creates dynamic assumptions list from actual config values
+func (ga *GlobalAssumptions) GenerateAssumptions() []string {
+	return []string{
+		fmt.Sprintf("General COLA (FERS pension & SS): %.1f%% annually", ga.COLAGeneralRate.Mul(decimal.NewFromInt(100)).InexactFloat64()),
+		fmt.Sprintf("FEHB premium inflation: %.1f%% annually", ga.FEHBPremiumInflation.Mul(decimal.NewFromInt(100)).InexactFloat64()),
+		fmt.Sprintf("TSP growth pre-retirement: %.1f%% annually", ga.TSPReturnPreRetirement.Mul(decimal.NewFromInt(100)).InexactFloat64()),
+		fmt.Sprintf("TSP growth post-retirement: %.1f%% annually", ga.TSPReturnPostRetirement.Mul(decimal.NewFromInt(100)).InexactFloat64()),
+		"Social Security wage base indexing: ~5% annually (2025 est: $168,600)",
+		"Tax brackets: 2025 levels held constant (no inflation indexing)",
+	}
 }
 
 // Location represents the geographic location for tax calculations

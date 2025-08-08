@@ -24,11 +24,18 @@ var htmlTemplate = template.Must(template.New("report").Funcs(template.FuncMap{
 func (h HTMLFormatter) Format(results *domain.ScenarioComparison) ([]byte, error) {
 	var buf bytes.Buffer
 	rec := AnalyzeScenarios(results)
+	
+	// Use assumptions from results if available, otherwise fall back to defaults
+	assumptions := results.Assumptions
+	if len(assumptions) == 0 {
+		assumptions = DefaultAssumptions
+	}
+	
 	data := struct {
 		*domain.ScenarioComparison
 		Recommendation Recommendation
 		Assumptions    []string
-	}{results, rec, DefaultAssumptions}
+	}{results, rec, assumptions}
 	if err := htmlTemplate.Execute(&buf, data); err != nil {
 		return nil, err
 	}

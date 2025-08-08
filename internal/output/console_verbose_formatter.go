@@ -22,7 +22,11 @@ func (c ConsoleVerboseFormatter) Format(results *domain.ScenarioComparison) ([]b
 	fmt.Fprintln(&buf, "=================================================================================")
 	fmt.Fprintln(&buf)
 	fmt.Fprintln(&buf, "KEY ASSUMPTIONS:")
-	for _, a := range DefaultAssumptions {
+	assumptions := results.Assumptions
+	if len(assumptions) == 0 {
+		assumptions = DefaultAssumptions
+	}
+	for _, a := range assumptions {
 		fmt.Fprintf(&buf, "• %s\n", a)
 	}
 	fmt.Fprintln(&buf)

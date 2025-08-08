@@ -33,7 +33,7 @@ h1 { margin:0 0 4px 0; font-weight:400; }
 <section>
   <h2>Scenario Summary</h2>
   <table class="table">
-    <thead><tr><th>Scenario</th><th>First Year Net</th><th>Year 5</th><th>Year 10</th><th>Total Lifetime Income</th><th>Success Rate</th><th>TSP Longevity</th></tr></thead>
+    <thead><tr><th>Scenario</th><th>First Year Net</th><th>Year 5</th><th>Year 10</th><th>Total Lifetime Income</th><th>Success Rate</th><th>TSP Longevity</th><th>Final TSP Balance</th></tr></thead>
     <tbody>
       {{range .Scenarios}}
       <tr>
@@ -44,10 +44,37 @@ h1 { margin:0 0 4px 0; font-weight:400; }
         <td>{{curr .TotalLifetimeIncome}}</td>
         <td>{{pct .SuccessRate}}</td>
         <td>{{.TSPLongevity}}</td>
+        <td>{{curr .FinalTSPBalance}}</td>
       </tr>
       {{end}}
     </tbody>
   </table>
+</section>
+<section>
+  <h2>Calendar Year Comparison (Apples-to-Apples)</h2>
+  <table class="table">
+    <thead><tr><th>Scenario</th><th>2030 Net Income</th><th>2035 Net Income</th><th>2040 Net Income</th></tr></thead>
+    <tbody>
+      <tr style="background-color: #f8f9fa; font-weight: bold;">
+        <td>Pre-Retirement Baseline (with COLA growth)</td>
+        <td>{{curr (index .Scenarios 0).PreRetirementNet2030}}</td>
+        <td>{{curr (index .Scenarios 0).PreRetirementNet2035}}</td>
+        <td>{{curr (index .Scenarios 0).PreRetirementNet2040}}</td>
+      </tr>
+      {{range .Scenarios}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td>{{curr .NetIncome2030}}</td>
+        <td>{{curr .NetIncome2035}}</td>
+        <td>{{curr .NetIncome2040}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  <p style="font-size: 0.9em; color: #666; margin-top: 10px;">
+    <strong>Note:</strong> This table shows net income for specific calendar years across all scenarios, enabling direct comparison. 
+    The baseline shows what your current income would be in those years with COLA (cost-of-living) adjustments.
+  </p>
 </section>
 <section>
   <h2>Recommendation</h2>

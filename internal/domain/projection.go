@@ -61,6 +61,14 @@ type ScenarioSummary struct {
 	InitialTSPBalance   decimal.Decimal  `json:"initial_tsp_balance"`
 	FinalTSPBalance     decimal.Decimal  `json:"final_tsp_balance"`
 	Projection          []AnnualCashFlow `json:"projection"`
+	
+	// Absolute calendar year comparisons for apples-to-apples analysis
+	NetIncome2030       decimal.Decimal  `json:"net_income_2030"`
+	NetIncome2035       decimal.Decimal  `json:"net_income_2035"`
+	NetIncome2040       decimal.Decimal  `json:"net_income_2040"`
+	PreRetirementNet2030 decimal.Decimal `json:"pre_retirement_net_2030"` // What current net would be with COLA growth
+	PreRetirementNet2035 decimal.Decimal `json:"pre_retirement_net_2035"`
+	PreRetirementNet2040 decimal.Decimal `json:"pre_retirement_net_2040"`
 }
 
 // ScenarioComparison provides a comparison of all scenarios
@@ -69,6 +77,7 @@ type ScenarioComparison struct {
 	Scenarios          []ScenarioSummary `json:"scenarios"`
 	ImmediateImpact    ImpactAnalysis    `json:"immediate_impact"`
 	LongTermProjection LongTermAnalysis  `json:"long_term_projection"`
+	Assumptions        []string          `json:"assumptions"` // Dynamic assumptions from config
 }
 
 // ImpactAnalysis provides analysis of the immediate impact of retirement
