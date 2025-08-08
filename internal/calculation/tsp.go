@@ -308,16 +308,48 @@ func (ce *CalculationEngine) getTSPAllocationForEmployee(employee *domain.Employ
 
 // calculateTSPReturnWithAllocation calculates TSP return using specific allocation and statistical models
 func (ce *CalculationEngine) calculateTSPReturnWithAllocation(allocation domain.TSPAllocation, year int) decimal.Decimal {
-	// Use the statistical models from the configuration
-	// For now, we'll use the mean returns from the statistical models
-	// In a full implementation, this would use Monte Carlo sampling from the distributions
-
-	// Default returns based on TSP statistical models (if not available, use conservative estimates)
-	cFundReturn := decimal.NewFromFloat(0.1125) // 11.25% from statistical model
-	sFundReturn := decimal.NewFromFloat(0.1117) // 11.17% from statistical model
-	iFundReturn := decimal.NewFromFloat(0.0634) // 6.34% from statistical model
-	fFundReturn := decimal.NewFromFloat(0.0532) // 5.32% from statistical model
-	gFundReturn := decimal.NewFromFloat(0.0493) // 4.93% from statistical model
+	// Try to use historical data if available
+	var cFundReturn, sFundReturn, iFundReturn, fFundReturn, gFundReturn decimal.Decimal
+	
+	if ce.HistoricalData != nil && ce.HistoricalData.IsLoaded {
+		// Use historical returns for the specific year
+		if cReturn, err := ce.HistoricalData.GetTSPReturn("C", year); err == nil {
+			cFundReturn = cReturn
+		} else {
+			cFundReturn = decimal.NewFromFloat(0.1125) // 11.25% fallback
+		}
+		
+		if sReturn, err := ce.HistoricalData.GetTSPReturn("S", year); err == nil {
+			sFundReturn = sReturn
+		} else {
+			sFundReturn = decimal.NewFromFloat(0.1117) // 11.17% fallback
+		}
+		
+		if iReturn, err := ce.HistoricalData.GetTSPReturn("I", year); err == nil {
+			iFundReturn = iReturn
+		} else {
+			iFundReturn = decimal.NewFromFloat(0.0634) // 6.34% fallback
+		}
+		
+		if fReturn, err := ce.HistoricalData.GetTSPReturn("F", year); err == nil {
+			fFundReturn = fReturn
+		} else {
+			fFundReturn = decimal.NewFromFloat(0.0532) // 5.32% fallback
+		}
+		
+		if gReturn, err := ce.HistoricalData.GetTSPReturn("G", year); err == nil {
+			gFundReturn = gReturn
+		} else {
+			gFundReturn = decimal.NewFromFloat(0.0493) // 4.93% fallback
+		}
+	} else {
+		// Fallback to default returns based on TSP statistical models
+		cFundReturn = decimal.NewFromFloat(0.1125) // 11.25% from statistical model
+		sFundReturn = decimal.NewFromFloat(0.1117) // 11.17% from statistical model
+		iFundReturn = decimal.NewFromFloat(0.0634) // 6.34% from statistical model
+		fFundReturn = decimal.NewFromFloat(0.0532) // 5.32% from statistical model
+		gFundReturn = decimal.NewFromFloat(0.0493) // 4.93% from statistical model
+	}
 
 	// Weighted return calculation using actual allocation
 	weightedReturn := decimal.Zero

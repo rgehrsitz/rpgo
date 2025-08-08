@@ -27,6 +27,7 @@ type CalculationEngine struct {
 	MedicareCalc        *MedicareCalculator
 	LifecycleFundLoader *LifecycleFundLoader
 	NetIncomeCalc       *NetIncomeCalculator
+	HistoricalData      *HistoricalDataManager
 	Debug               bool // Enable debug output for detailed calculations
 	Logger              Logger
 }
