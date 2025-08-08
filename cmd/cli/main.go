@@ -69,7 +69,20 @@ var calculateCmd = &cobra.Command{
 
 		// Generate output
 		outputFormat, _ := cmd.Flags().GetString("format")
-		output.GenerateReport(results, outputFormat)
+		
+		// Get the formatter and write to stdout instead of file
+		if f := output.GetFormatterByName(outputFormat); f != nil {
+			data, err := f.Format(results)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Print(string(data))
+		} else {
+			// Fallback to original GenerateReport for unsupported formats
+			if err := output.GenerateReport(results, outputFormat); err != nil {
+				log.Fatal(err)
+			}
+		}
 	},
 }
 

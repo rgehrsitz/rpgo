@@ -53,7 +53,7 @@ go build -o fers-calc cmd/cli/main.go
 
 3. **Generate HTML report**:
    ```bash
-   ./fers-calc calculate config.yaml --format html
+   ./fers-calc calculate config.yaml --format html > report.html
    ```
 
 4. **Run Monte Carlo simulations**:
@@ -80,7 +80,7 @@ To help you understand the core commands, here's a breakdown:
 ./fers-calc calculate [input-file]
 
 # With options
-./fers-calc calculate [input-file] --format html --verbose --debug
+./fers-calc calculate [input-file] --format html --verbose --debug > report.html
 
 # Validate configuration
 ./fers-calc validate [input-file]
@@ -121,12 +121,12 @@ Aliases map to canonical names:
 - `csv-detailed` → `detailed-csv`; `csv-summary` → `csv`
 - `html-report` → `html`; `json-pretty` → `json`
 
-Outputs are saved to timestamped files like `retirement_report_YYYYMMDD_HHMMSS.ext`.
+Reports are output to stdout by default. Redirect to files as needed (e.g., `> report.html`).
 
 ### Output Formats
 
 - `console`: Formatted text output (default)
-- `html`: Interactive HTML report
+- `html`: Interactive HTML report with charts and visualizations
 - `json`: Structured JSON data
 - `csv`: Comma-separated values for spreadsheet analysis
 
@@ -366,6 +366,7 @@ For issues, questions, or contributions, please use the GitHub issue tracker or 
 
 - [x] Monte Carlo simulation for TSP returns
 - [x] Historical data integration
+- [x] Interactive HTML reports with charts and visualizations
 - [ ] Enhanced withdrawal strategies (floor-ceiling, bond tent)
 - [ ] Web interface
 - [ ] Additional state tax support

@@ -19,6 +19,14 @@ var htmlTemplateSource string
 var htmlTemplate = template.Must(template.New("report").Funcs(template.FuncMap{
 	"curr": FormatCurrency,
 	"pct":  FormatPercentage,
+	"minus1": func(i int) int { return i - 1 },
+	"add": func(i, j int) int { return i + j },
+	"slice": func(items []domain.ScenarioSummary, start int) []domain.ScenarioSummary {
+		if start >= len(items) {
+			return []domain.ScenarioSummary{}
+		}
+		return items[start:]
+	},
 }).Parse(htmlTemplateSource))
 
 func (h HTMLFormatter) Format(results *domain.ScenarioComparison) ([]byte, error) {

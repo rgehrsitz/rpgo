@@ -23,8 +23,8 @@ The FERS Retirement Calculator provides a comprehensive command-line interface f
 # Basic calculation
 ./fers-calc calculate config.yaml
 
-# Generate HTML report
-./fers-calc calculate config.yaml --format html
+# Generate HTML report (save to file)
+./fers-calc calculate config.yaml --format html > report.html
 
 # Enable detailed debug logging
 ./fers-calc calculate config.yaml --debug
@@ -250,8 +250,8 @@ The FERS Retirement Calculator provides a comprehensive command-line interface f
 # Run deterministic calculations
 ./fers-calc calculate config.yaml
 
-# Generate HTML report
-./fers-calc calculate config.yaml --format html
+# Generate HTML report (save to file)
+./fers-calc calculate config.yaml --format html > report.html
 
 # Run break-even analysis
 ./fers-calc break-even config.yaml
@@ -301,6 +301,37 @@ The FERS Retirement Calculator provides a comprehensive command-line interface f
 ./fers-calc historical query ./data 2020 cola
 ```
 
+## HTML Reports
+
+The HTML output format generates interactive reports with visualizations to help understand retirement projections:
+
+### Features
+- **Scenario Summary Table**: Key metrics for all scenarios (first year income, 5/10-year projections, success rates, TSP longevity)
+- **Calendar Year Comparisons**: Absolute year comparisons (2030, 2035, 2040) for apples-to-apples analysis
+- **Pre-retirement Baseline**: Shows what current income would be in future years with COLA adjustments
+- **Interactive Charts**:
+  - **TSP Balance Over Time**: Line chart showing TSP balance projections for each scenario
+  - **Net Income Comparison**: Line chart comparing net income trajectories between scenarios  
+  - **Income Sources Breakdown**: Stacked bar chart showing composition of income (salary, pension, TSP, Social Security) in first retirement year
+
+### Usage
+```bash
+# Generate and save HTML report
+./fers-calc calculate config.yaml --format html > retirement_analysis.html
+
+# Open in browser (macOS)
+open retirement_analysis.html
+
+# Open in browser (Linux)
+xdg-open retirement_analysis.html
+```
+
+### Technical Details
+- Uses Chart.js for interactive visualizations
+- Responsive design that works on desktop and mobile
+- No external dependencies required when viewing (CDN-based)
+- Charts are fully interactive with hover tooltips and zoom capabilities
+
 ## Output Interpretation
 
 ## Output formats and aliases
@@ -310,7 +341,7 @@ Supported formats (use with `--format`):
 - `console-lite` (compact console summary)
 - `csv` (summary CSV)
 - `detailed-csv` (full year-by-year CSV)
-- `html` (HTML report)
+- `html` (interactive HTML report with charts)
 - `json` (structured JSON)
 - `all` (writes multiple outputs: verbose text + detailed CSV)
 
@@ -323,7 +354,8 @@ Aliases (mapped to canonical names):
 - `json-pretty` → `json`
 
 Notes:
-- Output files are saved with timestamped filenames in the current directory (for example: `retirement_report_YYYYMMDD_HHMMSS.ext`).
+- All output formats write to stdout by default. Redirect to save files (e.g., `> report.html`, `> report.json`, `> report.csv`).
+- The `all` format creates timestamped files directly rather than writing to stdout.
 - If an unknown format is provided, the error will list supported formats and aliases.
 
 ### Monte Carlo Results
