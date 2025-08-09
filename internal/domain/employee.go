@@ -94,9 +94,30 @@ func (rs *RetirementScenario) UnmarshalYAML(value *yaml.Node) error {
 
 // Scenario represents a complete retirement scenario for both employees
 type Scenario struct {
-	Name   string             `yaml:"name" json:"name"`
-	Robert RetirementScenario `yaml:"robert" json:"robert"`
-	Dawn   RetirementScenario `yaml:"dawn" json:"dawn"`
+	Name      string             `yaml:"name" json:"name"`
+	Robert    RetirementScenario `yaml:"robert" json:"robert"`
+	Dawn      RetirementScenario `yaml:"dawn" json:"dawn"`
+	Mortality *ScenarioMortality `yaml:"mortality,omitempty" json:"mortality,omitempty"`
+}
+
+// ScenarioMortality groups mortality specifications and assumptions for a scenario
+type ScenarioMortality struct {
+	Robert      *MortalitySpec        `yaml:"robert,omitempty" json:"robert,omitempty"`
+	Dawn        *MortalitySpec        `yaml:"dawn,omitempty" json:"dawn,omitempty"`
+	Assumptions *MortalityAssumptions `yaml:"assumptions,omitempty" json:"assumptions,omitempty"`
+}
+
+// MortalitySpec defines a deterministic death event by date or by age (one may be supplied)
+type MortalitySpec struct {
+	DeathDate *time.Time `yaml:"death_date,omitempty" json:"death_date,omitempty"`
+	DeathAge  *int       `yaml:"death_age,omitempty" json:"death_age,omitempty"`
+}
+
+// MortalityAssumptions defines how to treat finances after a death event (Phase 1 limited subset)
+type MortalityAssumptions struct {
+	SurvivorSpendingFactor decimal.Decimal `yaml:"survivor_spending_factor" json:"survivor_spending_factor"`
+	TSPSpousalTransfer     string          `yaml:"tsp_spousal_transfer" json:"tsp_spousal_transfer"` // merge|separate (Phase 1 supports only merge & separate=ignore merge)
+	FilingStatusSwitch     string          `yaml:"filing_status_switch" json:"filing_status_switch"` // next_year|immediate (not yet applied in Phase 1)
 }
 
 // GlobalAssumptions contains all the global parameters for calculations

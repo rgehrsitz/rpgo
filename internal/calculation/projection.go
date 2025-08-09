@@ -31,6 +31,50 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 	robertStrategy := ce.createTSPStrategy(&scenario.Robert, currentTSPTraditionalRobert.Add(currentTSPRothRobert), assumptions.InflationRate)
 	dawnStrategy := ce.createTSPStrategy(&scenario.Dawn, currentTSPTraditionalDawn.Add(currentTSPRothDawn), assumptions.InflationRate)
 
+	// Mortality derived dates (deterministic) if provided by age
+	var robertDeathYearIndex *int
+	var dawnDeathYearIndex *int
+	if scenario.Mortality != nil {
+		baseYear := ProjectionBaseYear
+		if scenario.Mortality.Robert != nil {
+			if scenario.Mortality.Robert.DeathDate != nil {
+				y := scenario.Mortality.Robert.DeathDate.Year() - baseYear
+				if y >= 0 && y < assumptions.ProjectionYears {
+					robertDeathYearIndex = &y
+				}
+			} else if scenario.Mortality.Robert.DeathAge != nil {
+				// compute calendar year when Robert reaches that age (approx: birth year + age)
+				targetYear := robert.BirthDate.Year() + *scenario.Mortality.Robert.DeathAge
+				y := targetYear - baseYear
+				if y >= 0 && y < assumptions.ProjectionYears {
+					robertDeathYearIndex = &y
+				}
+			}
+		}
+		if scenario.Mortality.Dawn != nil {
+			if scenario.Mortality.Dawn.DeathDate != nil {
+				y := scenario.Mortality.Dawn.DeathDate.Year() - baseYear
+				if y >= 0 && y < assumptions.ProjectionYears {
+					dawnDeathYearIndex = &y
+				}
+			} else if scenario.Mortality.Dawn.DeathAge != nil {
+				targetYear := dawn.BirthDate.Year() + *scenario.Mortality.Dawn.DeathAge
+				y := targetYear - baseYear
+				if y >= 0 && y < assumptions.ProjectionYears {
+					dawnDeathYearIndex = &y
+				}
+			}
+		}
+	}
+
+	survivorSpendingFactor := decimal.NewFromFloat(1.0)
+	if scenario.Mortality != nil && scenario.Mortality.Assumptions != nil && !scenario.Mortality.Assumptions.SurvivorSpendingFactor.IsZero() {
+		survivorSpendingFactor = scenario.Mortality.Assumptions.SurvivorSpendingFactor
+	}
+
+	robertIsDeceased := false
+	dawnIsDeceased := false
+
 	for year := 0; year < assumptions.ProjectionYears; year++ {
 		projectionDate := time.Date(projectionStartYear, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(year, 0, 0)
 		ageRobert := robert.Age(projectionDate)
@@ -75,9 +119,34 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 			dawnWorkFraction = decimal.NewFromInt(1)
 		}
 
-		// Calculate FERS pensions (only for retired portion of year)
+		// Apply death events at start-of-year (Phase 1: incomes stop this year)
+		if robertDeathYearIndex != nil && year >= *robertDeathYearIndex {
+			robertIsDeceased = true
+		}
+		if dawnDeathYearIndex != nil && year >= *dawnDeathYearIndex {
+			dawnIsDeceased = true
+		}
+
+		// If a spouse just became deceased this year and transfer mode is merge, merge TSP balances into survivor (traditional+roth)
+		if scenario.Mortality != nil && scenario.Mortality.Assumptions != nil && scenario.Mortality.Assumptions.TSPSpousalTransfer == "merge" {
+			if robertIsDeceased && !dawnIsDeceased {
+				// Move Robert balances into Dawn's (simple add)
+				currentTSPTraditionalDawn = currentTSPTraditionalDawn.Add(currentTSPTraditionalRobert)
+				currentTSPRothDawn = currentTSPRothDawn.Add(currentTSPRothRobert)
+				currentTSPTraditionalRobert = decimal.Zero
+				currentTSPRothRobert = decimal.Zero
+			}
+			if dawnIsDeceased && !robertIsDeceased {
+				currentTSPTraditionalRobert = currentTSPTraditionalRobert.Add(currentTSPTraditionalDawn)
+				currentTSPRothRobert = currentTSPRothRobert.Add(currentTSPRothDawn)
+				currentTSPTraditionalDawn = decimal.Zero
+				currentTSPRothDawn = decimal.Zero
+			}
+		}
+
+		// Calculate FERS pensions (only for retired portion of year, and not after death)
 		var pensionRobert, pensionDawn decimal.Decimal
-		if isRobertRetired {
+		if isRobertRetired && !robertIsDeceased {
 			pensionRobert = CalculatePensionForYear(robert, scenario.Robert.RetirementDate, year-robertRetirementYear, assumptions.InflationRate)
 			// Adjust for partial year if retiring this year
 			if year == robertRetirementYear {
@@ -102,7 +171,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 				ce.Logger.Debugf("  Current-year cash received (partial): $%s", pensionRobert.StringFixed(2))
 			}
 		}
-		if isDawnRetired {
+		if isDawnRetired && !dawnIsDeceased {
 			pensionDawn = CalculatePensionForYear(dawn, scenario.Dawn.RetirementDate, year-dawnRetirementYear, assumptions.InflationRate)
 			// Adjust for partial year if retiring this year
 			if year == dawnRetirementYear {
@@ -111,8 +180,25 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		}
 
 		// Calculate Social Security benefits
-		ssRobert := CalculateSSBenefitForYear(robert, scenario.Robert.SSStartAge, year, assumptions.COLAGeneralRate)
-		ssDawn := CalculateSSBenefitForYear(dawn, scenario.Dawn.SSStartAge, year, assumptions.COLAGeneralRate)
+		ssRobert := decimal.Zero
+		if !robertIsDeceased {
+			ssRobert = CalculateSSBenefitForYear(robert, scenario.Robert.SSStartAge, year, assumptions.COLAGeneralRate)
+		}
+		ssDawn := decimal.Zero
+		if !dawnIsDeceased {
+			ssDawn = CalculateSSBenefitForYear(dawn, scenario.Dawn.SSStartAge, year, assumptions.COLAGeneralRate)
+		}
+		// Survivor SS simplification: if one is deceased, survivor keeps max of their own vs deceased (Phase 1 naive annual)
+		if robertIsDeceased && !dawnIsDeceased {
+			if ssRobert.GreaterThan(ssDawn) {
+				ssDawn = ssRobert
+			}
+		}
+		if dawnIsDeceased && !robertIsDeceased {
+			if ssDawn.GreaterThan(ssRobert) {
+				ssRobert = ssDawn
+			}
+		}
 
 		// Adjust Social Security for partial year based on eligibility and retirement timing
 		if year == robertRetirementYear && robertRetirementYear >= 0 {
@@ -146,14 +232,14 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 
 		// Calculate FERS Special Retirement Supplement (only if retired)
 		var srsRobert, srsDawn decimal.Decimal
-		if isRobertRetired {
+		if isRobertRetired && !robertIsDeceased {
 			srsRobert = CalculateFERSSupplementYear(robert, scenario.Robert.RetirementDate, year-robertRetirementYear, assumptions.InflationRate)
 			// Adjust for partial year if retiring this year
 			if year == robertRetirementYear {
 				srsRobert = srsRobert.Mul(decimal.NewFromInt(1).Sub(robertWorkFraction))
 			}
 		}
-		if isDawnRetired {
+		if isDawnRetired && !dawnIsDeceased {
 			srsDawn = CalculateFERSSupplementYear(dawn, scenario.Dawn.RetirementDate, year-dawnRetirementYear, assumptions.InflationRate)
 			// Adjust for partial year if retiring this year
 			if year == dawnRetirementYear {
@@ -163,7 +249,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 
 		// Calculate TSP withdrawals and update balances
 		var tspWithdrawalRobert, tspWithdrawalDawn decimal.Decimal
-		if isRobertRetired {
+		if isRobertRetired && !robertIsDeceased {
 			// For 4% rule: Always withdraw 4% of initial balance (adjusted for inflation)
 			if scenario.Robert.TSPWithdrawalStrategy == "4_percent_rule" {
 				// Use the 4% rule strategy to calculate withdrawals
@@ -199,7 +285,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 			}
 		}
 
-		if isDawnRetired {
+		if isDawnRetired && !dawnIsDeceased {
 			if scenario.Dawn.TSPWithdrawalStrategy == "4_percent_rule" {
 				tspWithdrawalDawn = dawnStrategy.CalculateWithdrawal(
 					currentTSPTraditionalDawn.Add(currentTSPRothDawn),
@@ -348,7 +434,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 
 		// Calculate TSP contributions (only for working portion of year)
 		var tspContributions decimal.Decimal
-		if !isRobertRetired || !isDawnRetired {
+		if (!isRobertRetired || !isDawnRetired) && !(robertIsDeceased || dawnIsDeceased) {
 			robertContributions := robert.TotalAnnualTSPContribution().Mul(robertWorkFraction)
 			dawnContributions := dawn.TotalAnnualTSPContribution().Mul(dawnWorkFraction)
 			tspContributions = robertContributions.Add(dawnContributions)
@@ -384,6 +470,29 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 			IsRetired:             isRobertRetired && isDawnRetired, // Both retired
 			IsMedicareEligible:    dateutil.IsMedicareEligible(robert.BirthDate, projectionDate) || dateutil.IsMedicareEligible(dawn.BirthDate, projectionDate),
 			IsRMDYear:             dateutil.IsRMDYear(robert.BirthDate, projectionDate) || dateutil.IsRMDYear(dawn.BirthDate, projectionDate),
+			RobertDeceased:        robertIsDeceased,
+			DawnDeceased:          dawnIsDeceased,
+			FilingStatusSingle:    false,
+		}
+
+		// Determine filing status for display (mirror simplified logic in taxes.go)
+		if scenario.Mortality != nil && scenario.Mortality.Assumptions != nil && (robertIsDeceased != dawnIsDeceased) {
+			mode := scenario.Mortality.Assumptions.FilingStatusSwitch
+			// Reconstruct death year indexes (already computed earlier): reuse conditions
+			if mode == "immediate" {
+				cashFlow.FilingStatusSingle = true
+			} else if mode == "next_year" {
+				if robertDeathYearIndex != nil && robertIsDeceased && year > *robertDeathYearIndex { cashFlow.FilingStatusSingle = true }
+				if dawnDeathYearIndex != nil && dawnIsDeceased && year > *dawnDeathYearIndex { cashFlow.FilingStatusSingle = true }
+			}
+		}
+
+		// Apply survivor spending factor by scaling discretionary withdrawals (simple: scale TSP withdrawals post-death)
+		if (robertIsDeceased || dawnIsDeceased) && survivorSpendingFactor.LessThan(decimal.NewFromFloat(0.999)) {
+			cashFlow.TSPWithdrawalRobert = cashFlow.TSPWithdrawalRobert.Mul(survivorSpendingFactor)
+			cashFlow.TSPWithdrawalDawn = cashFlow.TSPWithdrawalDawn.Mul(survivorSpendingFactor)
+			cashFlow.PensionRobert = cashFlow.PensionRobert.Mul(survivorSpendingFactor)
+			cashFlow.PensionDawn = cashFlow.PensionDawn.Mul(survivorSpendingFactor)
 		}
 
 		// Calculate total gross income and net income

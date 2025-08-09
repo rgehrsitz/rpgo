@@ -87,3 +87,24 @@ scenarios:
       ss_start_age: 62
       tsp_withdrawal_strategy: "variable_percentage"
       tsp_withdrawal_rate: "0.01"   # 2.0% withdrawal rate (of current balance each year)
+
+  - name: "Mortality Shock: Robert dies 2034"
+    robert:
+      employee_name: "robert"
+      retirement_date: "2025-12-27T00:00:00Z"
+      ss_start_age: 62
+      tsp_withdrawal_strategy: "variable_percentage"
+      tsp_withdrawal_rate: "0.01"
+    dawn:
+      employee_name: "dawn"
+      retirement_date: "2025-08-30T00:00:00Z"
+      ss_start_age: 62
+      tsp_withdrawal_strategy: "variable_percentage"
+      tsp_withdrawal_rate: "0.01"
+    mortality:
+      robert:
+        death_date: "2034-06-30T00:00:00Z"
+      assumptions:
+        survivor_spending_factor: "0.90"
+        tsp_spousal_transfer: "merge"
+        filing_status_switch: "next_year"

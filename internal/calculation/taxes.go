@@ -364,6 +364,46 @@ func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithInflation(taxableI
 	return tax
 }
 
+// calculateFederalTaxWithStatus allows specifying filing status ("mfj" or "single") and number of seniors 65+.
+func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithStatus(agiComponents domain.TaxableIncome, filingStatus string, seniors int) decimal.Decimal {
+	totalIncome := agiComponents.Salary.Add(agiComponents.FERSPension).Add(agiComponents.TSPWithdrawalsTrad).Add(agiComponents.TaxableSSBenefits).Add(agiComponents.OtherTaxableIncome)
+
+	// Derive standard deduction based on filing status (simplified: use configured MFJ then halve for single)
+	standardDed := ctc.FederalTaxCalc.StandardDeduction
+	if filingStatus == "single" {
+		standardDed = standardDed.Div(decimal.NewFromInt(2))
+	}
+	// Additional senior deductions
+	for i := 0; i < seniors; i++ {
+		standardDed = standardDed.Add(ctc.FederalTaxCalc.AdditionalStdDed)
+	}
+
+	agi := totalIncome.Sub(standardDed)
+	if agi.LessThan(decimal.Zero) { agi = decimal.Zero }
+
+	// Use original brackets (approx) – for single we approximate by halving MFJ thresholds
+	inflationAdjustment := decimal.NewFromFloat(1.0)
+	tax := decimal.Zero
+	remaining := agi
+	for _, b := range ctc.FederalTaxCalc.Brackets {
+		adjMin := b.Min.Mul(inflationAdjustment)
+		adjMax := b.Max.Mul(inflationAdjustment)
+		if filingStatus == "single" {
+			adjMin = adjMin.Div(decimal.NewFromInt(2))
+			adjMax = adjMax.Div(decimal.NewFromInt(2))
+		}
+		if remaining.LessThanOrEqual(decimal.Zero) { break }
+		width := adjMax.Sub(adjMin)
+		if width.LessThanOrEqual(decimal.Zero) { continue }
+		incomeInBracket := decimal.Min(remaining, width)
+		if agi.GreaterThan(adjMin) && incomeInBracket.GreaterThan(decimal.Zero) {
+			tax = tax.Add(incomeInBracket.Mul(b.Rate))
+			remaining = remaining.Sub(incomeInBracket)
+		}
+	}
+	return tax
+}
+
 // CalculateTaxableIncome creates a TaxableIncome struct from cash flow data
 func CalculateTaxableIncome(cashFlow domain.AnnualCashFlow, isRetired bool) domain.TaxableIncome {
 	return domain.TaxableIncome{
@@ -402,11 +442,50 @@ func (ctc *ComprehensiveTaxCalculator) CalculateSocialSecurityTaxation(ssBenefit
 }
 
 // calculateTaxes calculates all applicable taxes
-func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, _ *domain.Scenario, year int, isRetired bool, pensionRobert, pensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn decimal.Decimal, _ *domain.GlobalAssumptions, workingIncomeRobert, workingIncomeDawn decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
+func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scenario *domain.Scenario, year int, isRetired bool, pensionRobert, pensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn decimal.Decimal, assumptions *domain.GlobalAssumptions, workingIncomeRobert, workingIncomeDawn decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
 	projectionStartYear := ProjectionBaseYear
 	projectionDate := time.Date(projectionStartYear, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(year, 0, 0)
 	ageRobert := robert.Age(projectionDate)
 	ageDawn := dawn.Age(projectionDate)
+
+	// Determine mortality & filing status for this year
+	filingStatus := "mfj"
+	seniors := 0
+	if ageRobert >= 65 { seniors++ }
+	if ageDawn >= 65 { seniors++ }
+
+	// Reconstruct death year indexes to know if someone deceased by this year (duplicated lightweight logic; could refactor)
+	var robertDeathYearIndex, dawnDeathYearIndex *int
+	if scenario != nil && scenario.Mortality != nil {
+		baseYear := ProjectionBaseYear
+		if scenario.Mortality.Robert != nil {
+			if scenario.Mortality.Robert.DeathDate != nil { y := scenario.Mortality.Robert.DeathDate.Year() - baseYear; if y >=0 { robertDeathYearIndex = &y } } else if scenario.Mortality.Robert.DeathAge != nil { ty := robert.BirthDate.Year() + *scenario.Mortality.Robert.DeathAge; y := ty - baseYear; if y >=0 { robertDeathYearIndex = &y } }
+		}
+		if scenario.Mortality.Dawn != nil {
+			if scenario.Mortality.Dawn.DeathDate != nil { y := scenario.Mortality.Dawn.DeathDate.Year() - baseYear; if y >=0 { dawnDeathYearIndex = &y } } else if scenario.Mortality.Dawn.DeathAge != nil { ty := dawn.BirthDate.Year() + *scenario.Mortality.Dawn.DeathAge; y := ty - baseYear; if y >=0 { dawnDeathYearIndex = &y } }
+		}
+	}
+	robertDeceased := robertDeathYearIndex != nil && year >= *robertDeathYearIndex
+	dawnDeceased := dawnDeathYearIndex != nil && year >= *dawnDeathYearIndex
+	if (robertDeceased || dawnDeceased) && !(robertDeceased && dawnDeceased) {
+		// One survivor; evaluate filing status switch policy
+		if scenario != nil && scenario.Mortality != nil && scenario.Mortality.Assumptions != nil {
+			mode := scenario.Mortality.Assumptions.FilingStatusSwitch
+			if mode == "immediate" {
+				filingStatus = "single"
+				seniors = 0
+				// Count surviving senior for additional deduction
+				if !robertDeceased && ageRobert >= 65 { seniors = 1 }
+				if !dawnDeceased && ageDawn >= 65 { seniors = 1 }
+			} else if mode == "next_year" {
+				// Switch next year after death event
+				deathYear := 0
+				if robertDeceased && robertDeathYearIndex != nil { deathYear = *robertDeathYearIndex }
+				if dawnDeceased && dawnDeathYearIndex != nil { deathYear = *dawnDeathYearIndex }
+				if year > deathYear { filingStatus = "single"; seniors = 0; if !robertDeceased && ageRobert >=65 { seniors=1 }; if !dawnDeceased && ageDawn >=65 { seniors=1 } }
+			}
+		}
+	}
 
 	// Check if this is a transition year (has both working and retirement income)
 	isTransitionYear := (workingIncomeRobert.GreaterThan(decimal.Zero) || workingIncomeDawn.GreaterThan(decimal.Zero)) &&
@@ -433,7 +512,10 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, _ *do
 		}
 
 		// Calculate taxes for transition year (FICA only on working income, with proration)
-		federalTax, stateTax, localTax, _ := ce.TaxCalc.CalculateTotalTaxes(taxableIncome, false, ageRobert, ageDawn, totalWorkingIncome)
+		// Federal tax using filing status logic
+		federalTax := ce.TaxCalc.calculateFederalTaxWithStatus(taxableIncome, filingStatus, seniors)
+		stateTax := ce.TaxCalc.StateTaxCalc.CalculateTax(taxableIncome, false)
+		localTax := ce.TaxCalc.LocalTaxCalc.CalculateEIT(totalWorkingIncome, false)
 
 		// Calculate FICA only on actual working income (no proration needed since we already have working income)
 		robertFICA := ce.TaxCalc.FICATaxCalc.CalculateFICA(workingIncomeRobert, totalWorkingIncome)
@@ -462,14 +544,18 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, _ *do
 		}
 
 		// Calculate taxes (no FICA in retirement)
-		federalTax, stateTax, localTax, _ := ce.TaxCalc.CalculateTotalTaxes(taxableIncome, isRetired, ageRobert, ageDawn, decimal.Zero)
+		federalTax := ce.TaxCalc.calculateFederalTaxWithStatus(taxableIncome, filingStatus, seniors)
+		stateTax := ce.TaxCalc.StateTaxCalc.CalculateTax(taxableIncome, true)
+		localTax := ce.TaxCalc.LocalTaxCalc.CalculateEIT(decimal.Zero, true)
 
 		return federalTax, stateTax, localTax, decimal.Zero
 	} else {
 		// Pre-retirement: calculate current working income
 		currentTaxableIncome := CalculateCurrentTaxableIncome(robert.CurrentSalary, dawn.CurrentSalary)
-		federalTax, stateTax, localTax, ficaTax := ce.TaxCalc.CalculateTotalTaxes(currentTaxableIncome, isRetired, ageRobert, ageDawn, robert.CurrentSalary.Add(dawn.CurrentSalary))
-
+		federalTax := ce.TaxCalc.calculateFederalTaxWithStatus(currentTaxableIncome, filingStatus, seniors)
+		stateTax := ce.TaxCalc.StateTaxCalc.CalculateTax(currentTaxableIncome, false)
+		localTax := ce.TaxCalc.LocalTaxCalc.CalculateEIT(robert.CurrentSalary.Add(dawn.CurrentSalary), false)
+		ficaTax := ce.TaxCalc.FICATaxCalc.CalculateFICA(robert.CurrentSalary, robert.CurrentSalary.Add(dawn.CurrentSalary)).Add(ce.TaxCalc.FICATaxCalc.CalculateFICA(dawn.CurrentSalary, robert.CurrentSalary.Add(dawn.CurrentSalary)))
 		return federalTax, stateTax, localTax, ficaTax
 	}
 }

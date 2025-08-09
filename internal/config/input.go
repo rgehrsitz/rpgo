@@ -77,6 +77,8 @@ func (ip *InputParser) ValidateConfiguration(config *domain.Configuration) error
 	}
 
 	return nil
+
+	return nil
 }
 
 // validateEmployee validates a single employee's data
@@ -178,6 +180,31 @@ func (ip *InputParser) validateScenario(_ int, scenario *domain.Scenario) error 
 	// Validate Dawn's scenario
 	if err := ip.validateRetirementScenario("dawn", &scenario.Dawn); err != nil {
 		return fmt.Errorf("dawn scenario validation failed: %w", err)
+	}
+
+	// Validate optional mortality block
+	if scenario.Mortality != nil {
+		if scenario.Mortality.Robert != nil {
+			if scenario.Mortality.Robert.DeathDate != nil && scenario.Mortality.Robert.DeathAge != nil {
+				return fmt.Errorf("mortality.robert: specify either death_date or death_age, not both")
+			}
+		}
+		if scenario.Mortality.Dawn != nil {
+			if scenario.Mortality.Dawn.DeathDate != nil && scenario.Mortality.Dawn.DeathAge != nil {
+				return fmt.Errorf("mortality.dawn: specify either death_date or death_age, not both")
+			}
+		}
+		if scenario.Mortality.Assumptions != nil {
+			if !scenario.Mortality.Assumptions.SurvivorSpendingFactor.IsZero() && (scenario.Mortality.Assumptions.SurvivorSpendingFactor.LessThan(decimal.NewFromFloat(0.4)) || scenario.Mortality.Assumptions.SurvivorSpendingFactor.GreaterThan(decimal.NewFromFloat(1.0))) {
+				return fmt.Errorf("mortality.assumptions.survivor_spending_factor must be between 0.4 and 1.0")
+			}
+			if scenario.Mortality.Assumptions.TSPSpousalTransfer != "" && scenario.Mortality.Assumptions.TSPSpousalTransfer != "merge" && scenario.Mortality.Assumptions.TSPSpousalTransfer != "separate" {
+				return fmt.Errorf("mortality.assumptions.tsp_spousal_transfer must be 'merge' or 'separate'")
+			}
+			if scenario.Mortality.Assumptions.FilingStatusSwitch != "" && scenario.Mortality.Assumptions.FilingStatusSwitch != "next_year" && scenario.Mortality.Assumptions.FilingStatusSwitch != "immediate" {
+				return fmt.Errorf("mortality.assumptions.filing_status_switch must be 'next_year' or 'immediate'")
+			}
+		}
 	}
 
 	return nil

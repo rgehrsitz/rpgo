@@ -47,6 +47,11 @@ type AnnualCashFlow struct {
 	IsMedicareEligible bool            `json:"is_medicare_eligible"`
 	IsRMDYear          bool            `json:"is_rmd_year"`
 	RMDAmount          decimal.Decimal `json:"rmd_amount"`
+
+	// Mortality / survivor tracking (Phase 1 deterministic death modeling)
+	RobertDeceased     bool `json:"robert_deceased"`
+	DawnDeceased       bool `json:"dawn_deceased"`
+	FilingStatusSingle bool `json:"filing_status_single"` // true once survivor filing status applies
 }
 
 // ScenarioSummary provides a summary of key metrics for a retirement scenario
@@ -61,11 +66,11 @@ type ScenarioSummary struct {
 	InitialTSPBalance   decimal.Decimal  `json:"initial_tsp_balance"`
 	FinalTSPBalance     decimal.Decimal  `json:"final_tsp_balance"`
 	Projection          []AnnualCashFlow `json:"projection"`
-	
+
 	// Absolute calendar year comparisons for apples-to-apples analysis
-	NetIncome2030       decimal.Decimal  `json:"net_income_2030"`
-	NetIncome2035       decimal.Decimal  `json:"net_income_2035"`
-	NetIncome2040       decimal.Decimal  `json:"net_income_2040"`
+	NetIncome2030        decimal.Decimal `json:"net_income_2030"`
+	NetIncome2035        decimal.Decimal `json:"net_income_2035"`
+	NetIncome2040        decimal.Decimal `json:"net_income_2040"`
 	PreRetirementNet2030 decimal.Decimal `json:"pre_retirement_net_2030"` // What current net would be with COLA growth
 	PreRetirementNet2035 decimal.Decimal `json:"pre_retirement_net_2035"`
 	PreRetirementNet2040 decimal.Decimal `json:"pre_retirement_net_2040"`
