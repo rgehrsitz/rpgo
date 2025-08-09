@@ -30,7 +30,8 @@ personal_details:
     
     # TSP Lifecycle Fund (optional - overrides tsp_allocation if specified)
     # If specified, allocation will change over time based on age
-    # TEMPORARILY DISABLED FOR MONTE CARLO TESTING
+    # NOTE: For Monte Carlo simulations, use manual tsp_allocation instead
+    # to ensure proper market variability in results
     # tsp_lifecycle_fund:
     #   fund_name: "L2030"  # Options: "L2030", "L2035", "L2040", "L Income"
     #   # Allocation data is automatically loaded from CSV files in data/tsp-returns/
@@ -61,7 +62,8 @@ personal_details:
     
     # TSP Lifecycle Fund (optional - overrides tsp_allocation if specified)
     # If specified, allocation will change over time based on age
-    # TEMPORARILY DISABLED FOR MONTE CARLO TESTING
+    # NOTE: For Monte Carlo simulations, use manual tsp_allocation instead
+    # to ensure proper market variability in results
     # tsp_lifecycle_fund:
     #   fund_name: "L Income"  # Options: "L2030", "L2035", "L2040", "L Income"
     #   # Allocation data is automatically loaded from CSV files in data/tsp-returns/

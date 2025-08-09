@@ -76,6 +76,8 @@ The FERS Retirement Calculator provides a comprehensive command-line interface f
 
 **Description**: Run comprehensive FERS Monte Carlo simulations that model all retirement components (pension, SS, TSP, taxes, FEHB) with variable market conditions.
 
+**Important**: For proper TSP balance variation in Monte Carlo results, ensure your configuration file uses manual `tsp_allocation` settings rather than `tsp_lifecycle_fund` settings.
+
 **Flags**:
 - `--simulations, -s`: Number of simulations to run [default: 1000]
 - `--historical, -d`: Use historical data (false for statistical) [default: true]

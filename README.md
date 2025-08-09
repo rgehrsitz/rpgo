@@ -5,7 +5,8 @@ A comprehensive retirement planning calculator for Federal Employees Retirement 
 ## Features
 
 - **Comprehensive FERS Calculations**: Accurate pension calculations with proper multiplier rules (1.0% standard, 1.1% enhanced for age 62+ with 20+ years)
-- **TSP Modeling**: Support for both Traditional and Roth TSP accounts with multiple withdrawal strategies
+- **TSP Modeling**: Support for both Traditional and Roth TSP accounts with multiple withdrawal strategies and manual allocations
+- **TSP Lifecycle Fund Limitation**: For Monte Carlo simulations, manual TSP allocations are recommended over lifecycle funds for proper market variability
 - **Social Security Integration**: Full benefit calculations with 2025 WEP/GPO repeal implementation (2025 wage base: $176,100)
 - **Tax Modeling**: Complete federal, state (Pennsylvania), and local tax calculations
 - **Multiple Scenarios**: Compare multiple retirement scenarios simultaneously
@@ -64,6 +65,8 @@ go build -o fers-calc cmd/cli/main.go
    # Comprehensive FERS Monte Carlo (uses config file)
    ./fers-calc monte-carlo config.yaml ./data --simulations 1000
    ```
+
+   **Important**: For Monte Carlo simulations, ensure your configuration uses manual `tsp_allocation` settings rather than `tsp_lifecycle_fund` settings to get proper market variability in results.
 
 ### Command Line Options
 
@@ -150,6 +153,14 @@ personal_details:
     ss_benefit_70: 2976
     fehb_premium_monthly: 875
     survivor_benefit_election_percent: 0.0
+    
+    # TSP allocation (required for Monte Carlo variability)
+    tsp_allocation:
+      c_fund: "0.60"  # 60% C Fund (Large Cap Stock Index)
+      s_fund: "0.20"  # 20% S Fund (Small Cap Stock Index)
+      i_fund: "0.10"  # 10% I Fund (International Stock Index)
+      f_fund: "0.10"  # 10% F Fund (Fixed Income Index)
+      g_fund: "0.00"  # 0% G Fund (Government Securities)
 
   dawn:
     name: "Dawn"
@@ -165,6 +176,14 @@ personal_details:
     ss_benefit_70: 2728
     fehb_premium_monthly: 0.0
     survivor_benefit_election_percent: 0.0
+    
+    # TSP allocation (required for Monte Carlo variability)
+    tsp_allocation:
+      c_fund: "0.40"  # 40% C Fund (Large Cap Stock Index)
+      s_fund: "0.10"  # 10% S Fund (Small Cap Stock Index)
+      i_fund: "0.10"  # 10% I Fund (International Stock Index)
+      f_fund: "0.30"  # 30% F Fund (Fixed Income Index)
+      g_fund: "0.10"  # 10% G Fund (Government Securities)
 
 global_assumptions:
   inflation_rate: 0.025
@@ -218,6 +237,35 @@ scenarios:
   - CPI ≤ 2%: Full CPI increase
   - CPI 2-3%: Capped at 2%
   - CPI > 3%: CPI minus 1%
+
+### TSP Configuration
+
+#### TSP Allocations vs Lifecycle Funds
+For **deterministic calculations**, both approaches work equivalently:
+- **Manual TSP Allocation**: Specify exact percentages for each fund (C, S, I, F, G)
+- **TSP Lifecycle Fund**: Use predefined lifecycle funds (L2030, L2035, L2040, L Income)
+
+For **Monte Carlo simulations**, use **manual TSP allocations** for proper market variability:
+```yaml
+# ✅ Recommended for Monte Carlo
+tsp_allocation:
+  c_fund: "0.60"  # 60% C Fund
+  s_fund: "0.20"  # 20% S Fund
+  i_fund: "0.10"  # 10% I Fund
+  f_fund: "0.10"  # 10% F Fund
+  g_fund: "0.00"  # 0% G Fund
+
+# ❌ Avoid for Monte Carlo (produces identical results)
+# tsp_lifecycle_fund:
+#   fund_name: "L2030"
+```
+
+#### TSP Fund Types
+- **C Fund**: S&P 500 Index (Large Cap Stock)
+- **S Fund**: Small Cap Stock Index (Russell 2000)
+- **I Fund**: International Stock Index (MSCI World ex-US)
+- **F Fund**: Fixed Income Index (Bloomberg US Aggregate)
+- **G Fund**: Government Securities (Guaranteed return)
 
 ### TSP Withdrawal Strategies
 
@@ -367,6 +415,7 @@ For issues, questions, or contributions, please use the GitHub issue tracker or 
 - [x] Monte Carlo simulation for TSP returns
 - [x] Historical data integration
 - [x] Interactive HTML reports with charts and visualizations
+- [ ] TSP lifecycle fund support for Monte Carlo simulations
 - [ ] Enhanced withdrawal strategies (floor-ceiling, bond tent)
 - [ ] Web interface
 - [ ] Additional state tax support
