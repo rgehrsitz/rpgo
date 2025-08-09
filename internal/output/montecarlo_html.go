@@ -37,6 +37,9 @@ func (m *MonteCarloHTMLReport) GenerateHTMLReport(outputPath string) error {
 
 // generateHTMLContent creates the complete HTML report with embedded JavaScript
 func (m *MonteCarloHTMLReport) generateHTMLContent() string {
+	// Generate time-series data
+	netIncomeTimeSeriesData, tspBalanceTimeSeriesData := m.generateTimeSeriesData()
+
 	return fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -236,20 +239,31 @@ func (m *MonteCarloHTMLReport) generateHTMLContent() string {
                 </div>
             </div>
 
-            <!-- Charts Grid -->
+            <!-- Time Series Charts -->
+            <div class="chart-container full-width">
+                <h3>📈 Net Income Over Time - Percentile Bands</h3>
+                <canvas id="netIncomeTimeSeriesChart" width="800" height="400"></canvas>
+            </div>
+
+            <div class="chart-container full-width">
+                <h3>💰 TSP Balance Over Time - Percentile Bands</h3>
+                <canvas id="tspTimeSeriesChart" width="800" height="400"></canvas>
+            </div>
+
+            <!-- Distribution Charts -->
             <div class="chart-grid">
                 <div class="chart-container">
-                    <h3>📊 Net Income Distribution</h3>
+                    <h3>📊 Net Income Distribution (Average)</h3>
                     <canvas id="netIncomeChart" width="400" height="300"></canvas>
                 </div>
                 <div class="chart-container">
-                    <h3>💰 TSP Balance Distribution</h3>
+                    <h3>💰 Final TSP Balance Distribution</h3>
                     <canvas id="tspBalanceChart" width="400" height="300"></canvas>
                 </div>
             </div>
 
             <div class="chart-container full-width">
-                <h3>📈 Net Income Percentiles</h3>
+                <h3>📈 Static Percentile Summary</h3>
                 <canvas id="percentileChart" width="800" height="400"></canvas>
             </div>
 
@@ -433,6 +447,190 @@ func (m *MonteCarloHTMLReport) generateHTMLContent() string {
                 }
             }
         });
+
+        // Time Series Charts Data
+        const netIncomeTimeSeriesData = %s;
+        const tspBalanceTimeSeriesData = %s;
+
+        // Net Income Over Time Chart (Percentile Bands)
+        const netIncomeTimeSeriesCtx = document.getElementById('netIncomeTimeSeriesChart').getContext('2d');
+        new Chart(netIncomeTimeSeriesCtx, {
+            type: 'line',
+            data: {
+                labels: netIncomeTimeSeriesData.years,
+                datasets: [
+                    {
+                        label: '90th Percentile (Best 10%%)',
+                        data: netIncomeTimeSeriesData.p90,
+                        borderColor: 'rgba(39, 174, 96, 0.8)',
+                        backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                        fill: '+1'
+                    },
+                    {
+                        label: '75th Percentile',
+                        data: netIncomeTimeSeriesData.p75,
+                        borderColor: 'rgba(52, 152, 219, 0.8)',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        fill: '+1'
+                    },
+                    {
+                        label: 'Median (50th)',
+                        data: netIncomeTimeSeriesData.p50,
+                        borderColor: 'rgba(155, 89, 182, 0.9)',
+                        backgroundColor: 'rgba(155, 89, 182, 0.1)',
+                        fill: '+1',
+                        borderWidth: 3
+                    },
+                    {
+                        label: '25th Percentile',
+                        data: netIncomeTimeSeriesData.p25,
+                        borderColor: 'rgba(230, 126, 34, 0.8)',
+                        backgroundColor: 'rgba(230, 126, 34, 0.1)',
+                        fill: '+1'
+                    },
+                    {
+                        label: '10th Percentile (Worst 10%%)',
+                        data: netIncomeTimeSeriesData.p10,
+                        borderColor: 'rgba(231, 76, 60, 0.8)',
+                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        fill: 'origin'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2.5,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Net Income Distribution Over Time'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': $' + Math.round(context.parsed.y).toLocaleString();
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Year'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Annual Net Income ($)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + Math.round(value).toLocaleString();
+                            }
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                }
+            }
+        });
+
+        // TSP Balance Over Time Chart (Percentile Bands)
+        const tspTimeSeriesCtx = document.getElementById('tspTimeSeriesChart').getContext('2d');
+        new Chart(tspTimeSeriesCtx, {
+            type: 'line',
+            data: {
+                labels: tspBalanceTimeSeriesData.years,
+                datasets: [
+                    {
+                        label: '90th Percentile (Best 10%%)',
+                        data: tspBalanceTimeSeriesData.p90,
+                        borderColor: 'rgba(39, 174, 96, 0.8)',
+                        backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                        fill: '+1'
+                    },
+                    {
+                        label: '75th Percentile',
+                        data: tspBalanceTimeSeriesData.p75,
+                        borderColor: 'rgba(52, 152, 219, 0.8)',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        fill: '+1'
+                    },
+                    {
+                        label: 'Median (50th)',
+                        data: tspBalanceTimeSeriesData.p50,
+                        borderColor: 'rgba(155, 89, 182, 0.9)',
+                        backgroundColor: 'rgba(155, 89, 182, 0.1)',
+                        fill: '+1',
+                        borderWidth: 3
+                    },
+                    {
+                        label: '25th Percentile',
+                        data: tspBalanceTimeSeriesData.p25,
+                        borderColor: 'rgba(230, 126, 34, 0.8)',
+                        backgroundColor: 'rgba(230, 126, 34, 0.1)',
+                        fill: '+1'
+                    },
+                    {
+                        label: '10th Percentile (Worst 10%%)',
+                        data: tspBalanceTimeSeriesData.p10,
+                        borderColor: 'rgba(231, 76, 60, 0.8)',
+                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        fill: 'origin'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2.5,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'TSP Balance Distribution Over Time'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': $' + Math.round(context.parsed.y).toLocaleString();
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Year'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'TSP Balance ($)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + Math.round(value).toLocaleString();
+                            }
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                }
+            }
+        });
     </script>
 </body>
 </html>`,
@@ -453,7 +651,9 @@ func (m *MonteCarloHTMLReport) generateHTMLContent() string {
 		time.Now().Format("January 2, 2006 at 3:04 PM"),
 		m.generateNetIncomeData(),
 		m.generateTSPBalanceData(),
-		m.generatePercentileData())
+		m.generatePercentileData(),
+		netIncomeTimeSeriesData,
+		tspBalanceTimeSeriesData)
 }
 
 // Helper methods for HTML generation
@@ -557,7 +757,7 @@ func (m *MonteCarloHTMLReport) generateNetIncomeData() string {
 
 	// Create bins (simplified approach)
 	bins := m.createHistogramBins(incomes, 10)
-	
+
 	// Convert to Chart.js format
 	labels := "["
 	data := "["
@@ -594,7 +794,7 @@ func (m *MonteCarloHTMLReport) generateTSPBalanceData() string {
 
 	// Create bins for TSP balance distribution
 	bins := m.createHistogramBins(balances, 10)
-	
+
 	// Convert to Chart.js format
 	labels := "["
 	data := "["
@@ -640,11 +840,11 @@ func (m *MonteCarloHTMLReport) createHistogramBins(values []decimal.Decimal, num
 	// Create bins
 	binWidth := max.Sub(min).Div(decimal.NewFromInt(int64(numBins)))
 	bins := make([]HistogramBin, numBins)
-	
+
 	for i := 0; i < numBins; i++ {
 		binMin := min.Add(binWidth.Mul(decimal.NewFromInt(int64(i))))
 		binMax := min.Add(binWidth.Mul(decimal.NewFromInt(int64(i + 1))))
-		
+
 		bins[i] = HistogramBin{
 			Label: binMin.Div(decimal.NewFromInt(1000)).StringFixed(0) + "K",
 			Min:   binMin,
@@ -674,4 +874,138 @@ func (m *MonteCarloHTMLReport) generatePercentileData() string {
 		m.Result.NetIncomePercentiles.P50.StringFixed(0),
 		m.Result.NetIncomePercentiles.P75.StringFixed(0),
 		m.Result.NetIncomePercentiles.P90.StringFixed(0))
+}
+
+// generateTimeSeriesData creates year-by-year percentile data for charts
+func (m *MonteCarloHTMLReport) generateTimeSeriesData() (string, string) {
+	if len(m.Result.Simulations) == 0 {
+		return "[]", "[]"
+	}
+
+	// Get the first simulation to determine projection length
+	firstSim := m.Result.Simulations[0]
+	if len(firstSim.ScenarioResults) == 0 || len(firstSim.ScenarioResults[0].Projection) == 0 {
+		return "[]", "[]"
+	}
+
+	projectionLength := len(firstSim.ScenarioResults[0].Projection)
+
+	// Initialize arrays for each year
+	yearlyNetIncomes := make([][]decimal.Decimal, projectionLength)
+	yearlyTSPBalances := make([][]decimal.Decimal, projectionLength)
+	years := make([]int, projectionLength)
+
+	// Extract data for each year across all simulations
+	for _, sim := range m.Result.Simulations {
+		if len(sim.ScenarioResults) > 0 { // Use first scenario for each simulation
+			scenario := sim.ScenarioResults[0]
+			for yearIdx, yearData := range scenario.Projection {
+				if yearIdx < projectionLength {
+					if yearlyNetIncomes[yearIdx] == nil {
+						yearlyNetIncomes[yearIdx] = make([]decimal.Decimal, 0, len(m.Result.Simulations))
+						yearlyTSPBalances[yearIdx] = make([]decimal.Decimal, 0, len(m.Result.Simulations))
+						years[yearIdx] = yearData.Date.Year()
+					}
+					yearlyNetIncomes[yearIdx] = append(yearlyNetIncomes[yearIdx], yearData.NetIncome)
+					yearlyTSPBalances[yearIdx] = append(yearlyTSPBalances[yearIdx], yearData.TSPBalanceRobert.Add(yearData.TSPBalanceDawn))
+				}
+			}
+		}
+	}
+
+	// Calculate percentiles for each year
+	netIncomeTimeSeries := "{"
+	tspBalanceTimeSeries := "{"
+
+	netIncomeTimeSeries += "years: ["
+	tspBalanceTimeSeries += "years: ["
+	for i, year := range years {
+		netIncomeTimeSeries += fmt.Sprintf("%d", year)
+		tspBalanceTimeSeries += fmt.Sprintf("%d", year)
+		if i < len(years)-1 {
+			netIncomeTimeSeries += ","
+			tspBalanceTimeSeries += ","
+		}
+	}
+	netIncomeTimeSeries += "],"
+	tspBalanceTimeSeries += "],"
+
+	// Generate percentile arrays
+	percentiles := []string{"p10", "p25", "p50", "p75", "p90"}
+	percentileFactors := []float64{0.10, 0.25, 0.50, 0.75, 0.90}
+
+	for i, pct := range percentiles {
+		netIncomeTimeSeries += fmt.Sprintf("%s:[", pct)
+		tspBalanceTimeSeries += fmt.Sprintf("%s:[", pct)
+
+		for yearIdx := 0; yearIdx < projectionLength; yearIdx++ {
+			if len(yearlyNetIncomes[yearIdx]) > 0 {
+				netIncomePercentile := m.calculatePercentile(yearlyNetIncomes[yearIdx], percentileFactors[i])
+				tspBalancePercentile := m.calculatePercentile(yearlyTSPBalances[yearIdx], percentileFactors[i])
+
+				netIncomeTimeSeries += fmt.Sprintf("%.0f", netIncomePercentile.InexactFloat64())
+				tspBalanceTimeSeries += fmt.Sprintf("%.0f", tspBalancePercentile.InexactFloat64())
+			} else {
+				netIncomeTimeSeries += "0"
+				tspBalanceTimeSeries += "0"
+			}
+
+			if yearIdx < projectionLength-1 {
+				netIncomeTimeSeries += ","
+				tspBalanceTimeSeries += ","
+			}
+		}
+		netIncomeTimeSeries += "]"
+		tspBalanceTimeSeries += "]"
+
+		if i < len(percentiles)-1 {
+			netIncomeTimeSeries += ","
+			tspBalanceTimeSeries += ","
+		}
+	}
+
+	netIncomeTimeSeries += "}"
+	tspBalanceTimeSeries += "}"
+
+	return netIncomeTimeSeries, tspBalanceTimeSeries
+}
+
+// calculatePercentile calculates a specific percentile from a slice of values
+func (m *MonteCarloHTMLReport) calculatePercentile(values []decimal.Decimal, percentile float64) decimal.Decimal {
+	if len(values) == 0 {
+		return decimal.Zero
+	}
+
+	// Sort values
+	sortedValues := make([]decimal.Decimal, len(values))
+	copy(sortedValues, values)
+
+	// Simple bubble sort for decimal values
+	for i := 0; i < len(sortedValues)-1; i++ {
+		for j := 0; j < len(sortedValues)-i-1; j++ {
+			if sortedValues[j].GreaterThan(sortedValues[j+1]) {
+				sortedValues[j], sortedValues[j+1] = sortedValues[j+1], sortedValues[j]
+			}
+		}
+	}
+
+	// Calculate percentile index
+	index := percentile * float64(len(sortedValues)-1)
+	lowerIndex := int(index)
+	upperIndex := lowerIndex + 1
+
+	if upperIndex >= len(sortedValues) {
+		return sortedValues[len(sortedValues)-1]
+	}
+
+	if lowerIndex == int(index) {
+		return sortedValues[lowerIndex]
+	}
+
+	// Linear interpolation between the two nearest values
+	weight := decimal.NewFromFloat(index - float64(lowerIndex))
+	lower := sortedValues[lowerIndex]
+	upper := sortedValues[upperIndex]
+
+	return lower.Add(upper.Sub(lower).Mul(weight))
 }

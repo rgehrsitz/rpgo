@@ -23,13 +23,14 @@ func NewNetIncomeCalculator(taxCalc *ComprehensiveTaxCalculator, logger Logger) 
 
 // CalculationEngine orchestrates all retirement calculations
 type CalculationEngine struct {
-	TaxCalc             *ComprehensiveTaxCalculator
-	MedicareCalc        *MedicareCalculator
-	LifecycleFundLoader *LifecycleFundLoader
-	NetIncomeCalc       *NetIncomeCalculator
-	HistoricalData      *HistoricalDataManager
-	Debug               bool // Enable debug output for detailed calculations
-	Logger              Logger
+	TaxCalc               *ComprehensiveTaxCalculator
+	MedicareCalc          *MedicareCalculator
+	LifecycleFundLoader   *LifecycleFundLoader
+	NetIncomeCalc         *NetIncomeCalculator
+	HistoricalData        *HistoricalDataManager
+	MonteCarloFundReturns map[string]decimal.Decimal // Monte Carlo generated fund returns for TSP allocation calculations
+	Debug                 bool                       // Enable debug output for detailed calculations
+	Logger                Logger
 }
 
 // NewCalculationEngine creates a new calculation engine
@@ -116,7 +117,7 @@ func (ce *CalculationEngine) RunScenario(ctx context.Context, config *domain.Con
 	netIncome2030 := ce.getNetIncomeForYear(projection, 2030)
 	netIncome2035 := ce.getNetIncomeForYear(projection, 2035)
 	netIncome2040 := ce.getNetIncomeForYear(projection, 2040)
-	
+
 	// Calculate pre-retirement baseline projections with COLA growth
 	currentNetIncome := ce.NetIncomeCalc.Calculate(&robert, &dawn, ce.Debug)
 	preRetirement2030 := ce.projectPreRetirementNetIncome(currentNetIncome, 2030, config.GlobalAssumptions.COLAGeneralRate)
@@ -161,7 +162,7 @@ func (ce *CalculationEngine) RunScenario(ctx context.Context, config *domain.Con
 	if len(projection) > 0 {
 		summary.InitialTSPBalance = projection[0].TSPBalanceRobert.Add(projection[0].TSPBalanceDawn)
 		summary.FinalTSPBalance = projection[len(projection)-1].TSPBalanceRobert.Add(projection[len(projection)-1].TSPBalanceDawn)
-		
+
 		// Calculate success rate for deterministic scenarios based on TSP sustainability
 		summary.SuccessRate = ce.calculateDeterministicSuccessRate(projection, summary.TSPLongevity)
 	}
@@ -179,19 +180,18 @@ func (ce *CalculationEngine) getNetIncomeForYear(projection []domain.AnnualCashF
 	return decimal.Zero // Year not found in projection
 }
 
-
 // projectPreRetirementNetIncome projects current net income to future year with COLA growth
 func (ce *CalculationEngine) projectPreRetirementNetIncome(currentNet decimal.Decimal, targetYear int, colaRate decimal.Decimal) decimal.Decimal {
 	currentYear := 2025 // Base year
 	yearsToProject := targetYear - currentYear
-	
+
 	if yearsToProject <= 0 {
 		return currentNet
 	}
-	
+
 	// Apply COLA growth for the number of years
 	growthFactor := decimal.NewFromFloat(1).Add(colaRate).Pow(decimal.NewFromInt(int64(yearsToProject)))
-	
+
 	return currentNet.Mul(growthFactor)
 }
 
@@ -202,28 +202,28 @@ func (ce *CalculationEngine) calculateDeterministicSuccessRate(projection []doma
 	}
 
 	projectionLength := len(projection)
-	
+
 	// If TSP lasts the full projection period, success rate is 100%
 	if tspLongevity >= projectionLength {
 		// Additional check: TSP should be growing or stable, not just lasting
 		firstTSP := projection[0].TSPBalanceRobert.Add(projection[0].TSPBalanceDawn)
 		lastTSP := projection[projectionLength-1].TSPBalanceRobert.Add(projection[projectionLength-1].TSPBalanceDawn)
-		
+
 		if lastTSP.GreaterThanOrEqual(firstTSP) {
 			return decimal.NewFromFloat(100.0) // 100% success - TSP lasted and grew
 		} else {
 			return decimal.NewFromFloat(95.0) // 95% success - TSP lasted but declined
 		}
 	}
-	
+
 	// If TSP depletes before end of projection, calculate percentage based on longevity
 	successRate := decimal.NewFromInt(int64(tspLongevity)).Div(decimal.NewFromInt(int64(projectionLength))).Mul(decimal.NewFromFloat(100.0))
-	
+
 	// Minimum 10% success rate for any scenario that makes it past year 1
 	if successRate.LessThan(decimal.NewFromFloat(10.0)) && tspLongevity > 1 {
 		return decimal.NewFromFloat(10.0)
 	}
-	
+
 	return successRate
 }
 

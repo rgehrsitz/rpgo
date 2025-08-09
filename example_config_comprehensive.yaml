@@ -30,9 +30,10 @@ personal_details:
     
     # TSP Lifecycle Fund (optional - overrides tsp_allocation if specified)
     # If specified, allocation will change over time based on age
-    tsp_lifecycle_fund:
-      fund_name: "L2030"  # Options: "L2030", "L2035", "L2040", "L Income"
-      # Allocation data is automatically loaded from CSV files in data/tsp-returns/
+    # TEMPORARILY DISABLED FOR MONTE CARLO TESTING
+    # tsp_lifecycle_fund:
+    #   fund_name: "L2030"  # Options: "L2030", "L2035", "L2040", "L Income"
+    #   # Allocation data is automatically loaded from CSV files in data/tsp-returns/
     
   dawn:
     name: "Dawn M. Gehrsitz"
@@ -60,9 +61,10 @@ personal_details:
     
     # TSP Lifecycle Fund (optional - overrides tsp_allocation if specified)
     # If specified, allocation will change over time based on age
-    tsp_lifecycle_fund:
-      fund_name: "L Income"  # Options: "L2030", "L2035", "L2040", "L Income"
-      # Allocation data is automatically loaded from CSV files in data/tsp-returns/
+    # TEMPORARILY DISABLED FOR MONTE CARLO TESTING
+    # tsp_lifecycle_fund:
+    #   fund_name: "L Income"  # Options: "L2030", "L2035", "L2040", "L Income"
+    #   # Allocation data is automatically loaded from CSV files in data/tsp-returns/
 
 global_assumptions:
   inflation_rate: "0.025"

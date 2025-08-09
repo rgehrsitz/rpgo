@@ -308,47 +308,50 @@ func (ce *CalculationEngine) getTSPAllocationForEmployee(employee *domain.Employ
 
 // calculateTSPReturnWithAllocation calculates TSP return using specific allocation and statistical models
 func (ce *CalculationEngine) calculateTSPReturnWithAllocation(allocation domain.TSPAllocation, year int) decimal.Decimal {
-	// Try to use historical data if available
+	// Initialize return values
 	var cFundReturn, sFundReturn, iFundReturn, fFundReturn, gFundReturn decimal.Decimal
-	
-	if ce.HistoricalData != nil && ce.HistoricalData.IsLoaded {
-		// Use historical returns for the specific year
-		if cReturn, err := ce.HistoricalData.GetTSPReturn("C", year); err == nil {
+
+	// Check if we have Monte Carlo fund returns available (higher priority than historical data)
+	usingMonteCarlo := len(ce.MonteCarloFundReturns) > 0
+
+	if usingMonteCarlo {
+		// Use Monte Carlo generated fund returns, fall back to historical/statistical for missing funds
+		if cReturn, exists := ce.MonteCarloFundReturns["C"]; exists {
 			cFundReturn = cReturn
 		} else {
-			cFundReturn = decimal.NewFromFloat(0.1125) // 11.25% fallback
+			cFundReturn = ce.getFallbackReturn("C", year)
 		}
-		
-		if sReturn, err := ce.HistoricalData.GetTSPReturn("S", year); err == nil {
+
+		if sReturn, exists := ce.MonteCarloFundReturns["S"]; exists {
 			sFundReturn = sReturn
 		} else {
-			sFundReturn = decimal.NewFromFloat(0.1117) // 11.17% fallback
+			sFundReturn = ce.getFallbackReturn("S", year)
 		}
-		
-		if iReturn, err := ce.HistoricalData.GetTSPReturn("I", year); err == nil {
+
+		if iReturn, exists := ce.MonteCarloFundReturns["I"]; exists {
 			iFundReturn = iReturn
 		} else {
-			iFundReturn = decimal.NewFromFloat(0.0634) // 6.34% fallback
+			iFundReturn = ce.getFallbackReturn("I", year)
 		}
-		
-		if fReturn, err := ce.HistoricalData.GetTSPReturn("F", year); err == nil {
+
+		if fReturn, exists := ce.MonteCarloFundReturns["F"]; exists {
 			fFundReturn = fReturn
 		} else {
-			fFundReturn = decimal.NewFromFloat(0.0532) // 5.32% fallback
+			fFundReturn = ce.getFallbackReturn("F", year)
 		}
-		
-		if gReturn, err := ce.HistoricalData.GetTSPReturn("G", year); err == nil {
+
+		if gReturn, exists := ce.MonteCarloFundReturns["G"]; exists {
 			gFundReturn = gReturn
 		} else {
-			gFundReturn = decimal.NewFromFloat(0.0493) // 4.93% fallback
+			gFundReturn = ce.getFallbackReturn("G", year)
 		}
 	} else {
-		// Fallback to default returns based on TSP statistical models
-		cFundReturn = decimal.NewFromFloat(0.1125) // 11.25% from statistical model
-		sFundReturn = decimal.NewFromFloat(0.1117) // 11.17% from statistical model
-		iFundReturn = decimal.NewFromFloat(0.0634) // 6.34% from statistical model
-		fFundReturn = decimal.NewFromFloat(0.0532) // 5.32% from statistical model
-		gFundReturn = decimal.NewFromFloat(0.0493) // 4.93% from statistical model
+		// Use historical data or statistical models for all funds
+		cFundReturn = ce.getFallbackReturn("C", year)
+		sFundReturn = ce.getFallbackReturn("S", year)
+		iFundReturn = ce.getFallbackReturn("I", year)
+		fFundReturn = ce.getFallbackReturn("F", year)
+		gFundReturn = ce.getFallbackReturn("G", year)
 	}
 
 	// Weighted return calculation using actual allocation
@@ -370,6 +373,32 @@ func (ce *CalculationEngine) calculateTSPReturnWithAllocation(allocation domain.
 	weightedReturn = weightedReturn.Add(allocation.GFund.Mul(gFundReturn))
 
 	return weightedReturn
+}
+
+// getFallbackReturn gets historical or statistical fallback return for a fund
+func (ce *CalculationEngine) getFallbackReturn(fund string, year int) decimal.Decimal {
+	// Try historical data first
+	if ce.HistoricalData != nil && ce.HistoricalData.IsLoaded {
+		if returnRate, err := ce.HistoricalData.GetTSPReturn(fund, year); err == nil {
+			return returnRate
+		}
+	}
+
+	// Fallback to statistical models
+	switch fund {
+	case "C":
+		return decimal.NewFromFloat(0.1125) // 11.25% historical mean
+	case "S":
+		return decimal.NewFromFloat(0.1117) // 11.17% historical mean
+	case "I":
+		return decimal.NewFromFloat(0.0634) // 6.34% historical mean
+	case "F":
+		return decimal.NewFromFloat(0.0532) // 5.32% historical mean
+	case "G":
+		return decimal.NewFromFloat(0.0493) // 4.93% historical mean
+	default:
+		return decimal.NewFromFloat(0.08) // 8% default
+	}
 }
 
 // SimulateTSPGrowthPreRetirement simulates TSP growth before retirement

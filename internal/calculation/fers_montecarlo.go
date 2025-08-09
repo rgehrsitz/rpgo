@@ -81,6 +81,11 @@ type MarketCondition struct {
 	FEHBIncrease  decimal.Decimal            `json:"fehb_increase"`
 }
 
+// MarketConditionSeries represents year-by-year market conditions for entire projection
+type MarketConditionSeries struct {
+	Years []MarketCondition `json:"years"`
+}
+
 // NetIncomeMetrics represents net income metrics for a simulation
 type NetIncomeMetrics struct {
 	FirstYearNetIncome decimal.Decimal `json:"first_year_net_income"`
@@ -210,8 +215,8 @@ func (fmce *FERSMonteCarloEngine) RunFERSMonteCarlo(config FERSMonteCarloConfig)
 
 // runSingleFERSSimulation runs a single FERS Monte Carlo simulation
 func (fmce *FERSMonteCarloEngine) runSingleFERSSimulation(simIndex int) (*FERSMonteCarloSimulation, error) {
-	// Generate market conditions
-	marketConditions := fmce.generateMarketConditions()
+	// Generate market conditions with enhanced variability
+	marketConditions := fmce.generateEnhancedMarketConditions()
 
 	// Create a proper deep copy of the configuration to ensure each simulation is independent
 	modifiedConfig := fmce.deepCopyConfiguration(fmce.config.BaseConfig)
@@ -220,15 +225,27 @@ func (fmce *FERSMonteCarloEngine) runSingleFERSSimulation(simIndex int) (*FERSMo
 	// Apply TSP market conditions to the configuration
 	fmce.applyMarketConditionsToTSPCalculations(marketConditions, &modifiedConfig)
 
-	// Run full FERS calculation for each scenario
+	// Create a separate calculation engine instance for this simulation to avoid race conditions
+	// when running parallel simulations with different Monte Carlo fund returns
+	simEngine := NewCalculationEngineWithConfig(modifiedConfig.GlobalAssumptions.FederalRules)
+	simEngine.HistoricalData = fmce.calcEngine.HistoricalData // Share historical data
+	simEngine.Logger = fmce.calcEngine.Logger                 // Share logger
+	simEngine.Debug = fmce.calcEngine.Debug                   // Share debug setting
+
+	// Set Monte Carlo fund returns on this simulation's engine
+	simEngine.MonteCarloFundReturns = marketConditions.TSPReturns
+
+	// Run full FERS calculation for each scenario using the simulation-specific engine
 	var scenarioResults []*domain.ScenarioSummary
 	for _, scenario := range modifiedConfig.Scenarios {
-		summary, err := fmce.calcEngine.RunScenario(context.Background(), &modifiedConfig, &scenario)
+		summary, err := simEngine.RunScenario(context.Background(), &modifiedConfig, &scenario)
 		if err != nil {
 			return nil, fmt.Errorf("failed to run scenario %s: %w", scenario.Name, err)
 		}
 		scenarioResults = append(scenarioResults, summary)
 	}
+
+	// No need to clear Monte Carlo fund returns as this engine instance will be discarded
 
 	// Calculate metrics
 	netIncomeMetrics := fmce.calculateNetIncomeMetrics(scenarioResults)
@@ -253,6 +270,109 @@ func (fmce *FERSMonteCarloEngine) generateMarketConditions() MarketCondition {
 		return fmce.generateHistoricalMarketConditions()
 	}
 	return fmce.generateStatisticalMarketConditions()
+}
+
+// generateEnhancedMarketConditions generates market conditions with proper Monte Carlo variability
+func (fmce *FERSMonteCarloEngine) generateEnhancedMarketConditions() MarketCondition {
+	if fmce.config.UseHistorical {
+		return fmce.generateEnhancedHistoricalMarketConditions()
+	} else {
+		return fmce.generateStatisticalMarketConditions()
+	}
+}
+
+// generateEnhancedHistoricalMarketConditions generates more realistic historical market conditions
+// by sampling different historical years for different market components and applying variability
+func (fmce *FERSMonteCarloEngine) generateEnhancedHistoricalMarketConditions() MarketCondition {
+	// Get available years
+	minYear, maxYear, err := fmce.historicalData.GetAvailableYears()
+	if err != nil {
+		// Fallback to statistical if no historical data
+		return fmce.generateStatisticalMarketConditions()
+	}
+
+	marketData := MarketCondition{
+		TSPReturns: make(map[string]decimal.Decimal),
+	}
+
+	// Sample DIFFERENT historical years for different components to increase variability
+	tspYear := minYear + rand.Intn(maxYear-minYear+1)
+	inflationYear := minYear + rand.Intn(maxYear-minYear+1)
+	colaYear := minYear + rand.Intn(maxYear-minYear+1)
+	fehbYear := minYear + rand.Intn(maxYear-minYear+1)
+
+	// Sample TSP fund returns from one historical year, but apply variability
+	funds := []string{"C", "S", "I", "F", "G"}
+	for _, fund := range funds {
+		if baseReturn, err := fmce.historicalData.GetTSPReturn(fund, tspYear); err == nil {
+			// Apply random variability around the historical value using configured parameters
+			variabilityFactor := fmce.generateRandomVariability(fmce.config.TSPReturnVariability)
+			adjustedReturn := baseReturn.Mul(decimal.NewFromFloat(1.0).Add(variabilityFactor))
+			marketData.TSPReturns[fund] = adjustedReturn
+		} else {
+			// Fallback to statistical generation
+			marketData.TSPReturns[fund] = fmce.generateStatisticalTSPReturn(fund)
+		}
+	}
+
+	// Sample inflation from a different historical year with variability
+	if baseInflation, err := fmce.historicalData.GetInflationRate(inflationYear); err == nil {
+		variabilityFactor := fmce.generateRandomVariability(fmce.config.InflationVariability)
+		marketData.InflationRate = baseInflation.Mul(decimal.NewFromFloat(1.0).Add(variabilityFactor))
+	} else {
+		marketData.InflationRate = fmce.generateStatisticalInflation()
+	}
+
+	// Sample COLA from yet another historical year with variability
+	if baseCOLA, err := fmce.historicalData.GetCOLARate(colaYear); err == nil {
+		variabilityFactor := fmce.generateRandomVariability(fmce.config.COLAVariability)
+		marketData.COLARate = baseCOLA.Mul(decimal.NewFromFloat(1.0).Add(variabilityFactor))
+	} else {
+		marketData.COLARate = fmce.generateStatisticalCOLA()
+	}
+
+	// Sample FEHB increase from another year with variability
+	if baseFEHB, err := fmce.historicalData.GetInflationRate(fehbYear); err == nil {
+		// Use inflation as proxy for FEHB increases, with additional variability
+		variabilityFactor := fmce.generateRandomVariability(fmce.config.FEHBVariability)
+		marketData.FEHBIncrease = baseFEHB.Mul(decimal.NewFromFloat(1.0).Add(variabilityFactor))
+	} else {
+		marketData.FEHBIncrease = fmce.generateStatisticalInflation() // Fallback
+	}
+
+	marketData.Year = tspYear // Use TSP year as reference
+	return marketData
+}
+
+// generateRandomVariability generates a random variability factor using normal distribution
+// Returns a factor between -3*stdDev and +3*stdDev (approximately 99.7% of values)
+func (fmce *FERSMonteCarloEngine) generateRandomVariability(stdDev decimal.Decimal) decimal.Decimal {
+	if stdDev.IsZero() {
+		return decimal.Zero
+	}
+
+	// Generate normal distribution using Box-Muller transform
+	// Generate two uniform random numbers
+	u1 := rand.Float64()
+	u2 := rand.Float64()
+
+	// Box-Muller transformation to get normal distribution
+	z := math.Sqrt(-2.0*math.Log(u1)) * math.Cos(2.0*math.Pi*u2)
+
+	// Scale by standard deviation and convert to decimal
+	variability := decimal.NewFromFloat(z).Mul(stdDev)
+
+	// Cap at +/- 3 standard deviations to prevent extreme outliers
+	maxVariability := stdDev.Mul(decimal.NewFromFloat(3.0))
+	minVariability := stdDev.Mul(decimal.NewFromFloat(-3.0))
+
+	if variability.GreaterThan(maxVariability) {
+		variability = maxVariability
+	} else if variability.LessThan(minVariability) {
+		variability = minVariability
+	}
+
+	return variability
 }
 
 // generateHistoricalMarketConditions generates market conditions from historical data

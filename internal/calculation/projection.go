@@ -237,7 +237,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		if isRobertRetired {
 			// Post-retirement TSP growth with withdrawals
 			// Use lifecycle fund allocation if available, otherwise use default return rate
-			if robert.TSPLifecycleFund != nil {
+			if robert.TSPLifecycleFund != nil || robert.TSPAllocation != nil {
 				// Apply withdrawal first
 				if tspWithdrawalRobert.GreaterThan(currentTSPTraditionalRobert) {
 					// Take from Roth if traditional is insufficient
@@ -267,7 +267,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		} else {
 			// Pre-retirement TSP growth with contributions
 			// Use lifecycle fund allocation if available, otherwise use default return rate
-			if robert.TSPLifecycleFund != nil {
+			if robert.TSPLifecycleFund != nil || robert.TSPAllocation != nil {
 				currentTSPTraditionalRobert = ce.growTSPBalanceWithAllocation(robert, currentTSPTraditionalRobert, robert.TotalAnnualTSPContribution(), projectionDate)
 				currentTSPRothRobert = ce.growTSPBalanceWithAllocation(robert, currentTSPRothRobert, decimal.Zero, projectionDate)
 			} else {
@@ -279,7 +279,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		if isDawnRetired {
 			// Post-retirement TSP growth with withdrawals
 			// Use lifecycle fund allocation if available, otherwise use default return rate
-			if dawn.TSPLifecycleFund != nil {
+			if dawn.TSPLifecycleFund != nil || dawn.TSPAllocation != nil {
 				// Apply withdrawal first
 				if tspWithdrawalDawn.GreaterThan(currentTSPTraditionalDawn) {
 					// Take from Roth if traditional is insufficient
@@ -309,7 +309,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		} else {
 			// Pre-retirement TSP growth with contributions
 			// Use lifecycle fund allocation if available, otherwise use default return rate
-			if dawn.TSPLifecycleFund != nil {
+			if dawn.TSPLifecycleFund != nil || dawn.TSPAllocation != nil {
 				currentTSPTraditionalDawn = ce.growTSPBalanceWithAllocation(dawn, currentTSPTraditionalDawn, dawn.TotalAnnualTSPContribution(), projectionDate)
 				currentTSPRothDawn = ce.growTSPBalanceWithAllocation(dawn, currentTSPRothDawn, decimal.Zero, projectionDate)
 			} else {
