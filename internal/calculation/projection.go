@@ -482,8 +482,12 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 			if mode == "immediate" {
 				cashFlow.FilingStatusSingle = true
 			} else if mode == "next_year" {
-				if robertDeathYearIndex != nil && robertIsDeceased && year > *robertDeathYearIndex { cashFlow.FilingStatusSingle = true }
-				if dawnDeathYearIndex != nil && dawnIsDeceased && year > *dawnDeathYearIndex { cashFlow.FilingStatusSingle = true }
+				if robertDeathYearIndex != nil && robertIsDeceased && year > *robertDeathYearIndex {
+					cashFlow.FilingStatusSingle = true
+				}
+				if dawnDeathYearIndex != nil && dawnIsDeceased && year > *dawnDeathYearIndex {
+					cashFlow.FilingStatusSingle = true
+				}
 			}
 		}
 

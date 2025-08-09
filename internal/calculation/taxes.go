@@ -379,7 +379,9 @@ func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithStatus(agiComponen
 	}
 
 	agi := totalIncome.Sub(standardDed)
-	if agi.LessThan(decimal.Zero) { agi = decimal.Zero }
+	if agi.LessThan(decimal.Zero) {
+		agi = decimal.Zero
+	}
 
 	// Use original brackets (approx) – for single we approximate by halving MFJ thresholds
 	inflationAdjustment := decimal.NewFromFloat(1.0)
@@ -392,9 +394,13 @@ func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithStatus(agiComponen
 			adjMin = adjMin.Div(decimal.NewFromInt(2))
 			adjMax = adjMax.Div(decimal.NewFromInt(2))
 		}
-		if remaining.LessThanOrEqual(decimal.Zero) { break }
+		if remaining.LessThanOrEqual(decimal.Zero) {
+			break
+		}
 		width := adjMax.Sub(adjMin)
-		if width.LessThanOrEqual(decimal.Zero) { continue }
+		if width.LessThanOrEqual(decimal.Zero) {
+			continue
+		}
 		incomeInBracket := decimal.Min(remaining, width)
 		if agi.GreaterThan(adjMin) && incomeInBracket.GreaterThan(decimal.Zero) {
 			tax = tax.Add(incomeInBracket.Mul(b.Rate))
@@ -451,18 +457,44 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scena
 	// Determine mortality & filing status for this year
 	filingStatus := "mfj"
 	seniors := 0
-	if ageRobert >= 65 { seniors++ }
-	if ageDawn >= 65 { seniors++ }
+	if ageRobert >= 65 {
+		seniors++
+	}
+	if ageDawn >= 65 {
+		seniors++
+	}
 
 	// Reconstruct death year indexes to know if someone deceased by this year (duplicated lightweight logic; could refactor)
 	var robertDeathYearIndex, dawnDeathYearIndex *int
 	if scenario != nil && scenario.Mortality != nil {
 		baseYear := ProjectionBaseYear
 		if scenario.Mortality.Robert != nil {
-			if scenario.Mortality.Robert.DeathDate != nil { y := scenario.Mortality.Robert.DeathDate.Year() - baseYear; if y >=0 { robertDeathYearIndex = &y } } else if scenario.Mortality.Robert.DeathAge != nil { ty := robert.BirthDate.Year() + *scenario.Mortality.Robert.DeathAge; y := ty - baseYear; if y >=0 { robertDeathYearIndex = &y } }
+			if scenario.Mortality.Robert.DeathDate != nil {
+				y := scenario.Mortality.Robert.DeathDate.Year() - baseYear
+				if y >= 0 {
+					robertDeathYearIndex = &y
+				}
+			} else if scenario.Mortality.Robert.DeathAge != nil {
+				ty := robert.BirthDate.Year() + *scenario.Mortality.Robert.DeathAge
+				y := ty - baseYear
+				if y >= 0 {
+					robertDeathYearIndex = &y
+				}
+			}
 		}
 		if scenario.Mortality.Dawn != nil {
-			if scenario.Mortality.Dawn.DeathDate != nil { y := scenario.Mortality.Dawn.DeathDate.Year() - baseYear; if y >=0 { dawnDeathYearIndex = &y } } else if scenario.Mortality.Dawn.DeathAge != nil { ty := dawn.BirthDate.Year() + *scenario.Mortality.Dawn.DeathAge; y := ty - baseYear; if y >=0 { dawnDeathYearIndex = &y } }
+			if scenario.Mortality.Dawn.DeathDate != nil {
+				y := scenario.Mortality.Dawn.DeathDate.Year() - baseYear
+				if y >= 0 {
+					dawnDeathYearIndex = &y
+				}
+			} else if scenario.Mortality.Dawn.DeathAge != nil {
+				ty := dawn.BirthDate.Year() + *scenario.Mortality.Dawn.DeathAge
+				y := ty - baseYear
+				if y >= 0 {
+					dawnDeathYearIndex = &y
+				}
+			}
 		}
 	}
 	robertDeceased := robertDeathYearIndex != nil && year >= *robertDeathYearIndex
@@ -475,14 +507,31 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scena
 				filingStatus = "single"
 				seniors = 0
 				// Count surviving senior for additional deduction
-				if !robertDeceased && ageRobert >= 65 { seniors = 1 }
-				if !dawnDeceased && ageDawn >= 65 { seniors = 1 }
+				if !robertDeceased && ageRobert >= 65 {
+					seniors = 1
+				}
+				if !dawnDeceased && ageDawn >= 65 {
+					seniors = 1
+				}
 			} else if mode == "next_year" {
 				// Switch next year after death event
 				deathYear := 0
-				if robertDeceased && robertDeathYearIndex != nil { deathYear = *robertDeathYearIndex }
-				if dawnDeceased && dawnDeathYearIndex != nil { deathYear = *dawnDeathYearIndex }
-				if year > deathYear { filingStatus = "single"; seniors = 0; if !robertDeceased && ageRobert >=65 { seniors=1 }; if !dawnDeceased && ageDawn >=65 { seniors=1 } }
+				if robertDeceased && robertDeathYearIndex != nil {
+					deathYear = *robertDeathYearIndex
+				}
+				if dawnDeceased && dawnDeathYearIndex != nil {
+					deathYear = *dawnDeathYearIndex
+				}
+				if year > deathYear {
+					filingStatus = "single"
+					seniors = 0
+					if !robertDeceased && ageRobert >= 65 {
+						seniors = 1
+					}
+					if !dawnDeceased && ageDawn >= 65 {
+						seniors = 1
+					}
+				}
 			}
 		}
 	}
