@@ -371,7 +371,8 @@ func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithStatus(agiComponen
 	// Derive standard deduction based on filing status (simplified: use configured MFJ then halve for single)
 	standardDed := ctc.FederalTaxCalc.StandardDeduction
 	if filingStatus == "single" {
-		standardDed = standardDed.Div(decimal.NewFromInt(2))
+		// Approximate 2025 single standard deduction (half MFJ minus small rounding) -> 15000
+		standardDed = decimal.NewFromInt(15000)
 	}
 	// Additional senior deductions
 	for i := 0; i < seniors; i++ {

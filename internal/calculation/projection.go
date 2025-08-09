@@ -188,16 +188,19 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		if !dawnIsDeceased {
 			ssDawn = CalculateSSBenefitForYear(dawn, scenario.Dawn.SSStartAge, year, assumptions.COLAGeneralRate)
 		}
-		// Survivor SS simplification: if one is deceased, survivor keeps max of their own vs deceased (Phase 1 naive annual)
+		// Survivor SS refined: compute survivor benefit factoring early-claim reduction
 		if robertIsDeceased && !dawnIsDeceased {
-			if ssRobert.GreaterThan(ssDawn) {
-				ssDawn = ssRobert
-			}
+			fra := dateutil.FullRetirementAge(dawn.BirthDate)
+			// Use deceased's current-year benefit (pre-death). If zero (due to modeling order), recalc directly.
+			deceasedBenefit := CalculateSSBenefitForYear(robert, scenario.Robert.SSStartAge, year, assumptions.COLAGeneralRate)
+			candidate := CalculateSurvivorSSBenefit(deceasedBenefit, ageDawn, fra)
+			if candidate.GreaterThan(ssDawn) { ssDawn = candidate }
 		}
 		if dawnIsDeceased && !robertIsDeceased {
-			if ssDawn.GreaterThan(ssRobert) {
-				ssRobert = ssDawn
-			}
+			fra := dateutil.FullRetirementAge(robert.BirthDate)
+			deceasedBenefit := CalculateSSBenefitForYear(dawn, scenario.Dawn.SSStartAge, year, assumptions.COLAGeneralRate)
+			candidate := CalculateSurvivorSSBenefit(deceasedBenefit, ageRobert, fra)
+			if candidate.GreaterThan(ssRobert) { ssRobert = candidate }
 		}
 
 		// Adjust Social Security for partial year based on eligibility and retirement timing

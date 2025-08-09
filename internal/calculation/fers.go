@@ -25,8 +25,9 @@ type FERSPensionCalculation struct {
 	RetirementAge     int
 	Multiplier        decimal.Decimal
 	AnnualPension     decimal.Decimal
-	SurvivorElection  decimal.Decimal
-	ReducedPension    decimal.Decimal
+	SurvivorElection  decimal.Decimal // Input election percent (0, 0.25, 0.50 typical)
+	ReducedPension    decimal.Decimal // Retiree's payable pension after survivor reduction
+	SurvivorAnnuity   decimal.Decimal // Amount payable to surviving spouse after death (unreduced base * elected pct)
 }
 
 // CalculateFERSPension calculates the annual FERS pension
@@ -38,14 +39,30 @@ func CalculateFERSPension(employee *domain.Employee, retirementDate time.Time) F
 	// Determine multiplier based on age and service
 	multiplier := determineMultiplier(retirementAge, serviceYears)
 	
-	// Calculate base pension
+	// Calculate base pension (unreduced)
 	annualPension := employee.High3Salary.Mul(serviceYears).Mul(multiplier)
-	
-	// Apply survivor benefit reduction if elected
+
+	// Survivor rules (simplified FERS):
+	// If elect 50% survivor annuity -> retiree pension reduced by 10%
+	// If elect 25% survivor annuity -> retiree pension reduced by 5%
+	// Assume input SurvivorBenefitElectionPercent holds desired survivor percent of base (0, 0.25, 0.50).
 	reducedPension := annualPension
-	if employee.SurvivorBenefitElectionPercent.GreaterThan(decimal.Zero) {
-		reduction := annualPension.Mul(employee.SurvivorBenefitElectionPercent)
-		reducedPension = annualPension.Sub(reduction)
+	survivorAnnuity := decimal.Zero
+	election := employee.SurvivorBenefitElectionPercent
+	if election.GreaterThan(decimal.Zero) {
+		// Normalize election to standard values
+		if election.GreaterThan(decimal.NewFromFloat(0.4)) { election = decimal.NewFromFloat(0.5) }
+		if election.GreaterThan(decimal.NewFromFloat(0.20)) && election.LessThan(decimal.NewFromFloat(0.30)) { election = decimal.NewFromFloat(0.25) }
+		if election.Equals(decimal.NewFromFloat(0.5)) {
+			reducedPension = annualPension.Mul(decimal.NewFromFloat(0.90)) // 10% reduction
+			survivorAnnuity = annualPension.Mul(decimal.NewFromFloat(0.50))
+		} else if election.Equals(decimal.NewFromFloat(0.25)) {
+			reducedPension = annualPension.Mul(decimal.NewFromFloat(0.95)) // 5% reduction
+			survivorAnnuity = annualPension.Mul(decimal.NewFromFloat(0.25))
+		} else {
+			// Unsupported value - treat as no survivor
+			election = decimal.Zero
+		}
 	}
 	
 	return FERSPensionCalculation{
@@ -54,8 +71,9 @@ func CalculateFERSPension(employee *domain.Employee, retirementDate time.Time) F
 		RetirementAge:    retirementAge,
 		Multiplier:       multiplier,
 		AnnualPension:    annualPension,
-		SurvivorElection: employee.SurvivorBenefitElectionPercent,
+		SurvivorElection: election,
 		ReducedPension:   reducedPension,
+		SurvivorAnnuity:  survivorAnnuity,
 	}
 }
 
