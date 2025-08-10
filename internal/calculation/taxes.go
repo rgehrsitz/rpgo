@@ -62,23 +62,17 @@ func NewFederalTaxCalculator2025() *FederalTaxCalculator {
 
 // NewFederalTaxCalculator creates a new federal tax calculator with configurable values
 func NewFederalTaxCalculator(config domain.FederalTaxConfig) *FederalTaxCalculator {
-	// Convert domain.TaxBracket to calculation.TaxBracket
 	var bracketsMFJ []TaxBracket
-	for _, bracket := range config.TaxBrackets2025 {
-		bracketsMFJ = append(bracketsMFJ, TaxBracket{Min: bracket.Min, Max: bracket.Max, Rate: bracket.Rate})
-	}
+	for _, b := range config.TaxBrackets2025 { bracketsMFJ = append(bracketsMFJ, TaxBracket{Min: b.Min, Max: b.Max, Rate: b.Rate}) }
 	var bracketsSingle []TaxBracket
-	for _, bracket := range config.TaxBrackets2025Single {
-		bracketsSingle = append(bracketsSingle, TaxBracket{Min: bracket.Min, Max: bracket.Max, Rate: bracket.Rate})
+	for _, b := range config.TaxBrackets2025Single { bracketsSingle = append(bracketsSingle, TaxBracket{Min: b.Min, Max: b.Max, Rate: b.Rate}) }
+	// Provide defaults if single not supplied
+	stdSingle := config.StandardDeductionSingle
+	if stdSingle.IsZero() && !config.StandardDeductionMFJ.IsZero() { stdSingle = config.StandardDeductionMFJ.Div(decimal.NewFromInt(2)) }
+	if len(bracketsSingle) == 0 && len(bracketsMFJ) > 0 {
+		for _, b := range bracketsMFJ { bracketsSingle = append(bracketsSingle, TaxBracket{Min: b.Min.Div(decimal.NewFromInt(2)), Max: b.Max.Div(decimal.NewFromInt(2)), Rate: b.Rate}) }
 	}
-	return &FederalTaxCalculator{
-		Year:                    2025,
-		StandardDeduction:       config.StandardDeductionMFJ,
-		StandardDeductionSingle: config.StandardDeductionSingle,
-		AdditionalStdDed:        config.AdditionalStandardDeduction,
-		Brackets:                bracketsMFJ,
-		BracketsSingle:          bracketsSingle,
-	}
+	return &FederalTaxCalculator{ Year: 2025, StandardDeduction: config.StandardDeductionMFJ, StandardDeductionSingle: stdSingle, AdditionalStdDed: config.AdditionalStandardDeduction, Brackets: bracketsMFJ, BracketsSingle: bracketsSingle }
 }
 
 // CalculateFederalTax calculates federal income tax
@@ -413,15 +407,7 @@ func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithStatus(agiComponen
 
 // CalculateTaxableIncome creates a TaxableIncome struct from cash flow data
 func CalculateTaxableIncome(cashFlow domain.AnnualCashFlow, isRetired bool) domain.TaxableIncome {
-	return domain.TaxableIncome{
-		Salary:             decimal.Zero, // No salary in retirement
-		FERSPension:        cashFlow.PensionRobert.Add(cashFlow.PensionDawn),
-		TSPWithdrawalsTrad: cashFlow.TSPWithdrawalRobert.Add(cashFlow.TSPWithdrawalDawn), // Assuming all TSP withdrawals are from traditional
-		TaxableSSBenefits:  cashFlow.SSBenefitRobert.Add(cashFlow.SSBenefitDawn),         // Will be adjusted for taxation
-		OtherTaxableIncome: decimal.Zero,
-		WageIncome:         decimal.Zero, // No wages in retirement
-		InterestIncome:     decimal.Zero, // Could be added if needed
-	}
+	return domain.TaxableIncome{ Salary: decimal.Zero, FERSPension: cashFlow.PensionRobert.Add(cashFlow.PensionDawn).Add(cashFlow.SurvivorPensionRobert).Add(cashFlow.SurvivorPensionDawn), TSPWithdrawalsTrad: cashFlow.TSPWithdrawalRobert.Add(cashFlow.TSPWithdrawalDawn), TaxableSSBenefits: cashFlow.SSBenefitRobert.Add(cashFlow.SSBenefitDawn), OtherTaxableIncome: decimal.Zero, WageIncome: decimal.Zero, InterestIncome: decimal.Zero }
 }
 
 // CalculateCurrentTaxableIncome calculates taxable income for current employment
@@ -449,7 +435,7 @@ func (ctc *ComprehensiveTaxCalculator) CalculateSocialSecurityTaxation(ssBenefit
 }
 
 // calculateTaxes calculates all applicable taxes
-func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scenario *domain.Scenario, year int, isRetired bool, pensionRobert, pensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn decimal.Decimal, assumptions *domain.GlobalAssumptions, workingIncomeRobert, workingIncomeDawn decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
+func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scenario *domain.Scenario, year int, isRetired bool, pensionRobert, pensionDawn, survivorPensionRobert, survivorPensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn decimal.Decimal, assumptions *domain.GlobalAssumptions, workingIncomeRobert, workingIncomeDawn decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
 	projectionStartYear := ProjectionBaseYear
 	projectionDate := time.Date(projectionStartYear, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(year, 0, 0)
 	ageRobert := robert.Age(projectionDate)
@@ -542,9 +528,9 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scena
 		(pensionRobert.GreaterThan(decimal.Zero) || pensionDawn.GreaterThan(decimal.Zero) || tspWithdrawalRobert.GreaterThan(decimal.Zero) || tspWithdrawalDawn.GreaterThan(decimal.Zero) || ssRobert.GreaterThan(decimal.Zero) || ssDawn.GreaterThan(decimal.Zero))
 
 	if isTransitionYear {
-		// Transition year: combine working and retirement income (include survivor pensions if any already merged into pension vars externally)
+		// Transition year: combine working and retirement income, include survivor pensions
 		totalWorkingIncome := workingIncomeRobert.Add(workingIncomeDawn)
-		totalRetirementIncome := pensionRobert.Add(pensionDawn).Add(tspWithdrawalRobert).Add(tspWithdrawalDawn)
+		totalRetirementIncome := pensionRobert.Add(pensionDawn).Add(survivorPensionRobert).Add(survivorPensionDawn).Add(tspWithdrawalRobert).Add(tspWithdrawalDawn)
 
 		// Calculate Social Security taxation (filing status aware thresholds)
 		totalSSBenefits := ssRobert.Add(ssDawn)
@@ -559,7 +545,7 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scena
 		// Create taxable income structure for transition year
 		taxableIncome := domain.TaxableIncome{
 			Salary:             totalWorkingIncome,
-			FERSPension:        pensionRobert.Add(pensionDawn),
+			FERSPension:        pensionRobert.Add(pensionDawn).Add(survivorPensionRobert).Add(survivorPensionDawn),
 			TSPWithdrawalsTrad: tspWithdrawalRobert.Add(tspWithdrawalDawn),
 			TaxableSSBenefits:  taxableSS,
 			OtherTaxableIncome: decimal.Zero,
@@ -582,7 +568,7 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scena
 	} else if isRetired {
 		// Fully retired year
 		// Calculate other income (excluding Social Security)
-		otherIncome := pensionRobert.Add(pensionDawn).Add(tspWithdrawalRobert).Add(tspWithdrawalDawn)
+		otherIncome := pensionRobert.Add(pensionDawn).Add(survivorPensionRobert).Add(survivorPensionDawn).Add(tspWithdrawalRobert).Add(tspWithdrawalDawn)
 
 		// Calculate Social Security taxation with filing status thresholds
 		totalSSBenefits := ssRobert.Add(ssDawn)
@@ -597,7 +583,7 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scena
 		// Create taxable income structure
 		taxableIncome := domain.TaxableIncome{
 			Salary:             decimal.Zero, // No salary in retirement
-			FERSPension:        pensionRobert.Add(pensionDawn),
+			FERSPension:        pensionRobert.Add(pensionDawn).Add(survivorPensionRobert).Add(survivorPensionDawn),
 			TSPWithdrawalsTrad: tspWithdrawalRobert.Add(tspWithdrawalDawn), // Assuming all TSP withdrawals are from traditional
 			TaxableSSBenefits:  taxableSS,
 			OtherTaxableIncome: decimal.Zero,

@@ -477,10 +477,11 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		workingIncomeDawn := dawn.CurrentSalary.Mul(dawnWorkFraction)
 
 		federalTax, stateTax, localTax, ficaTax := ce.calculateTaxes(
-			robert, dawn, scenario, year, isRobertRetired && isDawnRetired, // Both retired for tax purposes
-			pensionRobert, pensionDawn, tspWithdrawalRobert, tspWithdrawalDawn,
+			robert, dawn, scenario, year, isRobertRetired && isDawnRetired,
+			pensionRobert, pensionDawn, survivorPensionRobert, survivorPensionDawn,
+			tspWithdrawalRobert, tspWithdrawalDawn,
 			ssRobert, ssDawn, assumptions,
-			workingIncomeRobert, workingIncomeDawn, // Pass working income for transition years
+			workingIncomeRobert, workingIncomeDawn,
 		)
 
 		// Calculate TSP contributions (only for working portion of year)
