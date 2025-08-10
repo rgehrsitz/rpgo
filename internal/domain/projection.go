@@ -29,14 +29,18 @@ type AnnualCashFlow struct {
 	TotalGrossIncome      decimal.Decimal `json:"total_gross_income"`
 
 	// Deductions and Taxes
-	FederalTax       decimal.Decimal `json:"federal_tax"`
-	StateTax         decimal.Decimal `json:"state_tax"`
-	LocalTax         decimal.Decimal `json:"local_tax"`
-	FICATax          decimal.Decimal `json:"fica_tax"`
-	TSPContributions decimal.Decimal `json:"tsp_contributions"`
-	FEHBPremium      decimal.Decimal `json:"fehb_premium"`
-	MedicarePremium  decimal.Decimal `json:"medicare_premium"`
-	NetIncome        decimal.Decimal `json:"net_income"`
+	FederalTax               decimal.Decimal `json:"federal_tax"`
+	FederalTaxableIncome     decimal.Decimal `json:"federal_taxable_income"`
+	FederalStandardDeduction decimal.Decimal `json:"federal_standard_deduction"`
+	FederalFilingStatus      string          `json:"federal_filing_status"`
+	FederalSeniors65Plus     int             `json:"federal_seniors_65_plus"`
+	StateTax                 decimal.Decimal `json:"state_tax"`
+	LocalTax                 decimal.Decimal `json:"local_tax"`
+	FICATax                  decimal.Decimal `json:"fica_tax"`
+	TSPContributions         decimal.Decimal `json:"tsp_contributions"`
+	FEHBPremium              decimal.Decimal `json:"fehb_premium"`
+	MedicarePremium          decimal.Decimal `json:"medicare_premium"`
+	NetIncome                decimal.Decimal `json:"net_income"`
 
 	// TSP Balances (end of year)
 	TSPBalanceRobert      decimal.Decimal `json:"tsp_balance_robert"`

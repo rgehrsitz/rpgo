@@ -31,41 +31,8 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 	robertStrategy := ce.createTSPStrategy(&scenario.Robert, currentTSPTraditionalRobert.Add(currentTSPRothRobert), assumptions.InflationRate)
 	dawnStrategy := ce.createTSPStrategy(&scenario.Dawn, currentTSPTraditionalDawn.Add(currentTSPRothDawn), assumptions.InflationRate)
 
-	// Mortality derived dates (deterministic) if provided by age
-	var robertDeathYearIndex *int
-	var dawnDeathYearIndex *int
-	if scenario.Mortality != nil {
-		baseYear := ProjectionBaseYear
-		if scenario.Mortality.Robert != nil {
-			if scenario.Mortality.Robert.DeathDate != nil {
-				y := scenario.Mortality.Robert.DeathDate.Year() - baseYear
-				if y >= 0 && y < assumptions.ProjectionYears {
-					robertDeathYearIndex = &y
-				}
-			} else if scenario.Mortality.Robert.DeathAge != nil {
-				// compute calendar year when Robert reaches that age (approx: birth year + age)
-				targetYear := robert.BirthDate.Year() + *scenario.Mortality.Robert.DeathAge
-				y := targetYear - baseYear
-				if y >= 0 && y < assumptions.ProjectionYears {
-					robertDeathYearIndex = &y
-				}
-			}
-		}
-		if scenario.Mortality.Dawn != nil {
-			if scenario.Mortality.Dawn.DeathDate != nil {
-				y := scenario.Mortality.Dawn.DeathDate.Year() - baseYear
-				if y >= 0 && y < assumptions.ProjectionYears {
-					dawnDeathYearIndex = &y
-				}
-			} else if scenario.Mortality.Dawn.DeathAge != nil {
-				targetYear := dawn.BirthDate.Year() + *scenario.Mortality.Dawn.DeathAge
-				y := targetYear - baseYear
-				if y >= 0 && y < assumptions.ProjectionYears {
-					dawnDeathYearIndex = &y
-				}
-			}
-		}
-	}
+	// Mortality derived dates using helper
+	robertDeathYearIndex, dawnDeathYearIndex := deriveDeathYearIndexes(scenario, robert, dawn, assumptions.ProjectionYears)
 
 	survivorSpendingFactor := decimal.NewFromFloat(1.0)
 	if scenario.Mortality != nil && scenario.Mortality.Assumptions != nil && !scenario.Mortality.Assumptions.SurvivorSpendingFactor.IsZero() {
@@ -180,16 +147,10 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 			}
 		}
 
-		// Survivor pension logic: when one spouse deceased and other alive, pay elected survivor annuity.
-		// Simplification: survivor annuity is based on deceased's initial unreduced base with COLA just like retiree pension.
-		// Implementation: reuse CalculatePensionForYear to derive deceased's reduced pension, then derive survivor annuity from initial calc each year.
-		if scenario.Mortality != nil { // only consider if mortality modeling enabled
+		// Survivor pension logic with pro-rating in death year
+		if scenario.Mortality != nil {
 			if robertIsDeceased && !dawnIsDeceased && isRobertRetired {
-				// Compute Robert's original pension calc (once) at retirement for survivor amount; then apply COLA path similarly.
 				baseCalc := CalculateFERSPension(robert, scenario.Robert.RetirementDate)
-				// SurvivorAnnuity already reflects elected percentage of unreduced base.
-				// Apply COLA sequence to survivor annuity consistent with retiree COLA rules (starts same year retiree would have gotten COLA)
-				// Derive years since retirement for this projection year
 				yearsSinceRet := year - robertRetirementYear
 				if yearsSinceRet < 0 {
 					yearsSinceRet = 0
@@ -200,9 +161,19 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 					ageAt := robert.Age(projDate)
 					currentSurvivor = ApplyFERSPensionCOLA(currentSurvivor, assumptions.InflationRate, ageAt)
 				}
-				// Survivor begins the year of death (we assume full-year payment replacing deceased pension)
 				if robertDeathYearIndex != nil && year >= *robertDeathYearIndex {
-					survivorPensionDawn = currentSurvivor
+					// Pro-rate in death year: survivor receives only portion AFTER death
+					var deathDate *time.Time
+					if scenario.Mortality.Robert != nil {
+						deathDate = scenario.Mortality.Robert.DeathDate
+					}
+					frac, occurred := deathFractionInYear(robertDeathYearIndex, year, deathDate)
+					if occurred {
+						// Pension stream for deceased stops at death; survivor annuity starts month after death -> approximate with (1-frac)
+						survivorPensionDawn = currentSurvivor.Mul(decimal.NewFromInt(1).Sub(frac))
+					} else {
+						survivorPensionDawn = currentSurvivor
+					}
 				}
 			}
 			if dawnIsDeceased && !robertIsDeceased && isDawnRetired {
@@ -218,7 +189,16 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 					currentSurvivor = ApplyFERSPensionCOLA(currentSurvivor, assumptions.InflationRate, ageAt)
 				}
 				if dawnDeathYearIndex != nil && year >= *dawnDeathYearIndex {
-					survivorPensionRobert = currentSurvivor
+					var deathDate *time.Time
+					if scenario.Mortality.Dawn != nil {
+						deathDate = scenario.Mortality.Dawn.DeathDate
+					}
+					frac, occurred := deathFractionInYear(dawnDeathYearIndex, year, deathDate)
+					if occurred {
+						survivorPensionRobert = currentSurvivor.Mul(decimal.NewFromInt(1).Sub(frac))
+					} else {
+						survivorPensionRobert = currentSurvivor
+					}
 				}
 			}
 		}
@@ -476,7 +456,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		workingIncomeRobert := robert.CurrentSalary.Mul(robertWorkFraction)
 		workingIncomeDawn := dawn.CurrentSalary.Mul(dawnWorkFraction)
 
-		federalTax, stateTax, localTax, ficaTax := ce.calculateTaxes(
+		federalTax, stateTax, localTax, ficaTax, taxableTotal, stdDedUsed, filingStatusUsed, seniors65 := ce.calculateTaxes(
 			robert, dawn, scenario, year, isRobertRetired && isDawnRetired,
 			pensionRobert, pensionDawn, survivorPensionRobert, survivorPensionDawn,
 			tspWithdrawalRobert, tspWithdrawalDawn,
@@ -494,37 +474,41 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 
 		// Create annual cash flow
 		cashFlow := domain.AnnualCashFlow{
-			Year:                  year + 1,
-			Date:                  projectionDate,
-			AgeRobert:             ageRobert,
-			AgeDawn:               ageDawn,
-			SalaryRobert:          robert.CurrentSalary.Mul(robertWorkFraction),
-			SalaryDawn:            dawn.CurrentSalary.Mul(dawnWorkFraction),
-			PensionRobert:         pensionRobert,
-			PensionDawn:           pensionDawn,
-			TSPWithdrawalRobert:   tspWithdrawalRobert,
-			TSPWithdrawalDawn:     tspWithdrawalDawn,
-			SSBenefitRobert:       ssRobert,
-			SSBenefitDawn:         ssDawn,
-			FERSSupplementRobert:  srsRobert,
-			FERSSupplementDawn:    srsDawn,
-			FederalTax:            federalTax,
-			StateTax:              stateTax,
-			LocalTax:              localTax,
-			FICATax:               ficaTax,
-			TSPContributions:      tspContributions,
-			FEHBPremium:           fehbPremium,
-			MedicarePremium:       medicarePremium,
-			TSPBalanceRobert:      currentTSPTraditionalRobert.Add(currentTSPRothRobert),
-			TSPBalanceDawn:        currentTSPTraditionalDawn.Add(currentTSPRothDawn),
-			TSPBalanceTraditional: currentTSPTraditionalRobert.Add(currentTSPTraditionalDawn),
-			TSPBalanceRoth:        currentTSPRothRobert.Add(currentTSPRothDawn),
-			IsRetired:             isRobertRetired && isDawnRetired, // Both retired
-			IsMedicareEligible:    dateutil.IsMedicareEligible(robert.BirthDate, projectionDate) || dateutil.IsMedicareEligible(dawn.BirthDate, projectionDate),
-			IsRMDYear:             dateutil.IsRMDYear(robert.BirthDate, projectionDate) || dateutil.IsRMDYear(dawn.BirthDate, projectionDate),
-			RobertDeceased:        robertIsDeceased,
-			DawnDeceased:          dawnIsDeceased,
-			FilingStatusSingle:    false,
+			Year:                     year + 1,
+			Date:                     projectionDate,
+			AgeRobert:                ageRobert,
+			AgeDawn:                  ageDawn,
+			SalaryRobert:             robert.CurrentSalary.Mul(robertWorkFraction),
+			SalaryDawn:               dawn.CurrentSalary.Mul(dawnWorkFraction),
+			PensionRobert:            pensionRobert,
+			PensionDawn:              pensionDawn,
+			TSPWithdrawalRobert:      tspWithdrawalRobert,
+			TSPWithdrawalDawn:        tspWithdrawalDawn,
+			SSBenefitRobert:          ssRobert,
+			SSBenefitDawn:            ssDawn,
+			FERSSupplementRobert:     srsRobert,
+			FERSSupplementDawn:       srsDawn,
+			FederalTax:               federalTax,
+			FederalTaxableIncome:     taxableTotal,
+			FederalStandardDeduction: stdDedUsed,
+			FederalFilingStatus:      filingStatusUsed,
+			FederalSeniors65Plus:     seniors65,
+			StateTax:                 stateTax,
+			LocalTax:                 localTax,
+			FICATax:                  ficaTax,
+			TSPContributions:         tspContributions,
+			FEHBPremium:              fehbPremium,
+			MedicarePremium:          medicarePremium,
+			TSPBalanceRobert:         currentTSPTraditionalRobert.Add(currentTSPRothRobert),
+			TSPBalanceDawn:           currentTSPTraditionalDawn.Add(currentTSPRothDawn),
+			TSPBalanceTraditional:    currentTSPTraditionalRobert.Add(currentTSPTraditionalDawn),
+			TSPBalanceRoth:           currentTSPRothRobert.Add(currentTSPRothDawn),
+			IsRetired:                isRobertRetired && isDawnRetired, // Both retired
+			IsMedicareEligible:       dateutil.IsMedicareEligible(robert.BirthDate, projectionDate) || dateutil.IsMedicareEligible(dawn.BirthDate, projectionDate),
+			IsRMDYear:                dateutil.IsRMDYear(robert.BirthDate, projectionDate) || dateutil.IsRMDYear(dawn.BirthDate, projectionDate),
+			RobertDeceased:           robertIsDeceased,
+			DawnDeceased:             dawnIsDeceased,
+			FilingStatusSingle:       false,
 		}
 
 		// Determine filing status for display (mirror simplified logic in taxes.go)

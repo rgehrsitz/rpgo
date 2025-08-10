@@ -63,16 +63,35 @@ func NewFederalTaxCalculator2025() *FederalTaxCalculator {
 // NewFederalTaxCalculator creates a new federal tax calculator with configurable values
 func NewFederalTaxCalculator(config domain.FederalTaxConfig) *FederalTaxCalculator {
 	var bracketsMFJ []TaxBracket
-	for _, b := range config.TaxBrackets2025 { bracketsMFJ = append(bracketsMFJ, TaxBracket{Min: b.Min, Max: b.Max, Rate: b.Rate}) }
+	for _, b := range config.TaxBrackets2025 {
+		bracketsMFJ = append(bracketsMFJ, TaxBracket{Min: b.Min, Max: b.Max, Rate: b.Rate})
+	}
+	if len(bracketsMFJ) == 0 { // fallback defaults
+		bracketsMFJ = []TaxBracket{
+			{decimal.Zero, decimal.NewFromInt(23200), decimal.NewFromFloat(0.10)},
+			{decimal.NewFromInt(23201), decimal.NewFromInt(94300), decimal.NewFromFloat(0.12)},
+			{decimal.NewFromInt(94301), decimal.NewFromInt(201050), decimal.NewFromFloat(0.22)},
+			{decimal.NewFromInt(201051), decimal.NewFromInt(383900), decimal.NewFromFloat(0.24)},
+			{decimal.NewFromInt(383901), decimal.NewFromInt(487450), decimal.NewFromFloat(0.32)},
+			{decimal.NewFromInt(487451), decimal.NewFromInt(731200), decimal.NewFromFloat(0.35)},
+			{decimal.NewFromInt(731201), decimal.NewFromInt(999999999), decimal.NewFromFloat(0.37)},
+		}
+	}
 	var bracketsSingle []TaxBracket
-	for _, b := range config.TaxBrackets2025Single { bracketsSingle = append(bracketsSingle, TaxBracket{Min: b.Min, Max: b.Max, Rate: b.Rate}) }
+	for _, b := range config.TaxBrackets2025Single {
+		bracketsSingle = append(bracketsSingle, TaxBracket{Min: b.Min, Max: b.Max, Rate: b.Rate})
+	}
 	// Provide defaults if single not supplied
 	stdSingle := config.StandardDeductionSingle
-	if stdSingle.IsZero() && !config.StandardDeductionMFJ.IsZero() { stdSingle = config.StandardDeductionMFJ.Div(decimal.NewFromInt(2)) }
-	if len(bracketsSingle) == 0 && len(bracketsMFJ) > 0 {
-		for _, b := range bracketsMFJ { bracketsSingle = append(bracketsSingle, TaxBracket{Min: b.Min.Div(decimal.NewFromInt(2)), Max: b.Max.Div(decimal.NewFromInt(2)), Rate: b.Rate}) }
+	if stdSingle.IsZero() && !config.StandardDeductionMFJ.IsZero() {
+		stdSingle = config.StandardDeductionMFJ.Div(decimal.NewFromInt(2))
 	}
-	return &FederalTaxCalculator{ Year: 2025, StandardDeduction: config.StandardDeductionMFJ, StandardDeductionSingle: stdSingle, AdditionalStdDed: config.AdditionalStandardDeduction, Brackets: bracketsMFJ, BracketsSingle: bracketsSingle }
+	if len(bracketsSingle) == 0 && len(bracketsMFJ) > 0 {
+		for _, b := range bracketsMFJ {
+			bracketsSingle = append(bracketsSingle, TaxBracket{Min: b.Min.Div(decimal.NewFromInt(2)), Max: b.Max.Div(decimal.NewFromInt(2)), Rate: b.Rate})
+		}
+	}
+	return &FederalTaxCalculator{Year: 2025, StandardDeduction: config.StandardDeductionMFJ, StandardDeductionSingle: stdSingle, AdditionalStdDed: config.AdditionalStandardDeduction, Brackets: bracketsMFJ, BracketsSingle: bracketsSingle}
 }
 
 // CalculateFederalTax calculates federal income tax
@@ -407,7 +426,7 @@ func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithStatus(agiComponen
 
 // CalculateTaxableIncome creates a TaxableIncome struct from cash flow data
 func CalculateTaxableIncome(cashFlow domain.AnnualCashFlow, isRetired bool) domain.TaxableIncome {
-	return domain.TaxableIncome{ Salary: decimal.Zero, FERSPension: cashFlow.PensionRobert.Add(cashFlow.PensionDawn).Add(cashFlow.SurvivorPensionRobert).Add(cashFlow.SurvivorPensionDawn), TSPWithdrawalsTrad: cashFlow.TSPWithdrawalRobert.Add(cashFlow.TSPWithdrawalDawn), TaxableSSBenefits: cashFlow.SSBenefitRobert.Add(cashFlow.SSBenefitDawn), OtherTaxableIncome: decimal.Zero, WageIncome: decimal.Zero, InterestIncome: decimal.Zero }
+	return domain.TaxableIncome{Salary: decimal.Zero, FERSPension: cashFlow.PensionRobert.Add(cashFlow.PensionDawn).Add(cashFlow.SurvivorPensionRobert).Add(cashFlow.SurvivorPensionDawn), TSPWithdrawalsTrad: cashFlow.TSPWithdrawalRobert.Add(cashFlow.TSPWithdrawalDawn), TaxableSSBenefits: cashFlow.SSBenefitRobert.Add(cashFlow.SSBenefitDawn), OtherTaxableIncome: decimal.Zero, WageIncome: decimal.Zero, InterestIncome: decimal.Zero}
 }
 
 // CalculateCurrentTaxableIncome calculates taxable income for current employment
@@ -435,7 +454,7 @@ func (ctc *ComprehensiveTaxCalculator) CalculateSocialSecurityTaxation(ssBenefit
 }
 
 // calculateTaxes calculates all applicable taxes
-func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scenario *domain.Scenario, year int, isRetired bool, pensionRobert, pensionDawn, survivorPensionRobert, survivorPensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn decimal.Decimal, assumptions *domain.GlobalAssumptions, workingIncomeRobert, workingIncomeDawn decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
+func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scenario *domain.Scenario, year int, isRetired bool, pensionRobert, pensionDawn, survivorPensionRobert, survivorPensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn decimal.Decimal, assumptions *domain.GlobalAssumptions, workingIncomeRobert, workingIncomeDawn decimal.Decimal) (federal decimal.Decimal, state decimal.Decimal, local decimal.Decimal, fica decimal.Decimal, taxableIncomeTotal decimal.Decimal, stdDed decimal.Decimal, filingStatusOut string, seniorsOut int) {
 	projectionStartYear := ProjectionBaseYear
 	projectionDate := time.Date(projectionStartYear, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(year, 0, 0)
 	ageRobert := robert.Age(projectionDate)
@@ -451,39 +470,8 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scena
 		seniors++
 	}
 
-	// Reconstruct death year indexes to know if someone deceased by this year (duplicated lightweight logic; could refactor)
-	var robertDeathYearIndex, dawnDeathYearIndex *int
-	if scenario != nil && scenario.Mortality != nil {
-		baseYear := ProjectionBaseYear
-		if scenario.Mortality.Robert != nil {
-			if scenario.Mortality.Robert.DeathDate != nil {
-				y := scenario.Mortality.Robert.DeathDate.Year() - baseYear
-				if y >= 0 {
-					robertDeathYearIndex = &y
-				}
-			} else if scenario.Mortality.Robert.DeathAge != nil {
-				ty := robert.BirthDate.Year() + *scenario.Mortality.Robert.DeathAge
-				y := ty - baseYear
-				if y >= 0 {
-					robertDeathYearIndex = &y
-				}
-			}
-		}
-		if scenario.Mortality.Dawn != nil {
-			if scenario.Mortality.Dawn.DeathDate != nil {
-				y := scenario.Mortality.Dawn.DeathDate.Year() - baseYear
-				if y >= 0 {
-					dawnDeathYearIndex = &y
-				}
-			} else if scenario.Mortality.Dawn.DeathAge != nil {
-				ty := dawn.BirthDate.Year() + *scenario.Mortality.Dawn.DeathAge
-				y := ty - baseYear
-				if y >= 0 {
-					dawnDeathYearIndex = &y
-				}
-			}
-		}
-	}
+	// Use shared helper for death year indexes (projection horizon not needed here; pass year+1 as conservative bound)
+	robertDeathYearIndex, dawnDeathYearIndex := deriveDeathYearIndexes(scenario, robert, dawn, year+1+5) // simple upper bound
 	robertDeceased := robertDeathYearIndex != nil && year >= *robertDeathYearIndex
 	dawnDeceased := dawnDeathYearIndex != nil && year >= *dawnDeathYearIndex
 	if (robertDeceased || dawnDeceased) && !(robertDeceased && dawnDeceased) {
@@ -558,13 +546,17 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scena
 		federalTax := ce.TaxCalc.calculateFederalTaxWithStatus(taxableIncome, filingStatus, seniors)
 		stateTax := ce.TaxCalc.StateTaxCalc.CalculateTax(taxableIncome, false)
 		localTax := ce.TaxCalc.LocalTaxCalc.CalculateEIT(totalWorkingIncome, false)
-
-		// Calculate FICA only on actual working income (no proration needed since we already have working income)
 		robertFICA := ce.TaxCalc.FICATaxCalc.CalculateFICA(workingIncomeRobert, totalWorkingIncome)
 		dawnFICA := ce.TaxCalc.FICATaxCalc.CalculateFICA(workingIncomeDawn, totalWorkingIncome)
 		ficaTax := robertFICA.Add(dawnFICA)
-
-		return federalTax, stateTax, localTax, ficaTax
+		std := ce.TaxCalc.FederalTaxCalc.StandardDeduction
+		if filingStatus == "single" {
+			std = ce.TaxCalc.FederalTaxCalc.StandardDeductionSingle
+		}
+		for i := 0; i < seniors; i++ {
+			std = std.Add(ce.TaxCalc.FederalTaxCalc.AdditionalStdDed)
+		}
+		return federalTax, stateTax, localTax, ficaTax, taxableIncome.Salary.Add(taxableIncome.FERSPension).Add(taxableIncome.TSPWithdrawalsTrad).Add(taxableIncome.TaxableSSBenefits), std, filingStatus, seniors
 	} else if isRetired {
 		// Fully retired year
 		// Calculate other income (excluding Social Security)
@@ -595,8 +587,14 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scena
 		federalTax := ce.TaxCalc.calculateFederalTaxWithStatus(taxableIncome, filingStatus, seniors)
 		stateTax := ce.TaxCalc.StateTaxCalc.CalculateTax(taxableIncome, true)
 		localTax := ce.TaxCalc.LocalTaxCalc.CalculateEIT(decimal.Zero, true)
-
-		return federalTax, stateTax, localTax, decimal.Zero
+		std := ce.TaxCalc.FederalTaxCalc.StandardDeduction
+		if filingStatus == "single" {
+			std = ce.TaxCalc.FederalTaxCalc.StandardDeductionSingle
+		}
+		for i := 0; i < seniors; i++ {
+			std = std.Add(ce.TaxCalc.FederalTaxCalc.AdditionalStdDed)
+		}
+		return federalTax, stateTax, localTax, decimal.Zero, taxableIncome.Salary.Add(taxableIncome.FERSPension).Add(taxableIncome.TSPWithdrawalsTrad).Add(taxableIncome.TaxableSSBenefits), std, filingStatus, seniors
 	} else {
 		// Pre-retirement: calculate current working income
 		currentTaxableIncome := CalculateCurrentTaxableIncome(robert.CurrentSalary, dawn.CurrentSalary)
@@ -604,6 +602,13 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scena
 		stateTax := ce.TaxCalc.StateTaxCalc.CalculateTax(currentTaxableIncome, false)
 		localTax := ce.TaxCalc.LocalTaxCalc.CalculateEIT(robert.CurrentSalary.Add(dawn.CurrentSalary), false)
 		ficaTax := ce.TaxCalc.FICATaxCalc.CalculateFICA(robert.CurrentSalary, robert.CurrentSalary.Add(dawn.CurrentSalary)).Add(ce.TaxCalc.FICATaxCalc.CalculateFICA(dawn.CurrentSalary, robert.CurrentSalary.Add(dawn.CurrentSalary)))
-		return federalTax, stateTax, localTax, ficaTax
+		std := ce.TaxCalc.FederalTaxCalc.StandardDeduction
+		if filingStatus == "single" {
+			std = ce.TaxCalc.FederalTaxCalc.StandardDeductionSingle
+		}
+		for i := 0; i < seniors; i++ {
+			std = std.Add(ce.TaxCalc.FederalTaxCalc.AdditionalStdDed)
+		}
+		return federalTax, stateTax, localTax, ficaTax, currentTaxableIncome.Salary, std, filingStatus, seniors
 	}
 }
