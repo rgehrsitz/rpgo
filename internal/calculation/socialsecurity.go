@@ -198,9 +198,15 @@ func InterpolateSSBenefit(benefit62, benefitFRA, benefit70 decimal.Decimal, clai
 // Early survivor reduction: approximately 28.5% maximum reduction if claimed at 60 (i.e. 71.5% of full).
 // We interpolate linearly between age 60 (71.5%) and survivor FRA (~67).
 func CalculateSurvivorSSBenefit(deceasedCurrent decimal.Decimal, survivorAge int, survivorFRA int) decimal.Decimal {
-	if deceasedCurrent.LessThanOrEqual(decimal.Zero) { return decimal.Zero }
-	if survivorAge >= survivorFRA { return deceasedCurrent }
-	if survivorAge < 60 { return decimal.Zero } // not yet eligible (simplified, ignoring child-in-care cases)
+	if deceasedCurrent.LessThanOrEqual(decimal.Zero) {
+		return decimal.Zero
+	}
+	if survivorAge >= survivorFRA {
+		return deceasedCurrent
+	}
+	if survivorAge < 60 {
+		return decimal.Zero
+	} // not yet eligible (simplified, ignoring child-in-care cases)
 	// Linear interpolation from 60 -> FRA: factor from 0.715 -> 1.0
 	totalMonths := (survivorFRA - 60) * 12
 	monthsFrom60 := (survivorAge - 60) * 12

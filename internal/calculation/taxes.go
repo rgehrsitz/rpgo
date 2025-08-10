@@ -34,10 +34,12 @@ type TaxBracket struct {
 
 // FederalTaxCalculator handles federal income tax calculations
 type FederalTaxCalculator struct {
-	Year              int
-	StandardDeduction decimal.Decimal
-	Brackets          []TaxBracket
-	AdditionalStdDed  decimal.Decimal // For age 65+
+	Year                    int
+	StandardDeduction       decimal.Decimal
+	StandardDeductionSingle decimal.Decimal
+	Brackets                []TaxBracket
+	BracketsSingle          []TaxBracket
+	AdditionalStdDed        decimal.Decimal // For age 65+
 }
 
 // NewFederalTaxCalculator2025 creates a new federal tax calculator for 2025
@@ -61,20 +63,21 @@ func NewFederalTaxCalculator2025() *FederalTaxCalculator {
 // NewFederalTaxCalculator creates a new federal tax calculator with configurable values
 func NewFederalTaxCalculator(config domain.FederalTaxConfig) *FederalTaxCalculator {
 	// Convert domain.TaxBracket to calculation.TaxBracket
-	var brackets []TaxBracket
+	var bracketsMFJ []TaxBracket
 	for _, bracket := range config.TaxBrackets2025 {
-		brackets = append(brackets, TaxBracket{
-			Min:  bracket.Min,
-			Max:  bracket.Max,
-			Rate: bracket.Rate,
-		})
+		bracketsMFJ = append(bracketsMFJ, TaxBracket{Min: bracket.Min, Max: bracket.Max, Rate: bracket.Rate})
 	}
-
+	var bracketsSingle []TaxBracket
+	for _, bracket := range config.TaxBrackets2025Single {
+		bracketsSingle = append(bracketsSingle, TaxBracket{Min: bracket.Min, Max: bracket.Max, Rate: bracket.Rate})
+	}
 	return &FederalTaxCalculator{
-		Year:              2025, // TODO: Make year configurable
-		StandardDeduction: config.StandardDeductionMFJ,
-		AdditionalStdDed:  config.AdditionalStandardDeduction,
-		Brackets:          brackets,
+		Year:                    2025,
+		StandardDeduction:       config.StandardDeductionMFJ,
+		StandardDeductionSingle: config.StandardDeductionSingle,
+		AdditionalStdDed:        config.AdditionalStandardDeduction,
+		Brackets:                bracketsMFJ,
+		BracketsSingle:          bracketsSingle,
 	}
 }
 
@@ -368,13 +371,15 @@ func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithInflation(taxableI
 func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithStatus(agiComponents domain.TaxableIncome, filingStatus string, seniors int) decimal.Decimal {
 	totalIncome := agiComponents.Salary.Add(agiComponents.FERSPension).Add(agiComponents.TSPWithdrawalsTrad).Add(agiComponents.TaxableSSBenefits).Add(agiComponents.OtherTaxableIncome)
 
-	// Derive standard deduction based on filing status (simplified: use configured MFJ then halve for single)
+	// Standard deduction based on filing status
 	standardDed := ctc.FederalTaxCalc.StandardDeduction
+	brackets := ctc.FederalTaxCalc.Brackets
 	if filingStatus == "single" {
-		// Approximate 2025 single standard deduction (half MFJ minus small rounding) -> 15000
-		standardDed = decimal.NewFromInt(15000)
+		standardDed = ctc.FederalTaxCalc.StandardDeductionSingle
+		if len(ctc.FederalTaxCalc.BracketsSingle) > 0 {
+			brackets = ctc.FederalTaxCalc.BracketsSingle
+		}
 	}
-	// Additional senior deductions
 	for i := 0; i < seniors; i++ {
 		standardDed = standardDed.Add(ctc.FederalTaxCalc.AdditionalStdDed)
 	}
@@ -384,17 +389,12 @@ func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithStatus(agiComponen
 		agi = decimal.Zero
 	}
 
-	// Use original brackets (approx) – for single we approximate by halving MFJ thresholds
 	inflationAdjustment := decimal.NewFromFloat(1.0)
-	tax := decimal.Zero
 	remaining := agi
-	for _, b := range ctc.FederalTaxCalc.Brackets {
+	tax := decimal.Zero
+	for _, b := range brackets {
 		adjMin := b.Min.Mul(inflationAdjustment)
 		adjMax := b.Max.Mul(inflationAdjustment)
-		if filingStatus == "single" {
-			adjMin = adjMin.Div(decimal.NewFromInt(2))
-			adjMax = adjMax.Div(decimal.NewFromInt(2))
-		}
 		if remaining.LessThanOrEqual(decimal.Zero) {
 			break
 		}
@@ -542,13 +542,19 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scena
 		(pensionRobert.GreaterThan(decimal.Zero) || pensionDawn.GreaterThan(decimal.Zero) || tspWithdrawalRobert.GreaterThan(decimal.Zero) || tspWithdrawalDawn.GreaterThan(decimal.Zero) || ssRobert.GreaterThan(decimal.Zero) || ssDawn.GreaterThan(decimal.Zero))
 
 	if isTransitionYear {
-		// Transition year: combine working and retirement income
+		// Transition year: combine working and retirement income (include survivor pensions if any already merged into pension vars externally)
 		totalWorkingIncome := workingIncomeRobert.Add(workingIncomeDawn)
 		totalRetirementIncome := pensionRobert.Add(pensionDawn).Add(tspWithdrawalRobert).Add(tspWithdrawalDawn)
 
-		// Calculate Social Security taxation
+		// Calculate Social Security taxation (filing status aware thresholds)
 		totalSSBenefits := ssRobert.Add(ssDawn)
-		taxableSS := ce.TaxCalc.CalculateSocialSecurityTaxation(totalSSBenefits, totalRetirementIncome)
+		provisional := ce.TaxCalc.SSTaxCalc.CalculateProvisionalIncome(totalRetirementIncome, decimal.Zero, totalSSBenefits)
+		var taxableSS decimal.Decimal
+		if filingStatus == "single" {
+			taxableSS = ce.TaxCalc.SSTaxCalc.CalculateTaxableSocialSecuritySingle(totalSSBenefits, provisional)
+		} else {
+			taxableSS = ce.TaxCalc.SSTaxCalc.CalculateTaxableSocialSecurity(totalSSBenefits, provisional)
+		}
 
 		// Create taxable income structure for transition year
 		taxableIncome := domain.TaxableIncome{
@@ -578,9 +584,15 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scena
 		// Calculate other income (excluding Social Security)
 		otherIncome := pensionRobert.Add(pensionDawn).Add(tspWithdrawalRobert).Add(tspWithdrawalDawn)
 
-		// Calculate Social Security taxation
+		// Calculate Social Security taxation with filing status thresholds
 		totalSSBenefits := ssRobert.Add(ssDawn)
-		taxableSS := ce.TaxCalc.CalculateSocialSecurityTaxation(totalSSBenefits, otherIncome)
+		provisional := ce.TaxCalc.SSTaxCalc.CalculateProvisionalIncome(otherIncome, decimal.Zero, totalSSBenefits)
+		var taxableSS decimal.Decimal
+		if filingStatus == "single" {
+			taxableSS = ce.TaxCalc.SSTaxCalc.CalculateTaxableSocialSecuritySingle(totalSSBenefits, provisional)
+		} else {
+			taxableSS = ce.TaxCalc.SSTaxCalc.CalculateTaxableSocialSecurity(totalSSBenefits, provisional)
+		}
 
 		// Create taxable income structure
 		taxableIncome := domain.TaxableIncome{

@@ -259,10 +259,12 @@ type FERSRules struct {
 type FederalTaxConfig struct {
 	// Standard deduction amounts
 	StandardDeductionMFJ        decimal.Decimal `yaml:"standard_deduction_mfj" json:"standard_deduction_mfj"`                               // Default: 30000 (2025 MFJ)
+	StandardDeductionSingle     decimal.Decimal `yaml:"standard_deduction_single" json:"standard_deduction_single"`                         // Default: 15000 (2025 Single)
 	AdditionalStandardDeduction decimal.Decimal `yaml:"additional_standard_deduction_65_plus" json:"additional_standard_deduction_65_plus"` // Default: 1550 (per person 65+)
 
 	// Tax brackets for 2025 (updated annually)
-	TaxBrackets2025 []TaxBracket `yaml:"tax_brackets_2025" json:"tax_brackets_2025"`
+	TaxBrackets2025       []TaxBracket `yaml:"tax_brackets_2025" json:"tax_brackets_2025"`
+	TaxBrackets2025Single []TaxBracket `yaml:"tax_brackets_2025_single" json:"tax_brackets_2025_single"`
 }
 
 // TaxBracket represents a federal tax bracket

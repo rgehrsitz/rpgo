@@ -14,17 +14,19 @@ type AnnualCashFlow struct {
 	AgeDawn   int       `json:"age_dawn"`
 
 	// Income Sources
-	SalaryRobert         decimal.Decimal `json:"salary_robert"`
-	SalaryDawn           decimal.Decimal `json:"salary_dawn"`
-	PensionRobert        decimal.Decimal `json:"pension_robert"`
-	PensionDawn          decimal.Decimal `json:"pension_dawn"`
-	TSPWithdrawalRobert  decimal.Decimal `json:"tsp_withdrawal_robert"`
-	TSPWithdrawalDawn    decimal.Decimal `json:"tsp_withdrawal_dawn"`
-	SSBenefitRobert      decimal.Decimal `json:"ss_benefit_robert"`
-	SSBenefitDawn        decimal.Decimal `json:"ss_benefit_dawn"`
-	FERSSupplementRobert decimal.Decimal `json:"fers_supplement_robert"`
-	FERSSupplementDawn   decimal.Decimal `json:"fers_supplement_dawn"`
-	TotalGrossIncome     decimal.Decimal `json:"total_gross_income"`
+	SalaryRobert          decimal.Decimal `json:"salary_robert"`
+	SalaryDawn            decimal.Decimal `json:"salary_dawn"`
+	PensionRobert         decimal.Decimal `json:"pension_robert"`
+	PensionDawn           decimal.Decimal `json:"pension_dawn"`
+	SurvivorPensionRobert decimal.Decimal `json:"survivor_pension_robert"`
+	SurvivorPensionDawn   decimal.Decimal `json:"survivor_pension_dawn"`
+	TSPWithdrawalRobert   decimal.Decimal `json:"tsp_withdrawal_robert"`
+	TSPWithdrawalDawn     decimal.Decimal `json:"tsp_withdrawal_dawn"`
+	SSBenefitRobert       decimal.Decimal `json:"ss_benefit_robert"`
+	SSBenefitDawn         decimal.Decimal `json:"ss_benefit_dawn"`
+	FERSSupplementRobert  decimal.Decimal `json:"fers_supplement_robert"`
+	FERSSupplementDawn    decimal.Decimal `json:"fers_supplement_dawn"`
+	TotalGrossIncome      decimal.Decimal `json:"total_gross_income"`
 
 	// Deductions and Taxes
 	FederalTax       decimal.Decimal `json:"federal_tax"`
@@ -170,6 +172,7 @@ type TaxableIncome struct {
 func (acf *AnnualCashFlow) CalculateTotalIncome() decimal.Decimal {
 	return acf.SalaryRobert.Add(acf.SalaryDawn).
 		Add(acf.PensionRobert).Add(acf.PensionDawn).
+		Add(acf.SurvivorPensionRobert).Add(acf.SurvivorPensionDawn).
 		Add(acf.TSPWithdrawalRobert).Add(acf.TSPWithdrawalDawn).
 		Add(acf.SSBenefitRobert).Add(acf.SSBenefitDawn).
 		Add(acf.FERSSupplementRobert).Add(acf.FERSSupplementDawn)

@@ -146,6 +146,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 
 		// Calculate FERS pensions (only for retired portion of year, and not after death)
 		var pensionRobert, pensionDawn decimal.Decimal
+		var survivorPensionRobert, survivorPensionDawn decimal.Decimal
 		if isRobertRetired && !robertIsDeceased {
 			pensionRobert = CalculatePensionForYear(robert, scenario.Robert.RetirementDate, year-robertRetirementYear, assumptions.InflationRate)
 			// Adjust for partial year if retiring this year
@@ -179,6 +180,49 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 			}
 		}
 
+		// Survivor pension logic: when one spouse deceased and other alive, pay elected survivor annuity.
+		// Simplification: survivor annuity is based on deceased's initial unreduced base with COLA just like retiree pension.
+		// Implementation: reuse CalculatePensionForYear to derive deceased's reduced pension, then derive survivor annuity from initial calc each year.
+		if scenario.Mortality != nil { // only consider if mortality modeling enabled
+			if robertIsDeceased && !dawnIsDeceased && isRobertRetired {
+				// Compute Robert's original pension calc (once) at retirement for survivor amount; then apply COLA path similarly.
+				baseCalc := CalculateFERSPension(robert, scenario.Robert.RetirementDate)
+				// SurvivorAnnuity already reflects elected percentage of unreduced base.
+				// Apply COLA sequence to survivor annuity consistent with retiree COLA rules (starts same year retiree would have gotten COLA)
+				// Derive years since retirement for this projection year
+				yearsSinceRet := year - robertRetirementYear
+				if yearsSinceRet < 0 {
+					yearsSinceRet = 0
+				}
+				currentSurvivor := baseCalc.SurvivorAnnuity
+				for cy := 1; cy <= yearsSinceRet; cy++ {
+					projDate := scenario.Robert.RetirementDate.AddDate(cy, 0, 0)
+					ageAt := robert.Age(projDate)
+					currentSurvivor = ApplyFERSPensionCOLA(currentSurvivor, assumptions.InflationRate, ageAt)
+				}
+				// Survivor begins the year of death (we assume full-year payment replacing deceased pension)
+				if robertDeathYearIndex != nil && year >= *robertDeathYearIndex {
+					survivorPensionDawn = currentSurvivor
+				}
+			}
+			if dawnIsDeceased && !robertIsDeceased && isDawnRetired {
+				baseCalc := CalculateFERSPension(dawn, scenario.Dawn.RetirementDate)
+				yearsSinceRet := year - dawnRetirementYear
+				if yearsSinceRet < 0 {
+					yearsSinceRet = 0
+				}
+				currentSurvivor := baseCalc.SurvivorAnnuity
+				for cy := 1; cy <= yearsSinceRet; cy++ {
+					projDate := scenario.Dawn.RetirementDate.AddDate(cy, 0, 0)
+					ageAt := dawn.Age(projDate)
+					currentSurvivor = ApplyFERSPensionCOLA(currentSurvivor, assumptions.InflationRate, ageAt)
+				}
+				if dawnDeathYearIndex != nil && year >= *dawnDeathYearIndex {
+					survivorPensionRobert = currentSurvivor
+				}
+			}
+		}
+
 		// Calculate Social Security benefits
 		ssRobert := decimal.Zero
 		if !robertIsDeceased {
@@ -194,13 +238,17 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 			// Use deceased's current-year benefit (pre-death). If zero (due to modeling order), recalc directly.
 			deceasedBenefit := CalculateSSBenefitForYear(robert, scenario.Robert.SSStartAge, year, assumptions.COLAGeneralRate)
 			candidate := CalculateSurvivorSSBenefit(deceasedBenefit, ageDawn, fra)
-			if candidate.GreaterThan(ssDawn) { ssDawn = candidate }
+			if candidate.GreaterThan(ssDawn) {
+				ssDawn = candidate
+			}
 		}
 		if dawnIsDeceased && !robertIsDeceased {
 			fra := dateutil.FullRetirementAge(robert.BirthDate)
 			deceasedBenefit := CalculateSSBenefitForYear(dawn, scenario.Dawn.SSStartAge, year, assumptions.COLAGeneralRate)
 			candidate := CalculateSurvivorSSBenefit(deceasedBenefit, ageRobert, fra)
-			if candidate.GreaterThan(ssRobert) { ssRobert = candidate }
+			if candidate.GreaterThan(ssRobert) {
+				ssRobert = candidate
+			}
 		}
 
 		// Adjust Social Security for partial year based on eligibility and retirement timing
@@ -494,7 +542,11 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 			}
 		}
 
-		// Apply survivor spending factor by scaling discretionary withdrawals (simple: scale TSP withdrawals post-death)
+		// Inject survivor pension values
+		cashFlow.SurvivorPensionRobert = survivorPensionRobert
+		cashFlow.SurvivorPensionDawn = survivorPensionDawn
+
+		// Apply survivor spending factor by scaling discretionary withdrawals and original pensions (not survivor annuity)
 		if (robertIsDeceased || dawnIsDeceased) && survivorSpendingFactor.LessThan(decimal.NewFromFloat(0.999)) {
 			cashFlow.TSPWithdrawalRobert = cashFlow.TSPWithdrawalRobert.Mul(survivorSpendingFactor)
 			cashFlow.TSPWithdrawalDawn = cashFlow.TSPWithdrawalDawn.Mul(survivorSpendingFactor)
