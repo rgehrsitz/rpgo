@@ -20,13 +20,13 @@ Monthly Net Income:   $8333.33
 DETAILED INCOME VALIDATION: WORKING vs RETIREMENT
 =================================================================================
 
-SCENARIO 1: Dawn Aug 2025, Robert Feb 2027
-==========================================
+SCENARIO 1: A
+=============
 
 COMPONENT                                   WORKING      RETIREMENT      DIFFERENCE
 --------------------------------------------------------------------------------
 INCOME SOURCES:
-  Salary (Robert + Dawn)                 $367399.00           $0.00     $-367399.00
+  Combined Salary                        $367399.00           $0.00     $-367399.00
   FERS Pension                                $0.00           $0.00           $0.00
   TSP Withdrawals                             $0.00           $0.00           $0.00
   Social Security                             $0.00           $0.00           $0.00
@@ -58,13 +58,13 @@ KEY INSIGHTS:
 Net Effect: $-5000.00 (-5.00%)
 
 
-SCENARIO 2: Dawn Aug 2025, Robert Feb 2027
-==========================================
+SCENARIO 2: B
+=============
 
 COMPONENT                                   WORKING      RETIREMENT      DIFFERENCE
 --------------------------------------------------------------------------------
 INCOME SOURCES:
-  Salary (Robert + Dawn)                 $367399.00           $0.00     $-367399.00
+  Combined Salary                        $367399.00           $0.00     $-367399.00
   FERS Pension                                $0.00           $0.00           $0.00
   TSP Withdrawals                             $0.00           $0.00           $0.00
   Social Security                             $0.00           $0.00           $0.00
@@ -101,16 +101,6 @@ FIRST RETIREMENT YEAR (2025) INCOME BREAKDOWN:
 (Note: Amounts shown are current-year cash received - may be partial year)
 ----------------------------------------
 INCOME SOURCES:
-  Robert's Salary:        $0.00
-  Dawn's Salary:          $0.00
-  Robert's FERS Pension:  $0.00
-  Dawn's FERS Pension:    $0.00
-  Robert's TSP Withdrawal: $0.00
-  Dawn's TSP Withdrawal:   $0.00
-  Robert's Social Security: $0.00
-  Dawn's Social Security:   $0.00
-  Robert's FERS SRS:       $0.00
-  Dawn's FERS SRS:         $0.00
   TOTAL GROSS INCOME:      $0.00
 
 DEDUCTIONS & TAXES:
@@ -133,8 +123,6 @@ RETIREMENT STATUS:
   Is Retired:             true
   Medicare Eligible:      false
   RMD Year:               false
-  Robert's Age:           0
-  Dawn's Age:             0
 
 LONG-TERM PROJECTION:
 ---------------------
@@ -150,16 +138,6 @@ FIRST RETIREMENT YEAR (2025) INCOME BREAKDOWN:
 (Note: Amounts shown are current-year cash received - may be partial year)
 ----------------------------------------
 INCOME SOURCES:
-  Robert's Salary:        $0.00
-  Dawn's Salary:          $0.00
-  Robert's FERS Pension:  $0.00
-  Dawn's FERS Pension:    $0.00
-  Robert's TSP Withdrawal: $0.00
-  Dawn's TSP Withdrawal:   $0.00
-  Robert's Social Security: $0.00
-  Dawn's Social Security:   $0.00
-  Robert's FERS SRS:       $0.00
-  Dawn's FERS SRS:         $0.00
   TOTAL GROSS INCOME:      $0.00
 
 DEDUCTIONS & TAXES:
@@ -182,8 +160,6 @@ RETIREMENT STATUS:
   Is Retired:             true
   Medicare Eligible:      false
   RMD Year:               false
-  Robert's Age:           0
-  Dawn's Age:             0
 
 LONG-TERM PROJECTION:
 ---------------------
@@ -195,6 +171,6 @@ LONG-TERM PROJECTION:
 
 SUMMARY & RECOMMENDATIONS
 =========================
-Best scenario for Robert: B
+Best scenario: B
 Take-Home Income Change: $5000.00 (5.00%)
 Monthly Change: $416.67

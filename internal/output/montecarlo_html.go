@@ -907,7 +907,7 @@ func (m *MonteCarloHTMLReport) generateTimeSeriesData() (string, string) {
 						years[yearIdx] = yearData.Date.Year()
 					}
 					yearlyNetIncomes[yearIdx] = append(yearlyNetIncomes[yearIdx], yearData.NetIncome)
-					yearlyTSPBalances[yearIdx] = append(yearlyTSPBalances[yearIdx], yearData.TSPBalanceRobert.Add(yearData.TSPBalanceDawn))
+					yearlyTSPBalances[yearIdx] = append(yearlyTSPBalances[yearIdx], yearData.GetTotalTSPBalance())
 				}
 			}
 		}

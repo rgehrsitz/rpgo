@@ -2,21 +2,30 @@
 
 ## Build/Lint/Test Commands
 
-- **Build**: `go build -o fers-calc cmd/cli/main.go`
+- **Build**: `go build -o rpgo cmd/cli/main.go`
+- **Run**: `./rpgo --help` or `go run cmd/cli/main.go --help`
 - **Run all tests**: `go test ./...`
-- **Run tests for a specific package**: `go test ./internal/calculation` (replace with desired package path)
-- **Run a single test**: `go test -run ^TestMyFunction$ ./path/to/package` (replace `TestMyFunction` and `./path/to/package`)
+- **Run tests with verbose output**: `go test -v ./...`
+- **Run tests for specific package**: `go test ./internal/calculation`
+- **Run single test**: `go test -run ^TestCalculateFERSPension$ ./internal/calculation`
+- **Run tests with coverage**: `go test -cover ./...`
+- **Format code**: `go fmt ./...`
+- **Vet code**: `go vet ./...`
+- **Mod tidy**: `go mod tidy`
 
 ## Code Style Guidelines (Go)
 
-This project follows standard Go conventions.
+This financial calculator follows standard Go conventions with domain-specific patterns:
 
-- **Imports**: Organize imports into standard library, external packages, and internal packages, separated by blank lines.
-- **Formatting**: Use `go fmt` and `goimports` to format code.
-- **Naming Conventions**:
-    - **Variables/Functions**: `camelCase` for local, `PascalCase` for exported.
-    - **Packages**: `lowercase` single word.
-- **Error Handling**: Return errors as the last return value. Check errors immediately after function calls. Do not `panic` unless truly unrecoverable.
-- **Comments**: Use comments to explain _why_ something is done, not _what_ it does. Public functions and structs should have godoc comments.
-- **Types**: Use specific types over `interface{}` where possible. Ensure type safety.
-- **Concurrency**: Use goroutines and channels for concurrency. Avoid shared memory by communicating.
+- **Imports**: Group standard library, external packages, then internal packages with blank line separation
+- **Financial Types**: Use `decimal.Decimal` for all monetary calculations, never `float64`
+- **Struct Tags**: Include both `yaml` and `json` tags: `yaml:"field_name" json:"field_name"`
+- **Naming**: 
+  - Variables/Functions: `camelCase` for unexported, `PascalCase` for exported
+  - Packages: lowercase single word (e.g., `calculation`, `domain`)
+  - Test files: `*_test.go` with `TestFunctionName` pattern
+- **Error Handling**: Return errors as last value, check immediately, avoid panics
+- **Comments**: Godoc comments for exported functions/types, explain "why" not "what"
+- **Testing**: Use testify/assert, golden files for complex output validation
+- **Types**: Prefer specific types over `interface{}`, use pointer receivers for mutating methods
+- **Time**: Use `time.Time` for dates, be explicit about timezone handling

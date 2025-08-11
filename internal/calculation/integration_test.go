@@ -54,16 +54,16 @@ func TestFullScenarioCalculation(t *testing.T) {
 
 		// First year should show mixed income (partial work + partial retirement)
 		firstYear := result.Projection[0]
-		assert.True(t, firstYear.SalaryRobert.GreaterThan(decimal.Zero),
+		assert.True(t, firstYear.Salaries["robert"].GreaterThan(decimal.Zero),
 			"Robert should have some salary income in first year")
-		assert.True(t, firstYear.PensionRobert.GreaterThan(decimal.Zero),
+		assert.True(t, firstYear.Pensions["robert"].GreaterThan(decimal.Zero),
 			"Robert should have some pension income in first year")
-		assert.True(t, firstYear.PensionDawn.GreaterThan(decimal.Zero),
+		assert.True(t, firstYear.Pensions["dawn"].GreaterThan(decimal.Zero),
 			"Dawn should have pension income in first year")
 
 		// Verify ages are calculated correctly
-		assert.Equal(t, 59, firstYear.AgeRobert, "Robert should be 59 in 2025")
-		assert.Equal(t, 61, firstYear.AgeDawn, "Dawn should be 61 in 2025")
+		assert.Equal(t, 59, firstYear.Ages["robert"], "Robert should be 59 in 2025")
+		assert.Equal(t, 61, firstYear.Ages["dawn"], "Dawn should be 61 in 2025")
 	})
 
 	t.Run("Scenario 2: Both Retire at Robert's 62 - Feb 2027", func(t *testing.T) {
@@ -100,15 +100,15 @@ func TestFullScenarioCalculation(t *testing.T) {
 		// Check the year when Robert actually retires (2027 = year 2 in projection)
 		if len(result.Projection) >= 3 {
 			retirementYear := result.Projection[2] // 2027
-			assert.Equal(t, 61, retirementYear.AgeRobert, "Robert should be 61 in 2027")
-			assert.Equal(t, 63, retirementYear.AgeDawn, "Dawn should be 63 in 2027")
+			assert.Equal(t, 61, retirementYear.Ages["robert"], "Robert should be 61 in 2027")
+			assert.Equal(t, 63, retirementYear.Ages["dawn"], "Dawn should be 63 in 2027")
 
 			// Robert should have enhanced multiplier at age 62 in the following year
 			if len(result.Projection) >= 4 {
 				postRetirement := result.Projection[3] // 2028
-				assert.Equal(t, 62, postRetirement.AgeRobert, "Robert should be 62 in 2028")
-				assert.True(t, postRetirement.PensionRobert.GreaterThan(decimal.NewFromInt(70000)),
-					"Robert should have enhanced pension at 62: %s", postRetirement.PensionRobert.StringFixed(2))
+				assert.Equal(t, 62, postRetirement.Ages["robert"], "Robert should be 62 in 2028")
+				assert.True(t, postRetirement.Pensions["robert"].GreaterThan(decimal.NewFromInt(70000)),
+					"Robert should have enhanced pension at 62: %s", postRetirement.Pensions["robert"].StringFixed(2))
 			}
 		}
 	})
@@ -304,18 +304,18 @@ func TestProjectionConsistency(t *testing.T) {
 		// Ages should increase by 1 each year
 		if i > 0 {
 			prevYear := result.Projection[i-1]
-			assert.Equal(t, prevYear.AgeRobert+1, year.AgeRobert,
+			assert.Equal(t, prevYear.Ages["robert"]+1, year.Ages["robert"],
 				"Robert's age should increase by 1 each year")
-			assert.Equal(t, prevYear.AgeDawn+1, year.AgeDawn,
+			assert.Equal(t, prevYear.Ages["dawn"]+1, year.Ages["dawn"],
 				"Dawn's age should increase by 1 each year")
 		}
 
 		// Total gross income should equal sum of components
-		calculatedGross := year.SalaryRobert.Add(year.SalaryDawn).
-			Add(year.PensionRobert).Add(year.PensionDawn).
-			Add(year.TSPWithdrawalRobert).Add(year.TSPWithdrawalDawn).
-			Add(year.SSBenefitRobert).Add(year.SSBenefitDawn).
-			Add(year.FERSSupplementRobert).Add(year.FERSSupplementDawn)
+		calculatedGross := year.GetTotalSalary().
+			Add(year.GetTotalPension()).
+			Add(year.GetTotalTSPWithdrawal()).
+			Add(year.GetTotalSSBenefit()).
+			Add(year.GetTotalFERSSupplement())
 
 		assert.True(t, calculatedGross.Sub(year.TotalGrossIncome).Abs().LessThan(decimal.NewFromFloat(0.01)),
 			"Year %d: Total gross income should equal sum of components: Calculated %s, Stored %s",
@@ -323,7 +323,7 @@ func TestProjectionConsistency(t *testing.T) {
 
 		// Net income should be gross minus deductions
 		calculatedDeductions := year.FederalTax.Add(year.StateTax).Add(year.LocalTax).
-			Add(year.FICATax).Add(year.TSPContributions).Add(year.FEHBPremium).Add(year.MedicarePremium)
+			Add(year.FICATax).Add(year.TotalTSPContributions).Add(year.FEHBPremium).Add(year.MedicarePremium)
 
 		expectedNet := year.TotalGrossIncome.Sub(calculatedDeductions)
 		assert.True(t, expectedNet.Sub(year.NetIncome).Abs().LessThan(decimal.NewFromFloat(0.01)),
@@ -331,18 +331,16 @@ func TestProjectionConsistency(t *testing.T) {
 			i+1, expectedNet.StringFixed(2), year.NetIncome.StringFixed(2))
 
 		// TSP balances should never go negative
-		assert.True(t, year.TSPBalanceRobert.GreaterThanOrEqual(decimal.Zero),
-			"Year %d: Robert's TSP balance should not be negative: %s", i+1, year.TSPBalanceRobert.StringFixed(2))
-		assert.True(t, year.TSPBalanceDawn.GreaterThanOrEqual(decimal.Zero),
-			"Year %d: Dawn's TSP balance should not be negative: %s", i+1, year.TSPBalanceDawn.StringFixed(2))
+		assert.True(t, year.GetTotalTSPBalance().GreaterThanOrEqual(decimal.Zero),
+			"Year %d: Total TSP balance should not be negative: %s", i+1, year.GetTotalTSPBalance().StringFixed(2))
 
 		// After retirement, salaries should be zero
 		if year.IsRetired && i > 0 { // Skip first year as it may be partial retirement year
-			assert.True(t, year.SalaryRobert.Equal(decimal.Zero),
+			assert.True(t, year.Salaries["robert"].Equal(decimal.Zero),
 				"Year %d: Robert's salary should be zero when retired", i+1)
-			assert.True(t, year.SalaryDawn.Equal(decimal.Zero),
+			assert.True(t, year.Salaries["dawn"].Equal(decimal.Zero),
 				"Year %d: Dawn's salary should be zero when retired", i+1)
-			assert.True(t, year.TSPContributions.Equal(decimal.Zero),
+			assert.True(t, year.TotalTSPContributions.Equal(decimal.Zero),
 				"Year %d: TSP contributions should be zero when retired", i+1)
 			assert.True(t, year.FICATax.Equal(decimal.Zero),
 				"Year %d: FICA tax should be zero when retired", i+1)

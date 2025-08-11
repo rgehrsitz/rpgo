@@ -6,29 +6,25 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// AnnualCashFlow represents the complete cash flow for a single year
+// AnnualCashFlow represents the complete cash flow for a single year with generic participant support
 type AnnualCashFlow struct {
-	Year      int       `json:"year"`
-	Date      time.Time `json:"date"`
-	AgeRobert int       `json:"ageRobert"`
-	AgeDawn   int       `json:"ageDawn"`
+	Year int       `json:"year"`
+	Date time.Time `json:"date"`
 
-	// Income Sources
-	SalaryRobert          decimal.Decimal `json:"salaryRobert"`
-	SalaryDawn            decimal.Decimal `json:"salaryDawn"`
-	PensionRobert         decimal.Decimal `json:"pensionRobert"`
-	PensionDawn           decimal.Decimal `json:"pensionDawn"`
-	SurvivorPensionRobert decimal.Decimal `json:"survivorPensionRobert"`
-	SurvivorPensionDawn   decimal.Decimal `json:"survivorPensionDawn"`
-	TSPWithdrawalRobert   decimal.Decimal `json:"tspWithdrawalRobert"`
-	TSPWithdrawalDawn     decimal.Decimal `json:"tspWithdrawalDawn"`
-	SSBenefitRobert       decimal.Decimal `json:"ssBenefitRobert"`
-	SSBenefitDawn         decimal.Decimal `json:"ssBenefitDawn"`
-	FERSSupplementRobert  decimal.Decimal `json:"fersSupplementRobert"`
-	FERSSupplementDawn    decimal.Decimal `json:"fersSupplementDawn"`
-	TotalGrossIncome      decimal.Decimal `json:"totalGrossIncome"`
+	// Participant-based data using maps (participant name -> value)
+	Ages                        map[string]int             `json:"ages"`                        // participantName -> age
+	Salaries                    map[string]decimal.Decimal `json:"salaries"`                    // participantName -> salary
+	Pensions                    map[string]decimal.Decimal `json:"pensions"`                    // participantName -> pension
+	SurvivorPensions            map[string]decimal.Decimal `json:"survivorPensions"`            // participantName -> survivor pension
+	TSPWithdrawals              map[string]decimal.Decimal `json:"tspWithdrawals"`              // participantName -> TSP withdrawal
+	SSBenefits                  map[string]decimal.Decimal `json:"ssBenefits"`                  // participantName -> Social Security benefits
+	FERSSupplements             map[string]decimal.Decimal `json:"fersSupplements"`             // participantName -> FERS supplement
+	TSPBalances                 map[string]decimal.Decimal `json:"tspBalances"`                 // participantName -> total TSP balance
+	ParticipantTSPContributions map[string]decimal.Decimal `json:"participantTspContributions"` // participantName -> TSP contributions
+	IsDeceased                  map[string]bool            `json:"isDeceased"`                  // participantName -> deceased status
 
-	// Deductions and Taxes
+	// Household-level totals and taxes
+	TotalGrossIncome         decimal.Decimal `json:"totalGrossIncome"`
 	FederalTax               decimal.Decimal `json:"federalTax"`
 	FederalTaxableIncome     decimal.Decimal `json:"federalTaxableIncome"`
 	FederalStandardDeduction decimal.Decimal `json:"federalStandardDeduction"`
@@ -37,27 +33,17 @@ type AnnualCashFlow struct {
 	StateTax                 decimal.Decimal `json:"stateTax"`
 	LocalTax                 decimal.Decimal `json:"localTax"`
 	FICATax                  decimal.Decimal `json:"ficaTax"`
-	TSPContributions         decimal.Decimal `json:"tspContributions"`
+	TotalTSPContributions    decimal.Decimal `json:"totalTspContributions"` // Sum of all participant TSP contributions
 	FEHBPremium              decimal.Decimal `json:"fehbPremium"`
 	MedicarePremium          decimal.Decimal `json:"medicarePremium"`
 	NetIncome                decimal.Decimal `json:"netIncome"`
-
-	// TSP Balances (end of year)
-	TSPBalanceRobert      decimal.Decimal `json:"tspBalanceRobert"`
-	TSPBalanceDawn        decimal.Decimal `json:"tspBalanceDawn"`
-	TSPBalanceTraditional decimal.Decimal `json:"tspBalanceTraditional"`
-	TSPBalanceRoth        decimal.Decimal `json:"tspBalanceRoth"`
 
 	// Additional Information
 	IsRetired          bool            `json:"isRetired"`
 	IsMedicareEligible bool            `json:"isMedicareEligible"`
 	IsRMDYear          bool            `json:"isRmdYear"`
 	RMDAmount          decimal.Decimal `json:"rmdAmount"`
-
-	// Mortality / survivor tracking (Phase 1 deterministic death modeling)
-	RobertDeceased     bool `json:"robertDeceased"`
-	DawnDeceased       bool `json:"dawnDeceased"`
-	FilingStatusSingle bool `json:"filingStatusSingle"` // true once survivor filing status applies
+	FilingStatusSingle bool            `json:"filingStatusSingle"` // true once survivor filing status applies
 }
 
 // ScenarioSummary provides a summary of key metrics for a retirement scenario
@@ -172,20 +158,142 @@ type TaxableIncome struct {
 	InterestIncome     decimal.Decimal `json:"interestIncome"`
 }
 
+// NewAnnualCashFlow creates a new AnnualCashFlow with initialized participant maps
+func NewAnnualCashFlow(year int, date time.Time, participantNames []string) *AnnualCashFlow {
+	acf := &AnnualCashFlow{
+		Year:                        year,
+		Date:                        date,
+		Ages:                        make(map[string]int),
+		Salaries:                    make(map[string]decimal.Decimal),
+		Pensions:                    make(map[string]decimal.Decimal),
+		SurvivorPensions:            make(map[string]decimal.Decimal),
+		TSPWithdrawals:              make(map[string]decimal.Decimal),
+		SSBenefits:                  make(map[string]decimal.Decimal),
+		FERSSupplements:             make(map[string]decimal.Decimal),
+		TSPBalances:                 make(map[string]decimal.Decimal),
+		ParticipantTSPContributions: make(map[string]decimal.Decimal),
+		IsDeceased:                  make(map[string]bool),
+	}
+
+	// Initialize all participants with zero values
+	for _, name := range participantNames {
+		acf.Ages[name] = 0
+		acf.Salaries[name] = decimal.Zero
+		acf.Pensions[name] = decimal.Zero
+		acf.SurvivorPensions[name] = decimal.Zero
+		acf.TSPWithdrawals[name] = decimal.Zero
+		acf.SSBenefits[name] = decimal.Zero
+		acf.FERSSupplements[name] = decimal.Zero
+		acf.TSPBalances[name] = decimal.Zero
+		acf.ParticipantTSPContributions[name] = decimal.Zero
+		acf.IsDeceased[name] = false
+	}
+
+	return acf
+}
+
+// SyncLegacyFields syncs the participant maps to legacy fields for backward compatibility
+// This method assumes "robert" and "dawn" are the first two participants if they exist
+// (Legacy SyncLegacyFields removed: scalar convenience fields deprecated.)
+
+// GetParticipantNames returns all participant names from the cash flow
+func (acf *AnnualCashFlow) GetParticipantNames() []string {
+	names := make([]string, 0, len(acf.Ages))
+	for name := range acf.Ages {
+		names = append(names, name)
+	}
+	return names
+}
+
+// GetTotalSalary returns the sum of all participant salaries
+func (acf *AnnualCashFlow) GetTotalSalary() decimal.Decimal {
+	total := decimal.Zero
+	for _, salary := range acf.Salaries {
+		total = total.Add(salary)
+	}
+	return total
+}
+
+// GetTotalPension returns the sum of all participant pensions
+func (acf *AnnualCashFlow) GetTotalPension() decimal.Decimal {
+	total := decimal.Zero
+	for _, pension := range acf.Pensions {
+		total = total.Add(pension)
+	}
+	return total
+}
+
+// GetTotalTSPWithdrawal returns the sum of all participant TSP withdrawals
+func (acf *AnnualCashFlow) GetTotalTSPWithdrawal() decimal.Decimal {
+	total := decimal.Zero
+	for _, withdrawal := range acf.TSPWithdrawals {
+		total = total.Add(withdrawal)
+	}
+	return total
+}
+
+// GetTotalSSBenefit returns the sum of all participant Social Security benefits
+func (acf *AnnualCashFlow) GetTotalSSBenefit() decimal.Decimal {
+	total := decimal.Zero
+	for _, benefit := range acf.SSBenefits {
+		total = total.Add(benefit)
+	}
+	return total
+}
+
+// GetTotalFERSSupplement returns the sum of all participant FERS supplements
+func (acf *AnnualCashFlow) GetTotalFERSSupplement() decimal.Decimal {
+	total := decimal.Zero
+	for _, supplement := range acf.FERSSupplements {
+		total = total.Add(supplement)
+	}
+	return total
+}
+
+// GetTotalTSPBalance returns the sum of all participant TSP balances
+func (acf *AnnualCashFlow) GetTotalTSPBalance() decimal.Decimal {
+	total := decimal.Zero
+	for _, balance := range acf.TSPBalances {
+		total = total.Add(balance)
+	}
+	return total
+}
+
+// GetLivingParticipants returns a list of living participants
+func (acf *AnnualCashFlow) GetLivingParticipants() []string {
+	living := make([]string, 0)
+	for name, deceased := range acf.IsDeceased {
+		if !deceased {
+			living = append(living, name)
+		}
+	}
+	return living
+}
+
+// GetDeceasedParticipants returns a list of deceased participants
+func (acf *AnnualCashFlow) GetDeceasedParticipants() []string {
+	deceased := make([]string, 0)
+	for name, isDead := range acf.IsDeceased {
+		if isDead {
+			deceased = append(deceased, name)
+		}
+	}
+	return deceased
+}
+
 // CalculateTotalIncome calculates the total gross income for the year
 func (acf *AnnualCashFlow) CalculateTotalIncome() decimal.Decimal {
-	return acf.SalaryRobert.Add(acf.SalaryDawn).
-		Add(acf.PensionRobert).Add(acf.PensionDawn).
-		Add(acf.SurvivorPensionRobert).Add(acf.SurvivorPensionDawn).
-		Add(acf.TSPWithdrawalRobert).Add(acf.TSPWithdrawalDawn).
-		Add(acf.SSBenefitRobert).Add(acf.SSBenefitDawn).
-		Add(acf.FERSSupplementRobert).Add(acf.FERSSupplementDawn)
+	return acf.GetTotalSalary().
+		Add(acf.GetTotalPension()).
+		Add(acf.GetTotalTSPWithdrawal()).
+		Add(acf.GetTotalSSBenefit()).
+		Add(acf.GetTotalFERSSupplement())
 }
 
 // CalculateTotalDeductions calculates the total deductions for the year
 func (acf *AnnualCashFlow) CalculateTotalDeductions() decimal.Decimal {
 	return acf.FederalTax.Add(acf.StateTax).Add(acf.LocalTax).Add(acf.FICATax).
-		Add(acf.TSPContributions).Add(acf.FEHBPremium).Add(acf.MedicarePremium)
+		Add(acf.TotalTSPContributions).Add(acf.FEHBPremium).Add(acf.MedicarePremium)
 }
 
 // CalculateNetIncome calculates the net income for the year
@@ -194,9 +302,9 @@ func (acf *AnnualCashFlow) CalculateNetIncome() decimal.Decimal {
 	return acf.NetIncome
 }
 
-// TotalTSPBalance returns the combined TSP balance for both employees
+// TotalTSPBalance returns the combined TSP balance for all participants
 func (acf *AnnualCashFlow) TotalTSPBalance() decimal.Decimal {
-	return acf.TSPBalanceRobert.Add(acf.TSPBalanceDawn)
+	return acf.GetTotalTSPBalance()
 }
 
 // IsTSPDepleted returns true if TSP balances are zero or negative

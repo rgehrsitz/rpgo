@@ -60,18 +60,18 @@ func TestSurvivorPensionFlow(t *testing.T) {
 	preIdx := deathIdx - 1
 	if preIdx >= 0 {
 		cfPre := projection[preIdx]
-		if !cfPre.RobertDeceased && !cfPre.SurvivorPensionDawn.IsZero() {
+		if !cfPre.IsDeceased["robert"] && !cfPre.SurvivorPensions["dawn"].IsZero() {
 			t.Errorf("unexpected survivor pension before death year")
 		}
 	}
 	// Death year onward should show survivor pension for Dawn and RobertDeceased true
 	for y := deathIdx; y < len(projection); y++ {
 		cf := projection[y]
-		if y == deathIdx && !cf.RobertDeceased {
+		if y == deathIdx && !cf.IsDeceased["robert"] {
 			t.Errorf("expected RobertDeceased true in death year")
 		}
-		if cf.RobertDeceased {
-			if cf.SurvivorPensionDawn.IsZero() {
+		if cf.IsDeceased["robert"] {
+			if cf.SurvivorPensions["dawn"].IsZero() {
 				t.Errorf("expected survivor pension for Dawn year %d", cf.Date.Year())
 			}
 			// Survivor pension should approximate elected share of unreduced base with COLA (allow small tolerance)
@@ -87,9 +87,9 @@ func TestSurvivorPensionFlow(t *testing.T) {
 				curr = ApplyFERSPensionCOLA(curr, assumptions.InflationRate, ageAt)
 			}
 			// Compare with tolerance 1 dollar
-			diff := cf.SurvivorPensionDawn.Sub(curr).Abs()
+			diff := cf.SurvivorPensions["dawn"].Sub(curr).Abs()
 			if diff.GreaterThan(decimal.NewFromInt(1)) {
-				t.Errorf("survivor pension mismatch year %d got %s expected %s", cf.Date.Year(), cf.SurvivorPensionDawn, curr)
+				t.Errorf("survivor pension mismatch year %d got %s expected %s", cf.Date.Year(), cf.SurvivorPensions["dawn"], curr)
 			}
 		}
 	}

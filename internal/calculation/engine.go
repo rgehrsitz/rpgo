@@ -94,26 +94,78 @@ func (ce *CalculationEngine) RunScenarioAuto(ctx context.Context, config *domain
 
 // RunGenericScenario calculates a complete retirement scenario using the generic household format
 func (ce *CalculationEngine) RunGenericScenario(ctx context.Context, config *domain.Configuration, scenario *domain.GenericScenario) (*domain.ScenarioSummary, error) {
-	// Convert to legacy format for now (temporary bridge while we refactor the calculation engine)
-	legacyConfig, err := config.ToLegacyConfiguration()
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert to legacy configuration: %w", err)
+	// Use the new generic projection method directly
+	projection := ce.GenerateAnnualProjectionGeneric(config.Household, scenario, &config.GlobalAssumptions, config.GlobalAssumptions.FederalRules)
+
+	// Create scenario summary (guard Year5/Year10 for short projections)
+	first := decimal.Zero
+	if len(projection) > 0 {
+		first = projection[0].NetIncome
+	}
+	year5 := decimal.Zero
+	if len(projection) > 4 {
+		year5 = projection[4].NetIncome
+	}
+	year10 := decimal.Zero
+	if len(projection) > 9 {
+		year10 = projection[9].NetIncome
 	}
 
-	// Find the corresponding legacy scenario (for now, assume first match by name)
-	var legacyScenario *domain.Scenario
-	for i := range legacyConfig.Scenarios {
-		if legacyConfig.Scenarios[i].Name == scenario.Name {
-			legacyScenario = &legacyConfig.Scenarios[i]
+	// Calculate absolute calendar year comparisons for apples-to-apples analysis
+	netIncome2030 := ce.getNetIncomeForYear(projection, 2030)
+	netIncome2035 := ce.getNetIncomeForYear(projection, 2035)
+	netIncome2040 := ce.getNetIncomeForYear(projection, 2040)
+
+	// Calculate pre-retirement baseline projections with COLA growth
+	currentNetIncome := ce.calculateCurrentNetIncomeGeneric(config.Household)
+	preRetirement2030 := ce.projectPreRetirementNetIncome(currentNetIncome, 2030, config.GlobalAssumptions.COLAGeneralRate)
+	preRetirement2035 := ce.projectPreRetirementNetIncome(currentNetIncome, 2035, config.GlobalAssumptions.COLAGeneralRate)
+	preRetirement2040 := ce.projectPreRetirementNetIncome(currentNetIncome, 2040, config.GlobalAssumptions.COLAGeneralRate)
+
+	summary := &domain.ScenarioSummary{
+		Name:                 scenario.Name,
+		FirstYearNetIncome:   first,
+		Year5NetIncome:       year5,
+		Year10NetIncome:      year10,
+		Projection:           projection,
+		NetIncome2030:        netIncome2030,
+		NetIncome2035:        netIncome2035,
+		NetIncome2040:        netIncome2040,
+		PreRetirementNet2030: preRetirement2030,
+		PreRetirementNet2035: preRetirement2035,
+		PreRetirementNet2040: preRetirement2040,
+	}
+
+	// Calculate total lifetime income (present value)
+	var totalPV decimal.Decimal
+	discountRate := decimal.NewFromFloat(0.03) // 3% discount rate
+	for i, year := range projection {
+		discountFactor := decimal.NewFromFloat(1).Add(discountRate).Pow(decimal.NewFromInt(int64(i)))
+		totalPV = totalPV.Add(year.NetIncome.Div(discountFactor))
+	}
+	summary.TotalLifetimeIncome = totalPV
+
+	// Determine TSP longevity
+	for i, year := range projection {
+		if year.IsTSPDepleted() {
+			summary.TSPLongevity = i + 1
 			break
 		}
 	}
-
-	if legacyScenario == nil {
-		return nil, fmt.Errorf("could not find matching legacy scenario for %s", scenario.Name)
+	if summary.TSPLongevity == 0 {
+		summary.TSPLongevity = len(projection) // Lasted full projection
 	}
 
-	return ce.RunScenario(ctx, legacyConfig, legacyScenario)
+	// Set initial and final TSP balances using the new generic methods
+	if len(projection) > 0 {
+		summary.InitialTSPBalance = projection[0].GetTotalTSPBalance()
+		summary.FinalTSPBalance = projection[len(projection)-1].GetTotalTSPBalance()
+
+		// Calculate success rate for deterministic scenarios based on TSP sustainability
+		summary.SuccessRate = ce.calculateDeterministicSuccessRate(projection, summary.TSPLongevity)
+	}
+
+	return summary, nil
 }
 
 // RunScenario calculates a complete retirement scenario (legacy format)
@@ -201,8 +253,8 @@ func (ce *CalculationEngine) RunScenario(ctx context.Context, config *domain.Con
 
 	// Set initial and final TSP balances
 	if len(projection) > 0 {
-		summary.InitialTSPBalance = projection[0].TSPBalanceRobert.Add(projection[0].TSPBalanceDawn)
-		summary.FinalTSPBalance = projection[len(projection)-1].TSPBalanceRobert.Add(projection[len(projection)-1].TSPBalanceDawn)
+		summary.InitialTSPBalance = projection[0].GetTotalTSPBalance()
+		summary.FinalTSPBalance = projection[len(projection)-1].GetTotalTSPBalance()
 
 		// Calculate success rate for deterministic scenarios based on TSP sustainability
 		summary.SuccessRate = ce.calculateDeterministicSuccessRate(projection, summary.TSPLongevity)
@@ -247,8 +299,8 @@ func (ce *CalculationEngine) calculateDeterministicSuccessRate(projection []doma
 	// If TSP lasts the full projection period, success rate is 100%
 	if tspLongevity >= projectionLength {
 		// Additional check: TSP should be growing or stable, not just lasting
-		firstTSP := projection[0].TSPBalanceRobert.Add(projection[0].TSPBalanceDawn)
-		lastTSP := projection[projectionLength-1].TSPBalanceRobert.Add(projection[projectionLength-1].TSPBalanceDawn)
+		firstTSP := projection[0].GetTotalTSPBalance()
+		lastTSP := projection[projectionLength-1].GetTotalTSPBalance()
 
 		if lastTSP.GreaterThanOrEqual(firstTSP) {
 			return decimal.NewFromFloat(100.0) // 100% success - TSP lasted and grew
@@ -266,6 +318,84 @@ func (ce *CalculationEngine) calculateDeterministicSuccessRate(projection []doma
 	}
 
 	return successRate
+}
+
+// calculateCurrentNetIncomeGeneric calculates current net income for a household using generic participants
+func (ce *CalculationEngine) calculateCurrentNetIncomeGeneric(household *domain.Household) decimal.Decimal {
+	// Calculate gross income from all participants
+	grossIncome := decimal.Zero
+	for _, participant := range household.Participants {
+		if participant.IsFederal && participant.CurrentSalary != nil {
+			grossIncome = grossIncome.Add(*participant.CurrentSalary)
+		}
+	}
+
+	// Calculate FEHB premiums (from primary holder)
+	fehbPremium := decimal.Zero
+	for _, participant := range household.Participants {
+		if participant.IsPrimaryFEHBHolder && participant.FEHBPremiumPerPayPeriod != nil {
+			fehbPremium = participant.FEHBPremiumPerPayPeriod.Mul(decimal.NewFromInt(26)) // 26 pay periods per year
+			break                                                                         // Only one primary holder
+		}
+	}
+
+	// Calculate TSP contributions (pre-tax) from all federal participants
+	tspContributions := decimal.Zero
+	for _, participant := range household.Participants {
+		if participant.IsFederal && participant.CurrentSalary != nil && participant.TSPContributionPercent != nil {
+			contribution := participant.CurrentSalary.Mul(*participant.TSPContributionPercent)
+			agencyMatch := participant.AgencyMatch()
+			tspContributions = tspContributions.Add(contribution).Add(agencyMatch)
+		}
+	}
+
+	// Calculate taxes - use projection start date for age calculation
+	projectionStartYear := ProjectionBaseYear
+	projectionStartDate := time.Date(projectionStartYear, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	ages := make([]int, 0)
+	salaries := make([]decimal.Decimal, 0)
+	for _, participant := range household.Participants {
+		ages = append(ages, participant.Age(projectionStartDate))
+		if participant.IsFederal && participant.CurrentSalary != nil {
+			salaries = append(salaries, *participant.CurrentSalary)
+		} else {
+			salaries = append(salaries, decimal.Zero)
+		}
+	}
+
+	// Calculate taxes (simplified - use first two participants' ages)
+	ageFirst := 0
+	ageSecond := 0
+	salaryFirst := decimal.Zero
+	salarySecond := decimal.Zero
+
+	if len(ages) > 0 {
+		ageFirst = ages[0]
+		salaryFirst = salaries[0]
+	}
+	if len(ages) > 1 {
+		ageSecond = ages[1]
+		salarySecond = salaries[1]
+	}
+
+	// Calculate taxes (excluding FICA for now, will calculate separately)
+	currentTaxableIncome := CalculateCurrentTaxableIncome(salaryFirst, salarySecond)
+	federalTax, stateTax, localTax, _ := ce.TaxCalc.CalculateTotalTaxes(currentTaxableIncome, false, ageFirst, ageSecond, grossIncome)
+
+	// Calculate FICA taxes for each individual separately
+	ficaTax := decimal.Zero
+	for _, participant := range household.Participants {
+		if participant.IsFederal && participant.CurrentSalary != nil {
+			participantFICA := ce.TaxCalc.FICATaxCalc.CalculateFICA(*participant.CurrentSalary, *participant.CurrentSalary)
+			ficaTax = ficaTax.Add(participantFICA)
+		}
+	}
+
+	// Calculate net income: gross - taxes - FEHB - TSP contributions
+	netIncome := grossIncome.Sub(federalTax).Sub(stateTax).Sub(localTax).Sub(ficaTax).Sub(fehbPremium).Sub(tspContributions)
+
+	return netIncome
 }
 
 // GenerateAnnualProjection generates annual cash flow projections for a scenario
@@ -301,21 +431,15 @@ func (ce *CalculationEngine) RunScenarios(config *domain.Configuration) (*domain
 		return nil, fmt.Errorf("invalid configuration format")
 	}
 
-	// Calculate baseline (current net income) - need to convert for new format
+	// Calculate baseline (current net income) - use format-appropriate method
 	var baselineNetIncome decimal.Decimal
 	if config.IsLegacyFormat() {
 		robert := config.PersonalDetails["robert"]
 		dawn := config.PersonalDetails["dawn"]
 		baselineNetIncome = ce.NetIncomeCalc.Calculate(&robert, &dawn, ce.Debug)
 	} else {
-		// Convert to legacy format temporarily to calculate baseline
-		legacyConfig, err := config.ToLegacyConfiguration()
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert to legacy configuration for baseline calculation: %w", err)
-		}
-		robert := legacyConfig.PersonalDetails["robert"]
-		dawn := legacyConfig.PersonalDetails["dawn"]
-		baselineNetIncome = ce.NetIncomeCalc.Calculate(&robert, &dawn, ce.Debug)
+		// Use the new generic calculation
+		baselineNetIncome = ce.calculateCurrentNetIncomeGeneric(config.Household)
 	}
 
 	comparison := &domain.ScenarioComparison{

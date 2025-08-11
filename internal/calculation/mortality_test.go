@@ -40,24 +40,24 @@ func TestMortalityBasic(t *testing.T) {
 	after := projection[deathYearIdx]
 	next := projection[deathYearIdx+1]
 
-	if after.RobertDeceased != true {
+	if !after.IsDeceased["robert"] {
 		t.Fatalf("expected Robert deceased in death year")
 	}
-	if before.RobertDeceased {
+	if before.IsDeceased["robert"] {
 		t.Fatalf("Robert should be alive year before death")
 	}
 
 	// Robert pension and SS should be zero after death year start
-	if after.PensionRobert.GreaterThan(decimal.Zero) {
-		t.Fatalf("pension should cease after death; got %s", after.PensionRobert)
+	if after.Pensions["robert"].GreaterThan(decimal.Zero) {
+		t.Fatalf("pension should cease after death; got %s", after.Pensions["robert"])
 	}
-	if after.SSBenefitRobert.GreaterThan(decimal.Zero) {
-		t.Fatalf("SS should cease after death; got %s", after.SSBenefitRobert)
+	if after.SSBenefits["robert"].GreaterThan(decimal.Zero) {
+		t.Fatalf("SS should cease after death; got %s", after.SSBenefits["robert"])
 	}
 
 	// Survivor (Dawn) should have SS at least her own prior-year or Robert's whichever higher (simplified rule)
-	if after.SSBenefitDawn.LessThan(before.SSBenefitDawn) {
-		t.Fatalf("survivor SS should not decrease; before %s after %s", before.SSBenefitDawn, after.SSBenefitDawn)
+	if after.SSBenefits["dawn"].LessThan(before.SSBenefits["dawn"]) {
+		t.Fatalf("survivor SS should not decrease; before %s after %s", before.SSBenefits["dawn"], after.SSBenefits["dawn"])
 	}
 
 	// Filing status should switch the year AFTER death per next_year policy

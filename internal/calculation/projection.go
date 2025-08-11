@@ -456,7 +456,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		workingIncomeRobert := robert.CurrentSalary.Mul(robertWorkFraction)
 		workingIncomeDawn := dawn.CurrentSalary.Mul(dawnWorkFraction)
 
-		federalTax, stateTax, localTax, ficaTax, taxableTotal, stdDedUsed, filingStatusUsed, seniors65 := ce.calculateTaxes(
+		federalTax, stateTax, localTax, ficaTax, _, _, _, _ := ce.calculateTaxes(
 			robert, dawn, scenario, year, isRobertRetired && isDawnRetired,
 			pensionRobert, pensionDawn, survivorPensionRobert, survivorPensionDawn,
 			tspWithdrawalRobert, tspWithdrawalDawn,
@@ -472,80 +472,319 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 			tspContributions = robertContributions.Add(dawnContributions)
 		}
 
-		// Create annual cash flow
-		cashFlow := domain.AnnualCashFlow{
-			Year:                     year + 1,
-			Date:                     projectionDate,
-			AgeRobert:                ageRobert,
-			AgeDawn:                  ageDawn,
-			SalaryRobert:             robert.CurrentSalary.Mul(robertWorkFraction),
-			SalaryDawn:               dawn.CurrentSalary.Mul(dawnWorkFraction),
-			PensionRobert:            pensionRobert,
-			PensionDawn:              pensionDawn,
-			TSPWithdrawalRobert:      tspWithdrawalRobert,
-			TSPWithdrawalDawn:        tspWithdrawalDawn,
-			SSBenefitRobert:          ssRobert,
-			SSBenefitDawn:            ssDawn,
-			FERSSupplementRobert:     srsRobert,
-			FERSSupplementDawn:       srsDawn,
-			FederalTax:               federalTax,
-			FederalTaxableIncome:     taxableTotal,
-			FederalStandardDeduction: stdDedUsed,
-			FederalFilingStatus:      filingStatusUsed,
-			FederalSeniors65Plus:     seniors65,
-			StateTax:                 stateTax,
-			LocalTax:                 localTax,
-			FICATax:                  ficaTax,
-			TSPContributions:         tspContributions,
-			FEHBPremium:              fehbPremium,
-			MedicarePremium:          medicarePremium,
-			TSPBalanceRobert:         currentTSPTraditionalRobert.Add(currentTSPRothRobert),
-			TSPBalanceDawn:           currentTSPTraditionalDawn.Add(currentTSPRothDawn),
-			TSPBalanceTraditional:    currentTSPTraditionalRobert.Add(currentTSPTraditionalDawn),
-			TSPBalanceRoth:           currentTSPRothRobert.Add(currentTSPRothDawn),
-			IsRetired:                isRobertRetired && isDawnRetired, // Both retired
-			IsMedicareEligible:       dateutil.IsMedicareEligible(robert.BirthDate, projectionDate) || dateutil.IsMedicareEligible(dawn.BirthDate, projectionDate),
-			IsRMDYear:                dateutil.IsRMDYear(robert.BirthDate, projectionDate) || dateutil.IsRMDYear(dawn.BirthDate, projectionDate),
-			RobertDeceased:           robertIsDeceased,
-			DawnDeceased:             dawnIsDeceased,
-			FilingStatusSingle:       false,
-		}
+		cf := domain.NewAnnualCashFlow(year+1, projectionDate, []string{"robert", "dawn"})
+		cf.Ages["robert"], cf.Ages["dawn"] = ageRobert, ageDawn
+		cf.Salaries["robert"], cf.Salaries["dawn"] = robert.CurrentSalary.Mul(robertWorkFraction), dawn.CurrentSalary.Mul(dawnWorkFraction)
+		cf.Pensions["robert"], cf.Pensions["dawn"] = pensionRobert, pensionDawn
+		cf.TSPWithdrawals["robert"], cf.TSPWithdrawals["dawn"] = tspWithdrawalRobert, tspWithdrawalDawn
+		cf.SSBenefits["robert"], cf.SSBenefits["dawn"] = ssRobert, ssDawn
+		cf.FERSSupplements["robert"], cf.FERSSupplements["dawn"] = srsRobert, srsDawn
+		cf.TSPBalances["robert"], cf.TSPBalances["dawn"] = currentTSPTraditionalRobert.Add(currentTSPRothRobert), currentTSPTraditionalDawn.Add(currentTSPRothDawn)
+		cf.FederalTax, cf.StateTax, cf.LocalTax, cf.FICATax = federalTax, stateTax, localTax, ficaTax
+		cf.FEHBPremium, cf.MedicarePremium = fehbPremium, medicarePremium
+		cf.IsRetired = isRobertRetired && isDawnRetired
+		cf.IsMedicareEligible = dateutil.IsMedicareEligible(robert.BirthDate, projectionDate) || dateutil.IsMedicareEligible(dawn.BirthDate, projectionDate)
+		cf.IsRMDYear = dateutil.IsRMDYear(robert.BirthDate, projectionDate) || dateutil.IsRMDYear(dawn.BirthDate, projectionDate)
+		cf.TotalTSPContributions = tspContributions
+		cf.IsDeceased["robert"], cf.IsDeceased["dawn"] = robertIsDeceased, dawnIsDeceased
 
-		// Determine filing status for display (mirror simplified logic in taxes.go)
+		// Filing status after a death
 		if scenario.Mortality != nil && scenario.Mortality.Assumptions != nil && (robertIsDeceased != dawnIsDeceased) {
 			mode := scenario.Mortality.Assumptions.FilingStatusSwitch
-			// Reconstruct death year indexes (already computed earlier): reuse conditions
 			switch mode {
 			case "immediate":
-				cashFlow.FilingStatusSingle = true
+				cf.FilingStatusSingle = true
 			case "next_year":
 				if robertDeathYearIndex != nil && robertIsDeceased && year > *robertDeathYearIndex {
-					cashFlow.FilingStatusSingle = true
+					cf.FilingStatusSingle = true
 				}
 				if dawnDeathYearIndex != nil && dawnIsDeceased && year > *dawnDeathYearIndex {
-					cashFlow.FilingStatusSingle = true
+					cf.FilingStatusSingle = true
 				}
 			}
 		}
 
-		// Inject survivor pension values
-		cashFlow.SurvivorPensionRobert = survivorPensionRobert
-		cashFlow.SurvivorPensionDawn = survivorPensionDawn
+		// Survivor pensions (store in participant map)
+		cf.SurvivorPensions["robert"] = survivorPensionRobert
+		cf.SurvivorPensions["dawn"] = survivorPensionDawn
 
-		// Apply survivor spending factor by scaling discretionary withdrawals and original pensions (not survivor annuity)
+		// Apply survivor spending factor to withdrawals & pensions (not survivor annuity itself)
 		if (robertIsDeceased || dawnIsDeceased) && survivorSpendingFactor.LessThan(decimal.NewFromFloat(0.999)) {
-			cashFlow.TSPWithdrawalRobert = cashFlow.TSPWithdrawalRobert.Mul(survivorSpendingFactor)
-			cashFlow.TSPWithdrawalDawn = cashFlow.TSPWithdrawalDawn.Mul(survivorSpendingFactor)
-			cashFlow.PensionRobert = cashFlow.PensionRobert.Mul(survivorSpendingFactor)
-			cashFlow.PensionDawn = cashFlow.PensionDawn.Mul(survivorSpendingFactor)
+			cf.TSPWithdrawals["robert"] = cf.TSPWithdrawals["robert"].Mul(survivorSpendingFactor)
+			cf.TSPWithdrawals["dawn"] = cf.TSPWithdrawals["dawn"].Mul(survivorSpendingFactor)
+			cf.Pensions["robert"] = cf.Pensions["robert"].Mul(survivorSpendingFactor)
+			cf.Pensions["dawn"] = cf.Pensions["dawn"].Mul(survivorSpendingFactor)
 		}
 
-		// Calculate total gross income and net income
-		cashFlow.TotalGrossIncome = cashFlow.CalculateTotalIncome()
-		cashFlow.CalculateNetIncome()
+		// Recalculate total gross income & net income after adjustments
+		cf.TotalGrossIncome = cf.CalculateTotalIncome()
+		cf.CalculateNetIncome()
 
-		projection[year] = cashFlow
+		projection[year] = *cf
 	}
 
 	return projection
+}
+
+// GenerateAnnualProjectionGeneric generates annual cash flow projections for a household scenario using participant-based logic
+func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.Household, scenario *domain.GenericScenario, assumptions *domain.GlobalAssumptions, federalRules domain.FederalRules) []domain.AnnualCashFlow {
+	projection := make([]domain.AnnualCashFlow, assumptions.ProjectionYears)
+	projectionStartYear := ProjectionBaseYear
+
+	// Get participant names for initialization
+	participantNames := make([]string, len(household.Participants))
+	for i, p := range household.Participants {
+		participantNames[i] = p.Name
+	}
+
+	// Initialize participant data structures
+	currentTSPBalances := make(map[string]decimal.Decimal)
+	tspStrategies := make(map[string]TSPWithdrawalStrategy)
+	retirementYears := make(map[string]int)
+	isRetiredMap := make(map[string]bool)
+	isDeceasedMap := make(map[string]bool)
+	deathYearIndexes := make(map[string]*int)
+
+	// Initialize TSP balances and strategies for each participant
+	for _, participant := range household.Participants {
+		if participant.IsFederal {
+			tspBalance := decimal.Zero
+			if participant.TSPBalanceTraditional != nil {
+				tspBalance = tspBalance.Add(*participant.TSPBalanceTraditional)
+			}
+			if participant.TSPBalanceRoth != nil {
+				tspBalance = tspBalance.Add(*participant.TSPBalanceRoth)
+			}
+			currentTSPBalances[participant.Name] = tspBalance
+
+			// Create TSP withdrawal strategy if participant scenario exists
+			if participantScenario, exists := scenario.ParticipantScenarios[participant.Name]; exists {
+				retirementScenario := domain.RetirementScenario{
+					EmployeeName:               participant.Name,
+					RetirementDate:             *participantScenario.RetirementDate,
+					SSStartAge:                 participantScenario.SSStartAge,
+					TSPWithdrawalStrategy:      participantScenario.TSPWithdrawalStrategy,
+					TSPWithdrawalTargetMonthly: participantScenario.TSPWithdrawalTargetMonthly,
+					TSPWithdrawalRate:          participantScenario.TSPWithdrawalRate,
+				}
+				tspStrategies[participant.Name] = ce.createTSPStrategy(&retirementScenario, tspBalance, assumptions.InflationRate)
+				retirementYears[participant.Name] = participantScenario.RetirementDate.Year() - projectionStartYear
+			}
+		}
+
+		isRetiredMap[participant.Name] = false
+		isDeceasedMap[participant.Name] = false
+
+		// Initialize death year indexes from mortality data
+		if scenario.Mortality != nil && scenario.Mortality.Participants != nil {
+			if mortalitySpec, exists := scenario.Mortality.Participants[participant.Name]; exists && mortalitySpec != nil {
+				if mortalitySpec.DeathAge != nil {
+					deathYear := participant.BirthDate.Year() + *mortalitySpec.DeathAge - projectionStartYear
+					if deathYear >= 0 && deathYear < assumptions.ProjectionYears {
+						deathYearIndexes[participant.Name] = &deathYear
+					}
+				} else if mortalitySpec.DeathDate != nil {
+					deathYear := mortalitySpec.DeathDate.Year() - projectionStartYear
+					if deathYear >= 0 && deathYear < assumptions.ProjectionYears {
+						deathYearIndexes[participant.Name] = &deathYear
+					}
+				}
+			}
+		}
+	}
+
+	// Generate projection for each year
+	for year := 0; year < assumptions.ProjectionYears; year++ {
+		projectionDate := time.Date(projectionStartYear, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(year, 0, 0)
+
+		// Create new cash flow for this year
+		cashFlow := domain.NewAnnualCashFlow(year, projectionDate, participantNames)
+
+		// Process death events at start of year
+		for participantName, deathYearIndex := range deathYearIndexes {
+			if deathYearIndex != nil && year >= *deathYearIndex {
+				isDeceasedMap[participantName] = true
+				cashFlow.IsDeceased[participantName] = true
+			}
+		}
+
+		// Calculate each participant's data for this year
+		for _, participant := range household.Participants {
+			name := participant.Name
+			age := participant.Age(projectionDate)
+			cashFlow.Ages[name] = age
+
+			// Skip processing if participant is deceased
+			if isDeceasedMap[name] {
+				continue
+			}
+
+			// Determine if participant is retired this year
+			if participantScenario, exists := scenario.ParticipantScenarios[name]; exists && participantScenario.RetirementDate != nil {
+				retirementYear := retirementYears[name]
+				wasRetired := isRetiredMap[name]
+				isRetiredThisYear := year >= retirementYear
+				isRetiredMap[name] = isRetiredThisYear
+
+				// Calculate work fraction for partial retirement year
+				workFraction := decimal.NewFromInt(1)
+				if year == retirementYear && retirementYear >= 0 {
+					yearStart := time.Date(projectionDate.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+					daysWorked := participantScenario.RetirementDate.Sub(yearStart).Hours() / 24
+					workFraction = decimal.NewFromFloat(daysWorked / 365.0)
+				} else if isRetiredThisYear {
+					workFraction = decimal.Zero
+				}
+
+				// Calculate salary for working portion
+				if participant.IsFederal && participant.CurrentSalary != nil {
+					cashFlow.Salaries[name] = participant.CurrentSalary.Mul(workFraction)
+				}
+
+				// Calculate FERS pension (only if retired and federal employee)
+				if isRetiredThisYear && participant.IsFederal && !wasRetired {
+					// Convert participant to employee for pension calculation
+					if employee, err := participant.ToEmployee(); err == nil {
+						pension := CalculatePensionForYear(employee, *participantScenario.RetirementDate, year-retirementYear, assumptions.InflationRate)
+						// Adjust for partial year if retiring this year
+						if year == retirementYear {
+							pension = pension.Mul(decimal.NewFromInt(1).Sub(workFraction))
+						}
+						cashFlow.Pensions[name] = pension
+					}
+				} else if isRetiredThisYear && participant.IsFederal {
+					// Continue existing pension with COLA adjustment
+					if employee, err := participant.ToEmployee(); err == nil {
+						pension := CalculatePensionForYear(employee, *participantScenario.RetirementDate, year-retirementYear, assumptions.InflationRate)
+						cashFlow.Pensions[name] = pension
+					}
+				}
+
+				// Calculate Social Security benefits
+				if age >= participantScenario.SSStartAge {
+					var ssBenefit decimal.Decimal
+					switch participantScenario.SSStartAge {
+					case 62:
+						ssBenefit = participant.SSBenefit62.Mul(decimal.NewFromInt(12))
+					case 67:
+						ssBenefit = participant.SSBenefitFRA.Mul(decimal.NewFromInt(12))
+					case 70:
+						ssBenefit = participant.SSBenefit70.Mul(decimal.NewFromInt(12))
+					default:
+						// Use FRA as default
+						ssBenefit = participant.SSBenefitFRA.Mul(decimal.NewFromInt(12))
+					}
+					cashFlow.SSBenefits[name] = ssBenefit
+				}
+
+				// Calculate TSP withdrawals
+				if participant.IsFederal && isRetiredThisYear {
+					if strategy, exists := tspStrategies[name]; exists {
+						// Calculate target income based on spending needs
+						targetIncome := decimal.Zero
+						if participantScenario.TSPWithdrawalTargetMonthly != nil {
+							targetIncome = participantScenario.TSPWithdrawalTargetMonthly.Mul(decimal.NewFromInt(12))
+						}
+
+						// Check if RMD year (age 73+)
+						isRMDYear := age >= 73
+						rmdAmount := decimal.Zero
+						if isRMDYear {
+							// Simplified RMD calculation - would need proper RMD tables
+							rmdAmount = currentTSPBalances[name].Div(decimal.NewFromFloat(26.5)) // Approximate RMD factor
+						}
+
+						withdrawal := strategy.CalculateWithdrawal(
+							currentTSPBalances[name],
+							year-retirementYear+1, // Years since retirement
+							targetIncome,
+							age,
+							isRMDYear,
+							rmdAmount,
+						)
+						cashFlow.TSPWithdrawals[name] = withdrawal
+
+						// Update TSP balance (simplified - just subtract withdrawal)
+						newBalance := currentTSPBalances[name].Sub(withdrawal)
+						if newBalance.LessThan(decimal.Zero) {
+							newBalance = decimal.Zero
+						}
+						currentTSPBalances[name] = newBalance
+						cashFlow.TSPBalances[name] = newBalance
+					}
+				} else if participant.IsFederal {
+					// Not retired yet, just track balance growth
+					if currentBalance, exists := currentTSPBalances[name]; exists {
+						// Apply growth (simplified)
+						growthRate := assumptions.TSPReturnPreRetirement
+						if isRetiredThisYear {
+							growthRate = assumptions.TSPReturnPostRetirement
+						}
+						newBalance := currentBalance.Mul(decimal.NewFromInt(1).Add(growthRate))
+						currentTSPBalances[name] = newBalance
+						cashFlow.TSPBalances[name] = newBalance
+					}
+				}
+			}
+		}
+
+		// Calculate household-level totals and taxes
+		cashFlow.TotalGrossIncome = cashFlow.GetTotalSalary().
+			Add(cashFlow.GetTotalPension()).
+			Add(cashFlow.GetTotalTSPWithdrawal()).
+			Add(cashFlow.GetTotalSSBenefit()).
+			Add(cashFlow.GetTotalFERSSupplement())
+
+		// Determine if any participant is retired for household retirement status
+		cashFlow.IsRetired = false
+		for _, isRetired := range isRetiredMap {
+			if isRetired {
+				cashFlow.IsRetired = true
+				break
+			}
+		}
+
+		// Calculate taxes (simplified for now - would need full tax calculation integration)
+		// For now, we'll use placeholder logic
+		ages := make([]int, 0)
+		for _, age := range cashFlow.Ages {
+			if !cashFlow.IsDeceased[getParticipantNameForAge(cashFlow.Ages, age)] {
+				ages = append(ages, age)
+			}
+		}
+
+		if len(ages) > 0 {
+			// Use first living participant's age for tax calculation (simplified)
+			primaryAge := ages[0]
+			secondaryAge := 0
+			if len(ages) > 1 {
+				secondaryAge = ages[1]
+			}
+
+			// Calculate taxes using existing tax calculator
+			taxableIncome := CalculateCurrentTaxableIncome(cashFlow.GetTotalSalary(), decimal.Zero)
+			federalTax, stateTax, localTax, _ := ce.TaxCalc.CalculateTotalTaxes(taxableIncome, cashFlow.IsRetired, primaryAge, secondaryAge, cashFlow.TotalGrossIncome)
+
+			cashFlow.FederalTax = federalTax
+			cashFlow.StateTax = stateTax
+			cashFlow.LocalTax = localTax
+		}
+
+		// Calculate net income
+		cashFlow.NetIncome = cashFlow.TotalGrossIncome.Sub(cashFlow.CalculateTotalDeductions())
+
+		projection[year] = *cashFlow
+	}
+
+	return projection
+}
+
+// Helper function to get participant name for a given age (simplified)
+func getParticipantNameForAge(ages map[string]int, targetAge int) string {
+	for name, age := range ages {
+		if age == targetAge {
+			return name
+		}
+	}
+	return ""
 }

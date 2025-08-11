@@ -148,12 +148,12 @@ const scenarioData = [
   {
     name: {{$scenario.Name | printf "%q"}},
     years: [{{range $scenario.Projection}}{{.Date.Year}},{{end}}],
-    tspBalances: [{{range $scenario.Projection}}{{printf "%.0f" (.TSPBalanceRobert.Add .TSPBalanceDawn).InexactFloat64}},{{end}}],
+    tspBalances: [{{range $scenario.Projection}}{{printf "%.0f" (.TotalTSPBalance).InexactFloat64}},{{end}}],
     netIncomes: [{{range $scenario.Projection}}{{printf "%.0f" .NetIncome.InexactFloat64}},{{end}}],
-    salaries: [{{range $scenario.Projection}}{{printf "%.0f" (.SalaryRobert.Add .SalaryDawn).InexactFloat64}},{{end}}],
-    pensions: [{{range $scenario.Projection}}{{printf "%.0f" (.PensionRobert.Add .PensionDawn).InexactFloat64}},{{end}}],
-    tspWithdrawals: [{{range $scenario.Projection}}{{printf "%.0f" (.TSPWithdrawalRobert.Add .TSPWithdrawalDawn).InexactFloat64}},{{end}}],
-    socialSecurity: [{{range $scenario.Projection}}{{printf "%.0f" (.SSBenefitRobert.Add .SSBenefitDawn).InexactFloat64}},{{end}}]
+    salaries: [{{range $scenario.Projection}}{{printf "%.0f" (.GetTotalSalary).InexactFloat64}},{{end}}],
+    pensions: [{{range $scenario.Projection}}{{printf "%.0f" (.GetTotalPension).InexactFloat64}},{{end}}],
+    tspWithdrawals: [{{range $scenario.Projection}}{{printf "%.0f" (.GetTotalTSPWithdrawal).InexactFloat64}},{{end}}],
+    socialSecurity: [{{range $scenario.Projection}}{{printf "%.0f" (.GetTotalSSBenefit).InexactFloat64}},{{end}}]
   }{{if ne $scenarioIndex (len $.Scenarios | minus1)}},{{end}}
 {{- end}}
 ];

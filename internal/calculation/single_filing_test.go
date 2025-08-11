@@ -56,7 +56,15 @@ func TestMortalityFilingAffectsSSTaxation(t *testing.T) {
 		t.Fatalf("expected single filing status post death")
 	}
 	// Compare taxable SS (approx by difference in federal tax relative to non-SS incomes not rigorous, just ensure SS benefits not zero)
-	if pre.SSBenefitRobert.Add(pre.SSBenefitDawn).IsZero() || post.SSBenefitRobert.Add(post.SSBenefitDawn).IsZero() {
+	preSS := decimal.Zero
+	for _, s := range pre.SSBenefits {
+		preSS = preSS.Add(s)
+	}
+	postSS := decimal.Zero
+	for _, s := range post.SSBenefits {
+		postSS = postSS.Add(s)
+	}
+	if preSS.IsZero() || postSS.IsZero() {
 		t.Skip("SS not started yet in this simplified test")
 	}
 }

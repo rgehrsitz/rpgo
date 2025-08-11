@@ -426,7 +426,23 @@ func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithStatus(agiComponen
 
 // CalculateTaxableIncome creates a TaxableIncome struct from cash flow data
 func CalculateTaxableIncome(cashFlow domain.AnnualCashFlow, isRetired bool) domain.TaxableIncome {
-	return domain.TaxableIncome{Salary: decimal.Zero, FERSPension: cashFlow.PensionRobert.Add(cashFlow.PensionDawn).Add(cashFlow.SurvivorPensionRobert).Add(cashFlow.SurvivorPensionDawn), TSPWithdrawalsTrad: cashFlow.TSPWithdrawalRobert.Add(cashFlow.TSPWithdrawalDawn), TaxableSSBenefits: cashFlow.SSBenefitRobert.Add(cashFlow.SSBenefitDawn), OtherTaxableIncome: decimal.Zero, WageIncome: decimal.Zero, InterestIncome: decimal.Zero}
+	// Aggregate pensions (including survivor pensions) and withdrawals from maps
+	ferPension := decimal.Zero
+	for _, p := range cashFlow.Pensions {
+		ferPension = ferPension.Add(p)
+	}
+	for _, sp := range cashFlow.SurvivorPensions {
+		ferPension = ferPension.Add(sp)
+	}
+	withdrawals := decimal.Zero
+	for _, w := range cashFlow.TSPWithdrawals {
+		withdrawals = withdrawals.Add(w)
+	}
+	ss := decimal.Zero
+	for _, s := range cashFlow.SSBenefits {
+		ss = ss.Add(s)
+	}
+	return domain.TaxableIncome{Salary: decimal.Zero, FERSPension: ferPension, TSPWithdrawalsTrad: withdrawals, TaxableSSBenefits: ss, OtherTaxableIncome: decimal.Zero, WageIncome: decimal.Zero, InterestIncome: decimal.Zero}
 }
 
 // CalculateCurrentTaxableIncome calculates taxable income for current employment

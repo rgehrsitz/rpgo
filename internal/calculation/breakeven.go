@@ -100,12 +100,17 @@ func (ce *CalculationEngine) CalculateBreakEvenAnalysis(config *domain.Configura
 			return nil, fmt.Errorf("failed to calculate break-even rate for scenario %s: %v", scenario.Name, err)
 		}
 
+		// Sum all participant TSP withdrawals
+		withdrawalTotal := decimal.Zero
+		for _, w := range yearData.TSPWithdrawals {
+			withdrawalTotal = withdrawalTotal.Add(w)
+		}
 		results[i] = BreakEvenResult{
 			ScenarioName:            scenario.Name,
 			BreakEvenWithdrawalRate: rate,
 			ProjectedNetIncome:      yearData.NetIncome,
 			ProjectedYear:           yearData.Year + (ProjectionBaseYear - 1),
-			TSPWithdrawalAmount:     yearData.TSPWithdrawalRobert.Add(yearData.TSPWithdrawalDawn),
+			TSPWithdrawalAmount:     withdrawalTotal,
 			TotalTSPBalance:         yearData.TotalTSPBalance(),
 			CurrentVsBreakEvenDiff:  yearData.NetIncome.Sub(targetNetIncome),
 		}

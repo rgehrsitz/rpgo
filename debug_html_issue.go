@@ -53,7 +53,7 @@ func main() {
 			// Check first few years of this simulation
 			for year := 0; year < min(3, len(scenario.Projection)); year++ {
 				yearData := scenario.Projection[year]
-				totalTSP := yearData.TSPBalanceRobert.Add(yearData.TSPBalanceDawn)
+				totalTSP := yearData.GetTotalTSPBalance()
 				fmt.Printf("    Year %d: TSP=$%s, NetIncome=$%s\n",
 					year+1, totalTSP.StringFixed(0), yearData.NetIncome.StringFixed(0))
 			}
@@ -88,7 +88,7 @@ func main() {
 					if yearlyTSPBalances[yearIdx] == nil {
 						yearlyTSPBalances[yearIdx] = make([]decimal.Decimal, 0, len(result.Simulations))
 					}
-					totalTSP := yearData.TSPBalanceRobert.Add(yearData.TSPBalanceDawn)
+					totalTSP := yearData.GetTotalTSPBalance()
 					yearlyTSPBalances[yearIdx] = append(yearlyTSPBalances[yearIdx], totalTSP)
 				}
 			}
@@ -130,7 +130,7 @@ func main() {
 	for i := 0; i < min(3, len(result.Simulations)); i++ {
 		sim := result.Simulations[i]
 		if len(sim.ScenarioResults) > 0 && len(sim.ScenarioResults[0].Projection) > year6Index {
-			directTSP := sim.ScenarioResults[0].Projection[year6Index].TSPBalanceRobert.Add(sim.ScenarioResults[0].Projection[year6Index].TSPBalanceDawn)
+			directTSP := sim.ScenarioResults[0].Projection[year6Index].GetTotalTSPBalance()
 			extractedTSP := yearlyTSPBalances[year6Index][i]
 
 			fmt.Printf("Sim %d Year 6: Direct=$%s, Extracted=$%s, Match=%v\n",
