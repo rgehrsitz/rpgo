@@ -17,10 +17,10 @@ func (h HTMLFormatter) Name() string { return "html" }
 var htmlTemplateSource string
 
 var htmlTemplate = template.Must(template.New("report").Funcs(template.FuncMap{
-	"curr": FormatCurrency,
-	"pct":  FormatPercentage,
+	"curr":   FormatCurrency,
+	"pct":    FormatPercentage,
 	"minus1": func(i int) int { return i - 1 },
-	"add": func(i, j int) int { return i + j },
+	"add":    func(i, j int) int { return i + j },
 	"slice": func(items []domain.ScenarioSummary, start int) []domain.ScenarioSummary {
 		if start >= len(items) {
 			return []domain.ScenarioSummary{}
@@ -32,13 +32,13 @@ var htmlTemplate = template.Must(template.New("report").Funcs(template.FuncMap{
 func (h HTMLFormatter) Format(results *domain.ScenarioComparison) ([]byte, error) {
 	var buf bytes.Buffer
 	rec := AnalyzeScenarios(results)
-	
+
 	// Use assumptions from results if available, otherwise fall back to defaults
 	assumptions := results.Assumptions
 	if len(assumptions) == 0 {
 		assumptions = DefaultAssumptions
 	}
-	
+
 	data := struct {
 		*domain.ScenarioComparison
 		Recommendation Recommendation

@@ -20,42 +20,42 @@ type HistoricalDataPoint struct {
 
 // HistoricalDataSet represents a complete dataset with metadata
 type HistoricalDataSet struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Source      string                 `json:"source"`
-	DataPoints  []HistoricalDataPoint  `json:"data_points"`
-	MinYear     int                    `json:"min_year"`
-	MaxYear     int                    `json:"max_year"`
-	Statistics  HistoricalStatistics   `json:"statistics"`
+	Name        string                `json:"name"`
+	Description string                `json:"description"`
+	Source      string                `json:"source"`
+	DataPoints  []HistoricalDataPoint `json:"dataPoints"`
+	MinYear     int                   `json:"minYear"`
+	MaxYear     int                   `json:"maxYear"`
+	Statistics  HistoricalStatistics  `json:"statistics"`
 }
 
 // HistoricalStatistics provides statistical summary of the dataset
 type HistoricalStatistics struct {
-	Mean        decimal.Decimal `json:"mean"`
-	Median      decimal.Decimal `json:"median"`
-	StdDev      decimal.Decimal `json:"std_dev"`
-	Min         decimal.Decimal `json:"min"`
-	Max         decimal.Decimal `json:"max"`
-	Count       int             `json:"count"`
-	MissingYears []int          `json:"missing_years"`
+	Mean         decimal.Decimal `json:"mean"`
+	Median       decimal.Decimal `json:"median"`
+	StdDev       decimal.Decimal `json:"stdDev"`
+	Min          decimal.Decimal `json:"min"`
+	Max          decimal.Decimal `json:"max"`
+	Count        int             `json:"count"`
+	MissingYears []int           `json:"missingYears"`
 }
 
 // TSPFundData represents historical returns for all TSP funds
 type TSPFundData struct {
-	CFund *HistoricalDataSet `json:"c_fund"`
-	SFund *HistoricalDataSet `json:"s_fund"`
-	IFund *HistoricalDataSet `json:"i_fund"`
-	FFund *HistoricalDataSet `json:"f_fund"`
-	GFund *HistoricalDataSet `json:"g_fund"`
+	CFund *HistoricalDataSet `json:"cFund"`
+	SFund *HistoricalDataSet `json:"sFund"`
+	IFund *HistoricalDataSet `json:"iFund"`
+	FFund *HistoricalDataSet `json:"fFund"`
+	GFund *HistoricalDataSet `json:"gFund"`
 }
 
 // HistoricalDataManager manages all historical datasets
 type HistoricalDataManager struct {
-	TSPFunds    *TSPFundData    `json:"tsp_funds"`
-	Inflation   *HistoricalDataSet `json:"inflation"`
-	COLA        *HistoricalDataSet `json:"cola"`
-	DataPath    string          `json:"data_path"`
-	IsLoaded    bool            `json:"is_loaded"`
+	TSPFunds  *TSPFundData       `json:"tspFunds"`
+	Inflation *HistoricalDataSet `json:"inflation"`
+	COLA      *HistoricalDataSet `json:"cola"`
+	DataPath  string             `json:"dataPath"`
+	IsLoaded  bool               `json:"isLoaded"`
 }
 
 // NewHistoricalDataManager creates a new historical data manager
@@ -96,7 +96,7 @@ func (hdm *HistoricalDataManager) LoadAllData() error {
 func (hdm *HistoricalDataManager) loadTSPFundData() error {
 	funds := map[string]string{
 		"c_fund": "c-fund-annual.csv",
-		"s_fund": "s-fund-annual.csv", 
+		"s_fund": "s-fund-annual.csv",
 		"i_fund": "i-fund-annual.csv",
 		"f_fund": "f-fund-annual.csv",
 		"g_fund": "g-fund-annual.csv",
@@ -157,7 +157,7 @@ func (hdm *HistoricalDataManager) loadCSVData(filePath, name, description, sourc
 	defer file.Close()
 
 	reader := csv.NewReader(file)
-	
+
 	// Read header
 	header, err := reader.Read()
 	if err != nil {
@@ -294,12 +294,12 @@ func (hdm *HistoricalDataManager) calculateStatistics(values []decimal.Decimal, 
 	}
 
 	return HistoricalStatistics{
-		Mean:        mean,
-		Median:      median,
-		StdDev:      stdDev,
-		Min:         min,
-		Max:         max,
-		Count:       len(values),
+		Mean:         mean,
+		Median:       median,
+		StdDev:       stdDev,
+		Min:          min,
+		Max:          max,
+		Count:        len(values),
 		MissingYears: missingYears,
 	}
 }
@@ -438,4 +438,4 @@ func (hdm *HistoricalDataManager) ValidateDataQuality() ([]string, error) {
 	}
 
 	return issues, nil
-} 
+}

@@ -12,84 +12,84 @@ import (
 // TestSocialSecurityOfficialExamples tests Social Security calculations using official SSA examples
 func TestSocialSecurityOfficialExamples(t *testing.T) {
 	tests := []struct {
-		name          string
-		birthDate     time.Time
-		benefitAtFRA  decimal.Decimal
-		claimingAge   int
+		name            string
+		birthDate       time.Time
+		benefitAtFRA    decimal.Decimal
+		claimingAge     int
 		expectedBenefit decimal.Decimal
-		description   string
+		description     string
 	}{
 		{
-			name:          "SSA 2025 Example: Maximum benefit at FRA",
-			birthDate:     time.Date(1958, 1, 1, 0, 0, 0, 0, time.UTC), // FRA = 66
-			benefitAtFRA:  decimal.NewFromInt(4018), // 2025 maximum at FRA
-			claimingAge:   66, // Fixed: was 67, should be 66 for FRA benefit
+			name:            "SSA 2025 Example: Maximum benefit at FRA",
+			birthDate:       time.Date(1958, 1, 1, 0, 0, 0, 0, time.UTC), // FRA = 66
+			benefitAtFRA:    decimal.NewFromInt(4018),                    // 2025 maximum at FRA
+			claimingAge:     66,                                          // Fixed: was 67, should be 66 for FRA benefit
 			expectedBenefit: decimal.NewFromInt(4018),
-			description:   "Official SSA maximum benefit for 2025",
+			description:     "Official SSA maximum benefit for 2025",
 		},
 		{
-			name:          "SSA 2025 Example: Maximum benefit at age 62",
-			birthDate:     time.Date(1963, 1, 1, 0, 0, 0, 0, time.UTC), // FRA = 67
-			benefitAtFRA:  decimal.NewFromInt(4018),
-			claimingAge:   62,
+			name:            "SSA 2025 Example: Maximum benefit at age 62",
+			birthDate:       time.Date(1963, 1, 1, 0, 0, 0, 0, time.UTC), // FRA = 67
+			benefitAtFRA:    decimal.NewFromInt(4018),
+			claimingAge:     62,
 			expectedBenefit: decimal.NewFromInt(2831), // 2025 maximum at age 62
-			description:   "Official SSA maximum benefit at age 62 for 2025",
+			description:     "Official SSA maximum benefit at age 62 for 2025",
 		},
 		{
-			name:          "SSA 2025 Example: Maximum benefit at age 70",
-			birthDate:     time.Date(1955, 1, 1, 0, 0, 0, 0, time.UTC), // FRA = 66 (simplified)
-			benefitAtFRA:  decimal.NewFromInt(4018),
-			claimingAge:   70,
+			name:            "SSA 2025 Example: Maximum benefit at age 70",
+			birthDate:       time.Date(1955, 1, 1, 0, 0, 0, 0, time.UTC), // FRA = 66 (simplified)
+			benefitAtFRA:    decimal.NewFromInt(4018),
+			claimingAge:     70,
 			expectedBenefit: decimal.NewFromFloat(5303.76), // 4018 * 1.32 (4 years × 8%)
-			description:   "Official SSA maximum benefit at age 70 for 2025",
+			description:     "Official SSA maximum benefit at age 70 for 2025",
 		},
 		{
-			name:          "Robert's Actual Benefits: FRA at 67",
-			birthDate:     time.Date(1965, 2, 25, 0, 0, 0, 0, time.UTC),
-			benefitAtFRA:  decimal.NewFromInt(4012), // From financial data
-			claimingAge:   67,
+			name:            "Robert's Actual Benefits: FRA at 67",
+			birthDate:       time.Date(1965, 2, 25, 0, 0, 0, 0, time.UTC),
+			benefitAtFRA:    decimal.NewFromInt(4012), // From financial data
+			claimingAge:     67,
 			expectedBenefit: decimal.NewFromInt(4012),
-			description:   "Robert's actual benefit at FRA",
+			description:     "Robert's actual benefit at FRA",
 		},
 		{
-			name:          "Robert's Actual Benefits: Early at 62",
-			birthDate:     time.Date(1965, 2, 25, 0, 0, 0, 0, time.UTC),
-			benefitAtFRA:  decimal.NewFromInt(4012),
-			claimingAge:   62,
+			name:            "Robert's Actual Benefits: Early at 62",
+			birthDate:       time.Date(1965, 2, 25, 0, 0, 0, 0, time.UTC),
+			benefitAtFRA:    decimal.NewFromInt(4012),
+			claimingAge:     62,
 			expectedBenefit: decimal.NewFromInt(2795), // From financial data
-			description:   "Robert's actual benefit at age 62",
+			description:     "Robert's actual benefit at age 62",
 		},
 		{
-			name:          "Robert's Actual Benefits: Delayed to 70",
-			birthDate:     time.Date(1965, 2, 25, 0, 0, 0, 0, time.UTC),
-			benefitAtFRA:  decimal.NewFromInt(4012),
-			claimingAge:   70,
+			name:            "Robert's Actual Benefits: Delayed to 70",
+			birthDate:       time.Date(1965, 2, 25, 0, 0, 0, 0, time.UTC),
+			benefitAtFRA:    decimal.NewFromInt(4012),
+			claimingAge:     70,
 			expectedBenefit: decimal.NewFromFloat(4974.88), // 4012 * 1.24 (3 years × 8%)
-			description:   "Robert's actual benefit at age 70",
+			description:     "Robert's actual benefit at age 70",
 		},
 		{
-			name:          "Dawn's Actual Benefits: FRA at 67",
-			birthDate:     time.Date(1963, 7, 31, 0, 0, 0, 0, time.UTC),
-			benefitAtFRA:  decimal.NewFromInt(3826), // From financial data
-			claimingAge:   67,
+			name:            "Dawn's Actual Benefits: FRA at 67",
+			birthDate:       time.Date(1963, 7, 31, 0, 0, 0, 0, time.UTC),
+			benefitAtFRA:    decimal.NewFromInt(3826), // From financial data
+			claimingAge:     67,
 			expectedBenefit: decimal.NewFromInt(3826),
-			description:   "Dawn's actual benefit at FRA",
+			description:     "Dawn's actual benefit at FRA",
 		},
 		{
-			name:          "Dawn's Actual Benefits: Early at 62",
-			birthDate:     time.Date(1963, 7, 31, 0, 0, 0, 0, time.UTC),
-			benefitAtFRA:  decimal.NewFromInt(3826),
-			claimingAge:   62,
+			name:            "Dawn's Actual Benefits: Early at 62",
+			birthDate:       time.Date(1963, 7, 31, 0, 0, 0, 0, time.UTC),
+			benefitAtFRA:    decimal.NewFromInt(3826),
+			claimingAge:     62,
 			expectedBenefit: decimal.NewFromFloat(2678.20), // 3826 * 0.70 (30% reduction for 5 years early)
-			description:   "Dawn's actual benefit at age 62",
+			description:     "Dawn's actual benefit at age 62",
 		},
 		{
-			name:          "Dawn's Actual Benefits: Delayed to 70",
-			birthDate:     time.Date(1963, 7, 31, 0, 0, 0, 0, time.UTC),
-			benefitAtFRA:  decimal.NewFromInt(3826),
-			claimingAge:   70,
+			name:            "Dawn's Actual Benefits: Delayed to 70",
+			birthDate:       time.Date(1963, 7, 31, 0, 0, 0, 0, time.UTC),
+			benefitAtFRA:    decimal.NewFromInt(3826),
+			claimingAge:     70,
 			expectedBenefit: decimal.NewFromFloat(4744.24), // 3826 * 1.24 (3 years × 8%)
-			description:   "Dawn's actual benefit at age 70",
+			description:     "Dawn's actual benefit at age 70",
 		},
 	}
 
@@ -161,12 +161,12 @@ func TestSocialSecurityEarlyRetirementReduction(t *testing.T) {
 // TestSocialSecurityDelayedRetirementCredits tests delayed retirement credits
 func TestSocialSecurityDelayedRetirementCredits(t *testing.T) {
 	tests := []struct {
-		name            string
-		birthYear       int
-		benefitAtFRA    decimal.Decimal
-		claimingAge     int
-		expectedBonus   decimal.Decimal
-		description     string
+		name          string
+		birthYear     int
+		benefitAtFRA  decimal.Decimal
+		claimingAge   int
+		expectedBonus decimal.Decimal
+		description   string
 	}{
 		{
 			name:          "1 year delay (age 68 for 1967 birth year)",
@@ -228,7 +228,7 @@ func TestSocialSecurityCOLA(t *testing.T) {
 		{
 			name:            "High inflation COLA: 5.9%",
 			initialBenefit:  decimal.NewFromInt(1500),
-			colaRate:        decimal.NewFromFloat(0.059), // 2022 actual COLA
+			colaRate:        decimal.NewFromFloat(0.059),   // 2022 actual COLA
 			expectedBenefit: decimal.NewFromFloat(1588.50), // 1500 * 1.059
 			description:     "High inflation period adjustment",
 		},
@@ -257,50 +257,50 @@ func TestSocialSecurityCOLA(t *testing.T) {
 // TestSocialSecurityTaxation tests Social Security benefit taxation rules
 func TestSocialSecurityTaxation(t *testing.T) {
 	tests := []struct {
-		name               string
-		annualSSBenefit    decimal.Decimal
-		otherIncome        decimal.Decimal
+		name                  string
+		annualSSBenefit       decimal.Decimal
+		otherIncome           decimal.Decimal
 		expectedTaxableAmount decimal.Decimal
-		description        string
+		description           string
 	}{
 		{
-			name:               "Below first threshold: No taxation",
-			annualSSBenefit:    decimal.NewFromInt(20000),
-			otherIncome:        decimal.NewFromInt(20000), // Provisional income = 30000
+			name:                  "Below first threshold: No taxation",
+			annualSSBenefit:       decimal.NewFromInt(20000),
+			otherIncome:           decimal.NewFromInt(20000), // Provisional income = 30000
 			expectedTaxableAmount: decimal.Zero,
-			description:        "Provisional income under $32,000",
+			description:           "Provisional income under $32,000",
 		},
 		{
-			name:               "Between thresholds: 50% taxation",
-			annualSSBenefit:    decimal.NewFromInt(24000),
-			otherIncome:        decimal.NewFromInt(25000), // Provisional income = 37000
-			expectedTaxableAmount: decimal.NewFromInt(2500), // 50% of excess over $32k, limited to 50% of benefits
-			description:        "Provisional income between $32,000 and $44,000",
+			name:                  "Between thresholds: 50% taxation",
+			annualSSBenefit:       decimal.NewFromInt(24000),
+			otherIncome:           decimal.NewFromInt(25000), // Provisional income = 37000
+			expectedTaxableAmount: decimal.NewFromInt(2500),  // 50% of excess over $32k, limited to 50% of benefits
+			description:           "Provisional income between $32,000 and $44,000",
 		},
 		{
-			name:               "Above second threshold: 85% taxation",
-			annualSSBenefit:    decimal.NewFromInt(30000),
-			otherIncome:        decimal.NewFromInt(50000), // Provisional income = 65000
+			name:                  "Above second threshold: 85% taxation",
+			annualSSBenefit:       decimal.NewFromInt(30000),
+			otherIncome:           decimal.NewFromInt(50000), // Provisional income = 65000
 			expectedTaxableAmount: decimal.NewFromInt(25500), // 85% of benefits
-			description:        "Provisional income above $44,000",
+			description:           "Provisional income above $44,000",
 		},
 		{
-			name:               "High income retiree: Maximum taxation",
-			annualSSBenefit:    decimal.NewFromInt(48000), // $4000/month
-			otherIncome:        decimal.NewFromInt(100000), // High retirement income
-			expectedTaxableAmount: decimal.NewFromInt(40800), // 85% of $48,000
-			description:        "High income scenario with maximum SS taxation",
+			name:                  "High income retiree: Maximum taxation",
+			annualSSBenefit:       decimal.NewFromInt(48000),  // $4000/month
+			otherIncome:           decimal.NewFromInt(100000), // High retirement income
+			expectedTaxableAmount: decimal.NewFromInt(40800),  // 85% of $48,000
+			description:           "High income scenario with maximum SS taxation",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			calculator := NewSSTaxCalculator()
-			
+
 			// Calculate provisional income
 			provisionalIncome := calculator.CalculateProvisionalIncome(
 				tt.otherIncome, decimal.Zero, tt.annualSSBenefit)
-			
+
 			// Calculate taxable Social Security
 			taxableAmount := calculator.CalculateTaxableSocialSecurity(
 				tt.annualSSBenefit, provisionalIncome)
@@ -317,10 +317,10 @@ func TestSocialSecurityTaxation(t *testing.T) {
 // TestSocialSecurityProjection tests multi-year Social Security benefit projections
 func TestSocialSecurityProjection(t *testing.T) {
 	employee := &domain.Employee{
-		BirthDate:     time.Date(1965, 2, 25, 0, 0, 0, 0, time.UTC), // Robert
-		SSBenefitFRA:  decimal.NewFromInt(4012),
-		SSBenefit62:   decimal.NewFromInt(2795),
-		SSBenefit70:   decimal.NewFromInt(5000),
+		BirthDate:    time.Date(1965, 2, 25, 0, 0, 0, 0, time.UTC), // Robert
+		SSBenefitFRA: decimal.NewFromInt(4012),
+		SSBenefit62:  decimal.NewFromInt(2795),
+		SSBenefit70:  decimal.NewFromInt(5000),
 	}
 
 	ssStartAge := 62
@@ -332,9 +332,9 @@ func TestSocialSecurityProjection(t *testing.T) {
 	assert.Len(t, projections, projectionYears, "Should have correct number of projection years")
 
 	// Check that benefits start when eligible
-	firstBenefit := projections[0] // Assuming starts immediately
+	firstBenefit := projections[0]                                               // Assuming starts immediately
 	expectedFirstBenefit := decimal.NewFromInt(2795).Mul(decimal.NewFromInt(12)) // Annual amount
-	
+
 	// Allow for timing differences based on when benefits actually start
 	if firstBenefit.GreaterThan(decimal.Zero) {
 		difference := firstBenefit.Sub(expectedFirstBenefit).Abs()

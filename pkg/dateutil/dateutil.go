@@ -7,7 +7,7 @@ import (
 // Age calculates the age at a given date
 func Age(birthDate, atDate time.Time) int {
 	age := atDate.Year() - birthDate.Year()
-	if atDate.Month() < birthDate.Month() || 
+	if atDate.Month() < birthDate.Month() ||
 		(atDate.Month() == birthDate.Month() && atDate.Day() < birthDate.Day()) {
 		age--
 	}
@@ -30,7 +30,7 @@ func YearsOfServiceDecimal(hireDate, atDate time.Time) float64 {
 // FullRetirementAge calculates the Social Security Full Retirement Age based on birth year
 func FullRetirementAge(birthDate time.Time) int {
 	birthYear := birthDate.Year()
-	
+
 	switch {
 	case birthYear <= 1937:
 		return 65
@@ -64,7 +64,7 @@ func FullRetirementAge(birthDate time.Time) int {
 // MinimumRetirementAge calculates the FERS Minimum Retirement Age
 func MinimumRetirementAge(birthDate time.Time) int {
 	birthYear := birthDate.Year()
-	
+
 	switch {
 	case birthYear <= 1947:
 		return 55
@@ -106,7 +106,7 @@ func IsMedicareEligible(birthDate, atDate time.Time) bool {
 func IsRMDYear(birthDate, atDate time.Time) bool {
 	age := Age(birthDate, atDate)
 	birthYear := birthDate.Year()
-	
+
 	// SECURE 2.0 Act RMD ages
 	switch {
 	case birthYear <= 1950:
@@ -173,4 +173,4 @@ func EndOfYear(date time.Time) time.Time {
 // BeginningOfYear returns the first day of the year for a given date
 func BeginningOfYear(date time.Time) time.Time {
 	return time.Date(date.Year(), 1, 1, 0, 0, 0, 0, date.Location())
-} 
+}

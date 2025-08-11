@@ -346,9 +346,22 @@ type TSPFundStats struct {
 
 // Configuration represents the complete input configuration
 type Configuration struct {
-	PersonalDetails   map[string]Employee `yaml:"personal_details" json:"personal_details"`
-	GlobalAssumptions GlobalAssumptions   `yaml:"global_assumptions" json:"global_assumptions"`
-	Scenarios         []Scenario          `yaml:"scenarios" json:"scenarios"`
+	// Legacy format (deprecated but still supported)
+	PersonalDetails map[string]Employee `yaml:"personal_details,omitempty" json:"personal_details,omitempty"`
+	Scenarios       []Scenario          `yaml:"scenarios,omitempty" json:"scenarios,omitempty"`
+
+	// New generic format
+	Household        *Household        `yaml:"household,omitempty" json:"household,omitempty"`
+	GenericScenarios []GenericScenario `yaml:"generic_scenarios,omitempty" json:"generic_scenarios,omitempty"`
+
+	GlobalAssumptions GlobalAssumptions `yaml:"global_assumptions" json:"global_assumptions"`
+}
+
+// NewConfiguration creates a new configuration using the generic household format
+type NewConfiguration struct {
+	Household         Household         `yaml:"household" json:"household"`
+	GenericScenarios  []GenericScenario `yaml:"scenarios" json:"scenarios"`
+	GlobalAssumptions GlobalAssumptions `yaml:"global_assumptions" json:"global_assumptions"`
 }
 
 // Age calculates the age of the employee at a given date
@@ -469,4 +482,385 @@ func (e *Employee) AgencyMatch() decimal.Decimal {
 // TotalAnnualTSPContribution returns the combined employee and agency contributions
 func (e *Employee) TotalAnnualTSPContribution() decimal.Decimal {
 	return e.AnnualTSPContribution().Add(e.AgencyMatch())
+}
+
+// Participant represents a generic participant in retirement planning (replaces Employee)
+// This struct supports both federal and non-federal employees
+type Participant struct {
+	Name      string    `yaml:"name" json:"name"`
+	BirthDate time.Time `yaml:"birth_date" json:"birth_date"`
+
+	// Federal employment fields (optional for non-federal employees)
+	IsFederal     bool             `yaml:"is_federal" json:"is_federal"`
+	HireDate      *time.Time       `yaml:"hire_date,omitempty" json:"hire_date,omitempty"`
+	CurrentSalary *decimal.Decimal `yaml:"current_salary,omitempty" json:"current_salary,omitempty"`
+	High3Salary   *decimal.Decimal `yaml:"high_3_salary,omitempty" json:"high_3_salary,omitempty"`
+
+	// TSP fields (only for federal employees)
+	TSPBalanceTraditional  *decimal.Decimal  `yaml:"tsp_balance_traditional,omitempty" json:"tsp_balance_traditional,omitempty"`
+	TSPBalanceRoth         *decimal.Decimal  `yaml:"tsp_balance_roth,omitempty" json:"tsp_balance_roth,omitempty"`
+	TSPContributionPercent *decimal.Decimal  `yaml:"tsp_contribution_percent,omitempty" json:"tsp_contribution_percent,omitempty"`
+	TSPAllocation          *TSPAllocation    `yaml:"tsp_allocation,omitempty" json:"tsp_allocation,omitempty"`
+	TSPLifecycleFund       *TSPLifecycleFund `yaml:"tsp_lifecycle_fund,omitempty" json:"tsp_lifecycle_fund,omitempty"`
+
+	// Social Security (all participants should have this)
+	SSBenefitFRA decimal.Decimal `yaml:"ss_benefit_fra" json:"ss_benefit_fra"`
+	SSBenefit62  decimal.Decimal `yaml:"ss_benefit_62" json:"ss_benefit_62"`
+	SSBenefit70  decimal.Decimal `yaml:"ss_benefit_70" json:"ss_benefit_70"`
+
+	// FEHB fields (only for federal employees)
+	FEHBPremiumPerPayPeriod *decimal.Decimal `yaml:"fehb_premium_per_pay_period,omitempty" json:"fehb_premium_per_pay_period,omitempty"`
+	IsPrimaryFEHBHolder     bool             `yaml:"is_primary_fehb_holder" json:"is_primary_fehb_holder"`
+
+	// FERS pension fields (only for federal employees)
+	SurvivorBenefitElectionPercent *decimal.Decimal `yaml:"survivor_benefit_election_percent,omitempty" json:"survivor_benefit_election_percent,omitempty"`
+	SickLeaveHours                 *decimal.Decimal `yaml:"sick_leave_hours,omitempty" json:"sick_leave_hours,omitempty"`
+
+	// External pension for non-federal employees
+	ExternalPension *ExternalPension `yaml:"external_pension,omitempty" json:"external_pension,omitempty"`
+
+	// Employment end date (for scenarios where someone stops working but hasn't retired)
+	EmploymentEndDate *time.Time `yaml:"employment_end_date,omitempty" json:"employment_end_date,omitempty"`
+
+	// Optional fields for additional context
+	PayPlanGrade string `yaml:"pay_plan_grade,omitempty" json:"pay_plan_grade,omitempty"`
+	SSNLast4     string `yaml:"ssn_last4,omitempty" json:"ssn_last4,omitempty"`
+}
+
+// ExternalPension represents a non-federal pension for private sector employees
+type ExternalPension struct {
+	MonthlyBenefit  decimal.Decimal `yaml:"monthly_benefit" json:"monthly_benefit"`
+	StartAge        int             `yaml:"start_age" json:"start_age"`
+	COLAAdjustment  decimal.Decimal `yaml:"cola_adjustment" json:"cola_adjustment"`
+	SurvivorBenefit decimal.Decimal `yaml:"survivor_benefit" json:"survivor_benefit"` // Percentage (0-1)
+}
+
+// Household represents a household of participants for retirement planning
+type Household struct {
+	Participants []Participant `yaml:"participants" json:"participants"`
+	FilingStatus string        `yaml:"filing_status" json:"filing_status"` // "married_filing_jointly", "single"
+}
+
+// ParticipantScenario represents a retirement scenario for a single participant
+type ParticipantScenario struct {
+	ParticipantName            string           `yaml:"participant_name" json:"participant_name"`
+	RetirementDate             *time.Time       `yaml:"retirement_date,omitempty" json:"retirement_date,omitempty"`
+	SSStartAge                 int              `yaml:"ss_start_age" json:"ss_start_age"`
+	TSPWithdrawalStrategy      string           `yaml:"tsp_withdrawal_strategy,omitempty" json:"tsp_withdrawal_strategy,omitempty"`
+	TSPWithdrawalTargetMonthly *decimal.Decimal `yaml:"tsp_withdrawal_target_monthly,omitempty" json:"tsp_withdrawal_target_monthly,omitempty"`
+	TSPWithdrawalRate          *decimal.Decimal `yaml:"tsp_withdrawal_rate,omitempty" json:"tsp_withdrawal_rate,omitempty"`
+}
+
+// GenericScenario represents a complete retirement scenario for a household
+type GenericScenario struct {
+	Name                 string                         `yaml:"name" json:"name"`
+	ParticipantScenarios map[string]ParticipantScenario `yaml:"participant_scenarios" json:"participant_scenarios"`
+	Mortality            *GenericScenarioMortality      `yaml:"mortality,omitempty" json:"mortality,omitempty"`
+}
+
+// GenericScenarioMortality groups mortality specifications for participants
+type GenericScenarioMortality struct {
+	Participants map[string]*MortalitySpec `yaml:"participants,omitempty" json:"participants,omitempty"`
+	Assumptions  *MortalityAssumptions     `yaml:"assumptions,omitempty" json:"assumptions,omitempty"`
+}
+
+// Age calculates the age of the participant at a given date
+func (p *Participant) Age(atDate time.Time) int {
+	age := atDate.Year() - p.BirthDate.Year()
+	if atDate.YearDay() < p.BirthDate.YearDay() {
+		age--
+	}
+	return age
+}
+
+// YearsOfService calculates years of service for federal employees
+func (p *Participant) YearsOfService(atDate time.Time) decimal.Decimal {
+	if !p.IsFederal || p.HireDate == nil {
+		return decimal.Zero
+	}
+
+	serviceDuration := atDate.Sub(*p.HireDate)
+	years := decimal.NewFromFloat(serviceDuration.Hours() / 24 / 365.25)
+
+	// Add sick leave credit if available
+	if p.SickLeaveHours != nil && p.SickLeaveHours.GreaterThan(decimal.Zero) {
+		sickLeaveDays := p.SickLeaveHours.Div(decimal.NewFromInt(8))
+		sickLeaveYears := sickLeaveDays.Div(decimal.NewFromFloat(365.25))
+		years = years.Add(sickLeaveYears)
+	}
+
+	return years.Round(4)
+}
+
+// TotalTSPBalance returns combined TSP balance for federal employees
+func (p *Participant) TotalTSPBalance() decimal.Decimal {
+	if !p.IsFederal || p.TSPBalanceTraditional == nil || p.TSPBalanceRoth == nil {
+		return decimal.Zero
+	}
+	return p.TSPBalanceTraditional.Add(*p.TSPBalanceRoth)
+}
+
+// AnnualTSPContribution calculates annual TSP contribution for federal employees
+func (p *Participant) AnnualTSPContribution() decimal.Decimal {
+	if !p.IsFederal || p.CurrentSalary == nil || p.TSPContributionPercent == nil {
+		return decimal.Zero
+	}
+	return p.CurrentSalary.Mul(*p.TSPContributionPercent)
+}
+
+// AgencyMatch calculates agency match for federal employees
+func (p *Participant) AgencyMatch() decimal.Decimal {
+	if !p.IsFederal || p.CurrentSalary == nil || p.TSPContributionPercent == nil {
+		return decimal.Zero
+	}
+	if p.TSPContributionPercent.GreaterThanOrEqual(decimal.NewFromFloat(0.05)) {
+		return p.CurrentSalary.Mul(decimal.NewFromFloat(0.05))
+	}
+	return decimal.Zero
+}
+
+// GetFederalParticipants returns only federal employee participants
+func (h *Household) GetFederalParticipants() []Participant {
+	var federal []Participant
+	for _, p := range h.Participants {
+		if p.IsFederal {
+			federal = append(federal, p)
+		}
+	}
+	return federal
+}
+
+// AgesAt returns a map of participant names to their ages at the given date
+func (h *Household) AgesAt(date time.Time) map[string]int {
+	ages := make(map[string]int)
+	for _, p := range h.Participants {
+		ages[p.Name] = p.Age(date)
+	}
+	return ages
+}
+
+// Survivors returns participants who are still alive in the given year
+func (h *Household) Survivors(atYear int, mortality map[string]*MortalitySpec) []Participant {
+	var survivors []Participant
+	for _, p := range h.Participants {
+		isAlive := true
+		if spec, exists := mortality[p.Name]; exists && spec != nil {
+			if spec.DeathAge != nil {
+				deathYear := p.BirthDate.Year() + *spec.DeathAge
+				if atYear > deathYear {
+					isAlive = false
+				}
+			} else if spec.DeathDate != nil {
+				if atYear > spec.DeathDate.Year() {
+					isAlive = false
+				}
+			}
+		}
+		if isAlive {
+			survivors = append(survivors, p)
+		}
+	}
+	return survivors
+}
+
+// Legacy conversion methods
+
+// ToEmployee converts a Participant to the legacy Employee struct (for federal employees only)
+func (p *Participant) ToEmployee() (*Employee, error) {
+	if !p.IsFederal {
+		return nil, fmt.Errorf("cannot convert non-federal participant to Employee")
+	}
+
+	// Check required fields
+	if p.HireDate == nil || p.CurrentSalary == nil || p.High3Salary == nil ||
+		p.TSPBalanceTraditional == nil || p.TSPBalanceRoth == nil ||
+		p.TSPContributionPercent == nil || p.FEHBPremiumPerPayPeriod == nil ||
+		p.SurvivorBenefitElectionPercent == nil {
+		return nil, fmt.Errorf("missing required federal employee fields for participant %s", p.Name)
+	}
+
+	employee := &Employee{
+		Name:                           p.Name,
+		BirthDate:                      p.BirthDate,
+		HireDate:                       *p.HireDate,
+		CurrentSalary:                  *p.CurrentSalary,
+		High3Salary:                    *p.High3Salary,
+		TSPBalanceTraditional:          *p.TSPBalanceTraditional,
+		TSPBalanceRoth:                 *p.TSPBalanceRoth,
+		TSPContributionPercent:         *p.TSPContributionPercent,
+		SSBenefitFRA:                   p.SSBenefitFRA,
+		SSBenefit62:                    p.SSBenefit62,
+		SSBenefit70:                    p.SSBenefit70,
+		FEHBPremiumPerPayPeriod:        *p.FEHBPremiumPerPayPeriod,
+		SurvivorBenefitElectionPercent: *p.SurvivorBenefitElectionPercent,
+		TSPAllocation:                  p.TSPAllocation,
+		TSPLifecycleFund:               p.TSPLifecycleFund,
+		PayPlanGrade:                   p.PayPlanGrade,
+		SSNLast4:                       p.SSNLast4,
+	}
+
+	if p.SickLeaveHours != nil {
+		employee.SickLeaveHours = *p.SickLeaveHours
+	}
+
+	return employee, nil
+}
+
+// FromEmployee converts an Employee to a Participant
+func ParticipantFromEmployee(e *Employee) *Participant {
+	return &Participant{
+		Name:                           e.Name,
+		BirthDate:                      e.BirthDate,
+		IsFederal:                      true,
+		HireDate:                       &e.HireDate,
+		CurrentSalary:                  &e.CurrentSalary,
+		High3Salary:                    &e.High3Salary,
+		TSPBalanceTraditional:          &e.TSPBalanceTraditional,
+		TSPBalanceRoth:                 &e.TSPBalanceRoth,
+		TSPContributionPercent:         &e.TSPContributionPercent,
+		TSPAllocation:                  e.TSPAllocation,
+		TSPLifecycleFund:               e.TSPLifecycleFund,
+		SSBenefitFRA:                   e.SSBenefitFRA,
+		SSBenefit62:                    e.SSBenefit62,
+		SSBenefit70:                    e.SSBenefit70,
+		FEHBPremiumPerPayPeriod:        &e.FEHBPremiumPerPayPeriod,
+		IsPrimaryFEHBHolder:            !e.FEHBPremiumPerPayPeriod.IsZero(),
+		SurvivorBenefitElectionPercent: &e.SurvivorBenefitElectionPercent,
+		SickLeaveHours:                 &e.SickLeaveHours,
+		PayPlanGrade:                   e.PayPlanGrade,
+		SSNLast4:                       e.SSNLast4,
+	}
+}
+
+// ToLegacyConfiguration converts a new-style configuration to legacy format (for backwards compatibility)
+func (c *Configuration) ToLegacyConfiguration() (*Configuration, error) {
+	if c.Household == nil || len(c.GenericScenarios) == 0 {
+		// Already in legacy format or incomplete
+		return c, nil
+	}
+
+	legacy := &Configuration{
+		PersonalDetails:   make(map[string]Employee),
+		Scenarios:         make([]Scenario, 0),
+		GlobalAssumptions: c.GlobalAssumptions,
+	}
+
+	// Convert participants to employees (only federal employees)
+	federalCount := 0
+	var robertEmployee *Employee
+
+	for _, p := range c.Household.Participants {
+		if p.IsFederal {
+			emp, err := p.ToEmployee()
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert participant %s to employee: %w", p.Name, err)
+			}
+
+			// Map to legacy "robert"/"dawn" keys based on order
+			if federalCount == 0 {
+				legacy.PersonalDetails["robert"] = *emp
+				robertEmployee = emp
+			} else if federalCount == 1 {
+				legacy.PersonalDetails["dawn"] = *emp
+			} else {
+				return nil, fmt.Errorf("legacy format only supports 2 federal employees, found more")
+			}
+			federalCount++
+		}
+	}
+
+	if federalCount == 0 {
+		return nil, fmt.Errorf("no federal employees found for legacy conversion")
+	}
+
+	// Fill in second employee with placeholder if only one exists
+	if federalCount == 1 {
+		// Create a minimal placeholder for Dawn
+		legacy.PersonalDetails["dawn"] = *robertEmployee // Copy Robert's data as placeholder
+	}
+
+	// Convert generic scenarios to legacy format
+	for _, gs := range c.GenericScenarios {
+		scenario := Scenario{
+			Name: gs.Name,
+		}
+
+		// Find Robert and Dawn scenarios by participant name or order
+		var robertScenario, dawnScenario *ParticipantScenario
+		participantNames := make([]string, 0, len(gs.ParticipantScenarios))
+		for name := range gs.ParticipantScenarios {
+			participantNames = append(participantNames, name)
+		}
+
+		if len(participantNames) >= 1 {
+			ps := gs.ParticipantScenarios[participantNames[0]]
+			robertScenario = &ps
+		}
+		if len(participantNames) >= 2 {
+			ps := gs.ParticipantScenarios[participantNames[1]]
+			dawnScenario = &ps
+		}
+
+		// Convert to legacy retirement scenarios
+		if robertScenario != nil {
+			scenario.Robert = RetirementScenario{
+				EmployeeName:               "robert",
+				RetirementDate:             *robertScenario.RetirementDate,
+				SSStartAge:                 robertScenario.SSStartAge,
+				TSPWithdrawalStrategy:      robertScenario.TSPWithdrawalStrategy,
+				TSPWithdrawalTargetMonthly: robertScenario.TSPWithdrawalTargetMonthly,
+				TSPWithdrawalRate:          robertScenario.TSPWithdrawalRate,
+			}
+		}
+
+		if dawnScenario != nil {
+			scenario.Dawn = RetirementScenario{
+				EmployeeName:               "dawn",
+				RetirementDate:             *dawnScenario.RetirementDate,
+				SSStartAge:                 dawnScenario.SSStartAge,
+				TSPWithdrawalStrategy:      dawnScenario.TSPWithdrawalStrategy,
+				TSPWithdrawalTargetMonthly: dawnScenario.TSPWithdrawalTargetMonthly,
+				TSPWithdrawalRate:          dawnScenario.TSPWithdrawalRate,
+			}
+		} else {
+			// Use Robert's scenario as placeholder
+			scenario.Dawn = scenario.Robert
+			scenario.Dawn.EmployeeName = "dawn"
+		}
+
+		// Convert mortality if present
+		if gs.Mortality != nil {
+			scenario.Mortality = &ScenarioMortality{
+				Assumptions: gs.Mortality.Assumptions,
+			}
+			if robert, exists := gs.Mortality.Participants["robert"]; exists {
+				scenario.Mortality.Robert = robert
+			} else if len(participantNames) >= 1 {
+				if spec, exists := gs.Mortality.Participants[participantNames[0]]; exists {
+					scenario.Mortality.Robert = spec
+				}
+			}
+			if dawn, exists := gs.Mortality.Participants["dawn"]; exists {
+				scenario.Mortality.Dawn = dawn
+			} else if len(participantNames) >= 2 {
+				if spec, exists := gs.Mortality.Participants[participantNames[1]]; exists {
+					scenario.Mortality.Dawn = spec
+				}
+			}
+		}
+
+		legacy.Scenarios = append(legacy.Scenarios, scenario)
+	}
+
+	return legacy, nil
+}
+
+// IsLegacyFormat returns true if this configuration uses the legacy robert/dawn format
+func (c *Configuration) IsLegacyFormat() bool {
+	return len(c.PersonalDetails) > 0 && c.Household == nil
+}
+
+// IsNewFormat returns true if this configuration uses the new generic participant format
+func (c *Configuration) IsNewFormat() bool {
+	return c.Household != nil && len(c.Household.Participants) > 0
 }

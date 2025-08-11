@@ -138,4 +138,4 @@ func (m Money) String() string {
 // Format formats the money amount with proper currency formatting
 func (m Money) Format() string {
 	return "$" + m.String()
-} 
+}

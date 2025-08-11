@@ -460,7 +460,7 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 			robert, dawn, scenario, year, isRobertRetired && isDawnRetired,
 			pensionRobert, pensionDawn, survivorPensionRobert, survivorPensionDawn,
 			tspWithdrawalRobert, tspWithdrawalDawn,
-			ssRobert, ssDawn, assumptions,
+			ssRobert, ssDawn,
 			workingIncomeRobert, workingIncomeDawn,
 		)
 
@@ -515,9 +515,10 @@ func (ce *CalculationEngine) GenerateAnnualProjection(robert, dawn *domain.Emplo
 		if scenario.Mortality != nil && scenario.Mortality.Assumptions != nil && (robertIsDeceased != dawnIsDeceased) {
 			mode := scenario.Mortality.Assumptions.FilingStatusSwitch
 			// Reconstruct death year indexes (already computed earlier): reuse conditions
-			if mode == "immediate" {
+			switch mode {
+			case "immediate":
 				cashFlow.FilingStatusSingle = true
-			} else if mode == "next_year" {
+			case "next_year":
 				if robertDeathYearIndex != nil && robertIsDeceased && year > *robertDeathYearIndex {
 					cashFlow.FilingStatusSingle = true
 				}

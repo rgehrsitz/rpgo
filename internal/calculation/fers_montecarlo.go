@@ -264,13 +264,6 @@ func (fmce *FERSMonteCarloEngine) runSingleFERSSimulation(simIndex int) (*FERSMo
 	}, nil
 }
 
-// generateMarketConditions generates market conditions for a simulation
-func (fmce *FERSMonteCarloEngine) generateMarketConditions() MarketCondition {
-	if fmce.config.UseHistorical {
-		return fmce.generateHistoricalMarketConditions()
-	}
-	return fmce.generateStatisticalMarketConditions()
-}
 
 // generateEnhancedMarketConditions generates market conditions with proper Monte Carlo variability
 func (fmce *FERSMonteCarloEngine) generateEnhancedMarketConditions() MarketCondition {

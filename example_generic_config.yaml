@@ -1,0 +1,167 @@
+# Example Generic Configuration - FERS Retirement Calculator
+# This demonstrates the new participant-based format that supports flexible household compositions
+
+household:
+  filing_status: "married_filing_jointly"
+  participants:
+    - name: "John Smith"
+      is_federal: true
+      birth_date: "1965-03-15T00:00:00Z"
+      hire_date: "1987-06-01T00:00:00Z"
+      current_salary: 145000
+      high_3_salary: 142000
+      tsp_balance_traditional: 850000
+      tsp_balance_roth: 175000
+      tsp_contribution_percent: 0.15
+      tsp_allocation:
+        c_fund: "0.45"
+        s_fund: "0.15"
+        i_fund: "0.15"
+        f_fund: "0.20"
+        g_fund: "0.05"
+      ss_benefit_fra: 3200
+      ss_benefit_62: 2240
+      ss_benefit_70: 3968
+      fehb_premium_per_pay_period: 745
+      is_primary_fehb_holder: true
+      survivor_benefit_election_percent: 0.0
+    
+    - name: "Jane Smith"
+      is_federal: true
+      birth_date: "1968-09-22T00:00:00Z"
+      hire_date: "1992-08-15T00:00:00Z"
+      current_salary: 125000
+      high_3_salary: 122000
+      tsp_balance_traditional: 650000
+      tsp_balance_roth: 85000
+      tsp_contribution_percent: 0.12
+      tsp_allocation:
+        c_fund: "0.35"
+        s_fund: "0.10"
+        i_fund: "0.10"
+        f_fund: "0.35"
+        g_fund: "0.10"
+      ss_benefit_fra: 2850
+      ss_benefit_62: 1995
+      ss_benefit_70: 3534
+      fehb_premium_per_pay_period: 0.0
+      is_primary_fehb_holder: false
+      survivor_benefit_election_percent: 0.0
+
+global_assumptions:
+  inflation_rate: "0.0259"
+  fehb_premium_inflation: "0.065"
+  tsp_return_pre_retirement: "0.08"
+  tsp_return_post_retirement: "0.065"
+  cola_general_rate: "0.0255"
+  projection_years: 30
+  current_location:
+    state: "Pennsylvania"
+    county: "Chester"
+    municipality: "West Chester Borough"
+  monte_carlo_settings:
+    default_simulations: 1000
+    use_historical_data: true
+    seed: 0
+  federal_rules:
+    federal_tax:
+      standard_deduction_mfj: "30000"
+      additional_standard_deduction_65_plus: "1550"
+      tax_brackets_2025:
+        - min: "0"
+          max: "23200"
+          rate: "0.10"
+        - min: "23201"
+          max: "94300"
+          rate: "0.12"
+        - min: "94301"
+          max: "201050"
+          rate: "0.22"
+        - min: "201051"
+          max: "383900"
+          rate: "0.24"
+        - min: "383901"
+          max: "487450"
+          rate: "0.32"
+        - min: "487451"
+          max: "731200"
+          rate: "0.35"
+        - min: "731201"
+          max: "999999999"
+          rate: "0.37"
+    state_local_tax:
+      pennsylvania_rate: "0.0307"
+      west_chester_eit_rate: "0.005"
+    fica_tax:
+      social_security_wage_base: "176100"
+      social_security_rate: "0.062"
+      medicare_rate: "0.0145"
+      additional_medicare_rate: "0.009"
+      high_income_threshold_mfj: "250000"
+    medicare:
+      base_premium_2025: "185.00"
+      irmaa_thresholds:
+        - income_threshold_single: "103000"
+          income_threshold_joint: "206000"
+          monthly_surcharge: "69.90"
+        - income_threshold_single: "129000"
+          income_threshold_joint: "258000"
+          monthly_surcharge: "174.70"
+        - income_threshold_single: "161000"
+          income_threshold_joint: "322000"
+          monthly_surcharge: "279.50"
+        - income_threshold_single: "193000"
+          income_threshold_joint: "386000"
+          monthly_surcharge: "384.30"
+        - income_threshold_single: "500000"
+          income_threshold_joint: "1000000"
+          monthly_surcharge: "419.30"
+    fehb:
+      pay_periods_per_year: 26
+      premium_sharing_ratio: "0.75"
+      premium_inflation_factor: "1.25"
+  tsp_statistical_models:
+    c_fund:
+      mean_return: "0.1125"
+      standard_deviation: "0.1744"
+    s_fund:
+      mean_return: "0.1117"
+      standard_deviation: "0.1933"
+    i_fund:
+      mean_return: "0.0634"
+      standard_deviation: "0.1863"
+    f_fund:
+      mean_return: "0.0532"
+      standard_deviation: "0.0565"
+    g_fund:
+      mean_return: "0.0493"
+      standard_deviation: "0.0165"
+
+generic_scenarios:
+  - name: "Early Retirement 2026 - Both Retire Together"
+    participant_scenarios:
+      "John Smith":
+        participant_name: "John Smith"
+        retirement_date: "2026-06-01T00:00:00Z"
+        ss_start_age: 62
+        tsp_withdrawal_strategy: "4_percent_rule"
+      "Jane Smith":
+        participant_name: "Jane Smith"
+        retirement_date: "2026-08-15T00:00:00Z"
+        ss_start_age: 62
+        tsp_withdrawal_strategy: "4_percent_rule"
+
+  - name: "Optimized Retirement 2028 - Delayed for Higher Benefits"
+    participant_scenarios:
+      "John Smith":
+        participant_name: "John Smith"
+        retirement_date: "2028-03-15T00:00:00Z"
+        ss_start_age: 67
+        tsp_withdrawal_strategy: "need_based"
+        tsp_withdrawal_target_monthly: 4000
+      "Jane Smith":
+        participant_name: "Jane Smith"
+        retirement_date: "2029-08-15T00:00:00Z"
+        ss_start_age: 67
+        tsp_withdrawal_strategy: "need_based"
+        tsp_withdrawal_target_monthly: 3500

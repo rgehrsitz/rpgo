@@ -135,7 +135,63 @@ Reports are output to stdout by default. Redirect to files as needed (e.g., `> r
 
 ## Configuration File Format
 
-The calculator uses YAML configuration files. Here's an example structure:
+The calculator supports two configuration formats:
+
+### New Generic Format (Recommended)
+
+The new participant-based format supports flexible household compositions including single federal employees, dual federal employees, or mixed households:
+
+```yaml
+household:
+  filing_status: "married_filing_jointly"  # or "single"
+  participants:
+    - name: "John Smith"
+      is_federal: true
+      birth_date: "1965-03-15T00:00:00Z"
+      hire_date: "1987-06-01T00:00:00Z"
+      current_salary: 145000
+      high_3_salary: 142000
+      tsp_balance_traditional: 850000
+      tsp_balance_roth: 175000
+      tsp_contribution_percent: 0.15
+      is_primary_fehb_holder: true
+      fehb_premium_per_pay_period: 745
+      ss_benefit_fra: 3200
+      ss_benefit_62: 2240
+      ss_benefit_70: 3968
+      survivor_benefit_election_percent: 0.0
+      
+    - name: "Jane Smith"
+      is_federal: false  # Non-federal employee
+      birth_date: "1968-09-22T00:00:00Z"
+      ss_benefit_fra: 2850
+      ss_benefit_62: 1995  
+      ss_benefit_70: 3534
+      external_pension:
+        monthly_benefit: 1500
+        start_age: 65
+        cola_adjustment: 0.02
+        survivor_benefit: 0.5
+
+global_assumptions:
+  # ... same as legacy format
+
+scenarios:
+  - name: "Early Retirement Scenario"
+    participant_scenarios:
+      "John Smith":
+        participant_name: "John Smith"
+        retirement_date: "2026-06-01T00:00:00Z"
+        ss_start_age: 62
+        tsp_withdrawal_strategy: "4_percent_rule"
+      "Jane Smith":
+        participant_name: "Jane Smith"
+        ss_start_age: 65
+```
+
+### Legacy Format (Still Supported)
+
+The legacy format uses fixed "robert" and "dawn" keys for backwards compatibility:
 
 ```yaml
 personal_details:

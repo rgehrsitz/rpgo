@@ -454,7 +454,7 @@ func (ctc *ComprehensiveTaxCalculator) CalculateSocialSecurityTaxation(ssBenefit
 }
 
 // calculateTaxes calculates all applicable taxes
-func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scenario *domain.Scenario, year int, isRetired bool, pensionRobert, pensionDawn, survivorPensionRobert, survivorPensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn decimal.Decimal, assumptions *domain.GlobalAssumptions, workingIncomeRobert, workingIncomeDawn decimal.Decimal) (federal decimal.Decimal, state decimal.Decimal, local decimal.Decimal, fica decimal.Decimal, taxableIncomeTotal decimal.Decimal, stdDed decimal.Decimal, filingStatusOut string, seniorsOut int) {
+func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scenario *domain.Scenario, year int, isRetired bool, pensionRobert, pensionDawn, survivorPensionRobert, survivorPensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn decimal.Decimal, workingIncomeRobert, workingIncomeDawn decimal.Decimal) (federal decimal.Decimal, state decimal.Decimal, local decimal.Decimal, fica decimal.Decimal, taxableIncomeTotal decimal.Decimal, stdDed decimal.Decimal, filingStatusOut string, seniorsOut int) {
 	projectionStartYear := ProjectionBaseYear
 	projectionDate := time.Date(projectionStartYear, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(year, 0, 0)
 	ageRobert := robert.Age(projectionDate)
@@ -478,7 +478,8 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scena
 		// One survivor; evaluate filing status switch policy
 		if scenario != nil && scenario.Mortality != nil && scenario.Mortality.Assumptions != nil {
 			mode := scenario.Mortality.Assumptions.FilingStatusSwitch
-			if mode == "immediate" {
+			switch mode {
+			case "immediate":
 				filingStatus = "single"
 				seniors = 0
 				// Count surviving senior for additional deduction
@@ -488,7 +489,7 @@ func (ce *CalculationEngine) calculateTaxes(robert, dawn *domain.Employee, scena
 				if !dawnDeceased && ageDawn >= 65 {
 					seniors = 1
 				}
-			} else if mode == "next_year" {
+			case "next_year":
 				// Switch next year after death event
 				deathYear := 0
 				if robertDeceased && robertDeathYearIndex != nil {

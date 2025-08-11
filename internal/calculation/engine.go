@@ -75,7 +75,48 @@ func (ce *CalculationEngine) SetLogger(l Logger) {
 	ce.Logger = l
 }
 
-// RunScenario calculates a complete retirement scenario
+// RunScenarioAuto automatically detects the configuration format and runs the appropriate scenario
+func (ce *CalculationEngine) RunScenarioAuto(ctx context.Context, config *domain.Configuration, scenarioIndex int) (*domain.ScenarioSummary, error) {
+	if config.IsLegacyFormat() {
+		if scenarioIndex >= len(config.Scenarios) {
+			return nil, fmt.Errorf("scenario index %d out of range (have %d scenarios)", scenarioIndex, len(config.Scenarios))
+		}
+		return ce.RunScenario(ctx, config, &config.Scenarios[scenarioIndex])
+	} else if config.IsNewFormat() {
+		if scenarioIndex >= len(config.GenericScenarios) {
+			return nil, fmt.Errorf("scenario index %d out of range (have %d scenarios)", scenarioIndex, len(config.GenericScenarios))
+		}
+		return ce.RunGenericScenario(ctx, config, &config.GenericScenarios[scenarioIndex])
+	} else {
+		return nil, fmt.Errorf("invalid configuration format")
+	}
+}
+
+// RunGenericScenario calculates a complete retirement scenario using the generic household format
+func (ce *CalculationEngine) RunGenericScenario(ctx context.Context, config *domain.Configuration, scenario *domain.GenericScenario) (*domain.ScenarioSummary, error) {
+	// Convert to legacy format for now (temporary bridge while we refactor the calculation engine)
+	legacyConfig, err := config.ToLegacyConfiguration()
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert to legacy configuration: %w", err)
+	}
+
+	// Find the corresponding legacy scenario (for now, assume first match by name)
+	var legacyScenario *domain.Scenario
+	for i := range legacyConfig.Scenarios {
+		if legacyConfig.Scenarios[i].Name == scenario.Name {
+			legacyScenario = &legacyConfig.Scenarios[i]
+			break
+		}
+	}
+
+	if legacyScenario == nil {
+		return nil, fmt.Errorf("could not find matching legacy scenario for %s", scenario.Name)
+	}
+
+	return ce.RunScenario(ctx, legacyConfig, legacyScenario)
+}
+
+// RunScenario calculates a complete retirement scenario (legacy format)
 func (ce *CalculationEngine) RunScenario(ctx context.Context, config *domain.Configuration, scenario *domain.Scenario) (*domain.ScenarioSummary, error) {
 	robert := config.PersonalDetails["robert"]
 	dawn := config.PersonalDetails["dawn"]
@@ -234,21 +275,48 @@ func (ce *CalculationEngine) calculateDeterministicSuccessRate(projection []doma
 
 // RunScenarios runs all scenarios and returns a comparison
 func (ce *CalculationEngine) RunScenarios(config *domain.Configuration) (*domain.ScenarioComparison, error) {
-	scenarios := make([]domain.ScenarioSummary, len(config.Scenarios))
 	ctx := context.Background()
+	var scenarios []domain.ScenarioSummary
 
-	for i, scenario := range config.Scenarios {
-		summary, err := ce.RunScenario(ctx, config, &scenario)
-		if err != nil {
-			return nil, fmt.Errorf("RunScenario failed: %w", err)
+	// Handle both legacy and new formats
+	if config.IsLegacyFormat() {
+		scenarios = make([]domain.ScenarioSummary, len(config.Scenarios))
+		for i, scenario := range config.Scenarios {
+			summary, err := ce.RunScenario(ctx, config, &scenario)
+			if err != nil {
+				return nil, fmt.Errorf("RunScenario failed: %w", err)
+			}
+			scenarios[i] = *summary
 		}
-		scenarios[i] = *summary
+	} else if config.IsNewFormat() {
+		scenarios = make([]domain.ScenarioSummary, len(config.GenericScenarios))
+		for i, scenario := range config.GenericScenarios {
+			summary, err := ce.RunGenericScenario(ctx, config, &scenario)
+			if err != nil {
+				return nil, fmt.Errorf("RunGenericScenario failed: %w", err)
+			}
+			scenarios[i] = *summary
+		}
+	} else {
+		return nil, fmt.Errorf("invalid configuration format")
 	}
 
-	// Calculate baseline (current net income)
-	robert := config.PersonalDetails["robert"]
-	dawn := config.PersonalDetails["dawn"]
-	baselineNetIncome := ce.NetIncomeCalc.Calculate(&robert, &dawn, ce.Debug)
+	// Calculate baseline (current net income) - need to convert for new format
+	var baselineNetIncome decimal.Decimal
+	if config.IsLegacyFormat() {
+		robert := config.PersonalDetails["robert"]
+		dawn := config.PersonalDetails["dawn"]
+		baselineNetIncome = ce.NetIncomeCalc.Calculate(&robert, &dawn, ce.Debug)
+	} else {
+		// Convert to legacy format temporarily to calculate baseline
+		legacyConfig, err := config.ToLegacyConfiguration()
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert to legacy configuration for baseline calculation: %w", err)
+		}
+		robert := legacyConfig.PersonalDetails["robert"]
+		dawn := legacyConfig.PersonalDetails["dawn"]
+		baselineNetIncome = ce.NetIncomeCalc.Calculate(&robert, &dawn, ce.Debug)
+	}
 
 	comparison := &domain.ScenarioComparison{
 		BaselineNetIncome: baselineNetIncome,

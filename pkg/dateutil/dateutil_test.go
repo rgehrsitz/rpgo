@@ -94,12 +94,12 @@ func TestAgeCalculation(t *testing.T) {
 // TestYearsOfService tests years of service calculation
 func TestYearsOfService(t *testing.T) {
 	tests := []struct {
-		name            string
-		hireDate        time.Time
-		atDate          time.Time
-		expectedYears   float64
-		tolerance       float64
-		description     string
+		name          string
+		hireDate      time.Time
+		atDate        time.Time
+		expectedYears float64
+		tolerance     float64
+		description   string
 	}{
 		{
 			name:          "Exact years",
@@ -253,11 +253,11 @@ func TestMinimumRetirementAge(t *testing.T) {
 // TestMedicareEligibility tests Medicare eligibility
 func TestMedicareEligibility(t *testing.T) {
 	tests := []struct {
-		name               string
-		birthDate          time.Time
-		atDate             time.Time
-		expectedEligible   bool
-		description        string
+		name             string
+		birthDate        time.Time
+		atDate           time.Time
+		expectedEligible bool
+		description      string
 	}{
 		{
 			name:             "Age 64 - not eligible",
