@@ -77,19 +77,10 @@ func (ce *CalculationEngine) SetLogger(l Logger) {
 
 // RunScenarioAuto automatically detects the configuration format and runs the appropriate scenario
 func (ce *CalculationEngine) RunScenarioAuto(ctx context.Context, config *domain.Configuration, scenarioIndex int) (*domain.ScenarioSummary, error) {
-	if config.IsLegacyFormat() {
-		if scenarioIndex >= len(config.Scenarios) {
-			return nil, fmt.Errorf("scenario index %d out of range (have %d scenarios)", scenarioIndex, len(config.Scenarios))
-		}
-		return ce.RunScenario(ctx, config, &config.Scenarios[scenarioIndex])
-	} else if config.IsNewFormat() {
-		if scenarioIndex >= len(config.GenericScenarios) {
-			return nil, fmt.Errorf("scenario index %d out of range (have %d scenarios)", scenarioIndex, len(config.GenericScenarios))
-		}
-		return ce.RunGenericScenario(ctx, config, &config.GenericScenarios[scenarioIndex])
-	} else {
-		return nil, fmt.Errorf("invalid configuration format")
+	if scenarioIndex >= len(config.Scenarios) {
+		return nil, fmt.Errorf("scenario index %d out of range (have %d scenarios)", scenarioIndex, len(config.Scenarios))
 	}
+	return ce.RunGenericScenario(ctx, config, &config.Scenarios[scenarioIndex])
 }
 
 // RunGenericScenario calculates a complete retirement scenario using the generic household format
@@ -169,99 +160,7 @@ func (ce *CalculationEngine) RunGenericScenario(ctx context.Context, config *dom
 }
 
 // RunScenario calculates a complete retirement scenario (legacy format)
-func (ce *CalculationEngine) RunScenario(ctx context.Context, config *domain.Configuration, scenario *domain.Scenario) (*domain.ScenarioSummary, error) {
-	robert := config.PersonalDetails["robert"]
-	dawn := config.PersonalDetails["dawn"]
-
-	// Validate retirement dates are after hire dates
-	if scenario.Robert.RetirementDate.Before(robert.HireDate) {
-		return nil, fmt.Errorf("robert's retirement date (%s) cannot be before hire date (%s)",
-			scenario.Robert.RetirementDate.Format("2006-01-02"), robert.HireDate.Format("2006-01-02"))
-	}
-	if scenario.Dawn.RetirementDate.Before(dawn.HireDate) {
-		return nil, fmt.Errorf("dawn's retirement date (%s) cannot be before hire date (%s)",
-			scenario.Dawn.RetirementDate.Format("2006-01-02"), dawn.HireDate.Format("2006-01-02"))
-	}
-
-	// Validate inflation and return rates are reasonable (allow deflation but cap extreme values)
-	if config.GlobalAssumptions.InflationRate.LessThan(decimal.NewFromFloat(-0.10)) || config.GlobalAssumptions.InflationRate.GreaterThan(decimal.NewFromFloat(0.20)) {
-		return nil, fmt.Errorf("inflation rate must be between -10%% and 20%%, got %s%%",
-			config.GlobalAssumptions.InflationRate.Mul(decimal.NewFromInt(100)).StringFixed(2))
-	}
-
-	// Generate annual projections
-	projection := ce.GenerateAnnualProjection(&robert, &dawn, scenario, &config.GlobalAssumptions, config.GlobalAssumptions.FederalRules)
-
-	// Create scenario summary (guard Year5/Year10 for short projections)
-	first := decimal.Zero
-	if len(projection) > 0 {
-		first = projection[0].NetIncome
-	}
-	year5 := decimal.Zero
-	if len(projection) > 4 {
-		year5 = projection[4].NetIncome
-	}
-	year10 := decimal.Zero
-	if len(projection) > 9 {
-		year10 = projection[9].NetIncome
-	}
-
-	// Calculate absolute calendar year comparisons for apples-to-apples analysis
-	netIncome2030 := ce.getNetIncomeForYear(projection, 2030)
-	netIncome2035 := ce.getNetIncomeForYear(projection, 2035)
-	netIncome2040 := ce.getNetIncomeForYear(projection, 2040)
-
-	// Calculate pre-retirement baseline projections with COLA growth
-	currentNetIncome := ce.NetIncomeCalc.Calculate(&robert, &dawn, ce.Debug)
-	preRetirement2030 := ce.projectPreRetirementNetIncome(currentNetIncome, 2030, config.GlobalAssumptions.COLAGeneralRate)
-	preRetirement2035 := ce.projectPreRetirementNetIncome(currentNetIncome, 2035, config.GlobalAssumptions.COLAGeneralRate)
-	preRetirement2040 := ce.projectPreRetirementNetIncome(currentNetIncome, 2040, config.GlobalAssumptions.COLAGeneralRate)
-
-	summary := &domain.ScenarioSummary{
-		Name:                 scenario.Name,
-		FirstYearNetIncome:   first,
-		Year5NetIncome:       year5,
-		Year10NetIncome:      year10,
-		Projection:           projection,
-		NetIncome2030:        netIncome2030,
-		NetIncome2035:        netIncome2035,
-		NetIncome2040:        netIncome2040,
-		PreRetirementNet2030: preRetirement2030,
-		PreRetirementNet2035: preRetirement2035,
-		PreRetirementNet2040: preRetirement2040,
-	}
-
-	// Calculate total lifetime income (present value)
-	var totalPV decimal.Decimal
-	discountRate := decimal.NewFromFloat(0.03) // 3% discount rate
-	for i, year := range projection {
-		discountFactor := decimal.NewFromFloat(1).Add(discountRate).Pow(decimal.NewFromInt(int64(i)))
-		totalPV = totalPV.Add(year.NetIncome.Div(discountFactor))
-	}
-	summary.TotalLifetimeIncome = totalPV
-
-	// Determine TSP longevity
-	for i, year := range projection {
-		if year.IsTSPDepleted() {
-			summary.TSPLongevity = i + 1
-			break
-		}
-	}
-	if summary.TSPLongevity == 0 {
-		summary.TSPLongevity = len(projection) // Lasted full projection
-	}
-
-	// Set initial and final TSP balances
-	if len(projection) > 0 {
-		summary.InitialTSPBalance = projection[0].GetTotalTSPBalance()
-		summary.FinalTSPBalance = projection[len(projection)-1].GetTotalTSPBalance()
-
-		// Calculate success rate for deterministic scenarios based on TSP sustainability
-		summary.SuccessRate = ce.calculateDeterministicSuccessRate(projection, summary.TSPLongevity)
-	}
-
-	return summary, nil
-}
+// (Legacy RunScenario removed)
 
 // getNetIncomeForYear finds the net income for a specific calendar year in the projection
 func (ce *CalculationEngine) getNetIncomeForYear(projection []domain.AnnualCashFlow, targetYear int) decimal.Decimal {
@@ -398,8 +297,7 @@ func (ce *CalculationEngine) calculateCurrentNetIncomeGeneric(household *domain.
 	return netIncome
 }
 
-// GenerateAnnualProjection generates annual cash flow projections for a scenario
-// GenerateAnnualProjection is implemented in projection.go
+// Legacy two-person GenerateAnnualProjection removed; generic projection handled via GenerateAnnualProjectionGeneric
 
 // calculateMedicarePremium moved to medicare.go
 
@@ -408,39 +306,17 @@ func (ce *CalculationEngine) RunScenarios(config *domain.Configuration) (*domain
 	ctx := context.Background()
 	var scenarios []domain.ScenarioSummary
 
-	// Handle both legacy and new formats
-	if config.IsLegacyFormat() {
-		scenarios = make([]domain.ScenarioSummary, len(config.Scenarios))
-		for i, scenario := range config.Scenarios {
-			summary, err := ce.RunScenario(ctx, config, &scenario)
-			if err != nil {
-				return nil, fmt.Errorf("RunScenario failed: %w", err)
-			}
-			scenarios[i] = *summary
+	scenarios = make([]domain.ScenarioSummary, len(config.Scenarios))
+	for i, scenario := range config.Scenarios {
+		summary, err := ce.RunGenericScenario(ctx, config, &scenario)
+		if err != nil {
+			return nil, fmt.Errorf("RunScenario failed: %w", err)
 		}
-	} else if config.IsNewFormat() {
-		scenarios = make([]domain.ScenarioSummary, len(config.GenericScenarios))
-		for i, scenario := range config.GenericScenarios {
-			summary, err := ce.RunGenericScenario(ctx, config, &scenario)
-			if err != nil {
-				return nil, fmt.Errorf("RunGenericScenario failed: %w", err)
-			}
-			scenarios[i] = *summary
-		}
-	} else {
-		return nil, fmt.Errorf("invalid configuration format")
+		scenarios[i] = *summary
 	}
 
 	// Calculate baseline (current net income) - use format-appropriate method
-	var baselineNetIncome decimal.Decimal
-	if config.IsLegacyFormat() {
-		robert := config.PersonalDetails["robert"]
-		dawn := config.PersonalDetails["dawn"]
-		baselineNetIncome = ce.NetIncomeCalc.Calculate(&robert, &dawn, ce.Debug)
-	} else {
-		// Use the new generic calculation
-		baselineNetIncome = ce.calculateCurrentNetIncomeGeneric(config.Household)
-	}
+	baselineNetIncome := ce.calculateCurrentNetIncomeGeneric(config.Household)
 
 	comparison := &domain.ScenarioComparison{
 		BaselineNetIncome: baselineNetIncome,

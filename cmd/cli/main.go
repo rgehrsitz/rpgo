@@ -86,24 +86,7 @@ var calculateCmd = &cobra.Command{
 	},
 }
 
-var exampleCmd = &cobra.Command{
-	Use:   "example [output-file]",
-	Short: "Generate an example configuration file",
-	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		outputFile := args[0]
-
-		parser := config.NewInputParser()
-		exampleConfig := parser.CreateExampleConfiguration()
-
-		err := output.SaveConfiguration(exampleConfig, outputFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		fmt.Printf("Example configuration saved to %s\n", outputFile)
-	},
-}
+// Example config command removed (legacy)
 
 var validateCmd = &cobra.Command{
 	Use:   "validate [input-file]",
@@ -191,187 +174,7 @@ var breakEvenCmd = &cobra.Command{
 	},
 }
 
-var fersMonteCarloCmd = &cobra.Command{
-	Use:   "monte-carlo [config-file] [data-path]",
-	Short: "Run FERS Monte Carlo simulations using configuration file",
-	Long:  "Run comprehensive FERS Monte Carlo simulations that model all retirement components (pension, SS, TSP, taxes, FEHB) with variable market conditions.",
-	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		configFile := args[0]
-		dataPath := args[1]
-
-		// Parse configuration
-		parser := config.NewInputParser()
-		baseConfig, err := parser.LoadFromFile(configFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// Load historical data
-		hdm := calculation.NewHistoricalDataManager(dataPath)
-		if err := hdm.LoadAllData(); err != nil {
-			fmt.Printf("Error loading historical data: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Get Monte Carlo parameters
-		numSimulations, _ := cmd.Flags().GetInt("simulations")
-		useHistorical, _ := cmd.Flags().GetBool("historical")
-		seed, _ := cmd.Flags().GetInt64("seed")
-		debugMode, _ := cmd.Flags().GetBool("debug")
-
-		// Create FERS Monte Carlo engine
-		engine := calculation.NewFERSMonteCarloEngine(baseConfig, hdm)
-		// Set logger on underlying calculation engine if debug enabled
-		if debugMode {
-			engine.SetLogger(simpleCLILogger{})
-			engine.SetDebug(true)
-		} else {
-			engine.SetDebug(false)
-		}
-
-		// Configure Monte Carlo simulation
-		mcConfig := calculation.FERSMonteCarloConfig{
-			BaseConfig:     baseConfig,
-			NumSimulations: numSimulations,
-			UseHistorical:  useHistorical,
-			Seed:           seed,
-		}
-
-		fmt.Printf("\n🎲 FERS MONTE CARLO SIMULATION\n")
-		fmt.Printf("==============================\n")
-		fmt.Printf("Configuration: %s\n", configFile)
-		fmt.Printf("Historical Data: %s\n", dataPath)
-		fmt.Printf("Simulations: %d\n", numSimulations)
-		fmt.Printf("Data Source: %s\n", map[bool]string{true: "Historical", false: "Statistical"}[useHistorical])
-		if seed != 0 {
-			fmt.Printf("Seed: %d\n", seed)
-		}
-
-		// Run simulation with progress indication
-		fmt.Printf("\n🔄 Running %d simulations...\n", numSimulations)
-		fmt.Printf("   Progress: [")
-		startTime := time.Now()
-
-		// Show progress for large simulations
-		if numSimulations > 100 {
-			for i := 0; i < 10; i++ {
-				fmt.Printf(" ")
-			}
-			fmt.Printf("] 0%%")
-		}
-
-		result, err := engine.RunFERSMonteCarlo(mcConfig)
-		if err != nil {
-			log.Fatal(err)
-		}
-		duration := time.Since(startTime)
-
-		// Clear progress line and show completion
-		if numSimulations > 100 {
-			fmt.Printf("\r   Progress: [")
-			for i := 0; i < 10; i++ {
-				fmt.Printf("█")
-			}
-			fmt.Printf("] 100%%\n")
-		}
-
-		// Display results
-		fmt.Printf("\n📊 SIMULATION RESULTS\n")
-		fmt.Printf("====================\n")
-		fmt.Printf("Execution Time: %v\n", duration)
-		fmt.Printf("Simulations Completed: %d\n", result.NumSimulations)
-
-		// Success metrics
-		fmt.Printf("\n✅ Success Metrics:\n")
-		successRatePercent := result.SuccessRate.Mul(decimal.NewFromInt(100))
-		fmt.Printf("  Success Rate: %s%%\n", successRatePercent.StringFixed(2))
-		fmt.Printf("  Median Net Income: $%s\n", result.MedianNetIncome.StringFixed(2))
-		fmt.Printf("  Income Volatility: $%s\n", result.IncomeVolatility.StringFixed(2))
-
-		// TSP metrics
-		fmt.Printf("\n💰 TSP Analysis:\n")
-		tspDepletionPercent := result.TSPDepletionRate.Mul(decimal.NewFromInt(100))
-		fmt.Printf("  TSP Depletion Rate: %s%%\n", tspDepletionPercent.StringFixed(2))
-		fmt.Printf("  Median TSP Longevity: %s years\n", result.TSPLongevityPercentiles.P50.StringFixed(0))
-
-		// Percentile analysis
-		fmt.Printf("\n📈 Net Income Percentiles:\n")
-		fmt.Printf("  10th Percentile: $%s\n", result.NetIncomePercentiles.P10.StringFixed(2))
-		fmt.Printf("  25th Percentile: $%s\n", result.NetIncomePercentiles.P25.StringFixed(2))
-		fmt.Printf("  50th Percentile: $%s\n", result.NetIncomePercentiles.P50.StringFixed(2))
-		fmt.Printf("  75th Percentile: $%s\n", result.NetIncomePercentiles.P75.StringFixed(2))
-		fmt.Printf("  90th Percentile: $%s\n", result.NetIncomePercentiles.P90.StringFixed(2))
-
-		// Risk assessment
-		fmt.Printf("\n⚠️  Risk Assessment:\n")
-		riskLevel, riskDescription := calculateRiskLevel(result.SuccessRate)
-		fmt.Printf("  Risk Level: %s\n", riskLevel)
-		fmt.Printf("  Description: %s\n", riskDescription)
-
-		// Recommendations
-		fmt.Printf("\n💡 Recommendations:\n")
-		recommendations := generateRecommendations(result)
-		for _, rec := range recommendations {
-			fmt.Printf("  • %s\n", rec)
-		}
-
-		// Market conditions summary
-		if len(result.Simulations) > 0 {
-			fmt.Printf("\n📊 Market Conditions Summary:\n")
-			fmt.Printf("  Average Inflation Rate: %s%%\n", calculateAverageInflation(result).Mul(decimal.NewFromInt(100)).StringFixed(2))
-			fmt.Printf("  Average COLA Rate: %s%%\n", calculateAverageCOLA(result).Mul(decimal.NewFromInt(100)).StringFixed(2))
-		}
-
-		// Generate HTML report
-		htmlReport := &output.MonteCarloHTMLReport{
-			Result: result,
-			Config: mcConfig,
-		}
-
-		htmlOutputPath := "monte_carlo_report.html"
-		if err := htmlReport.GenerateHTMLReport(htmlOutputPath); err != nil {
-			fmt.Printf("\n⚠️  Warning: Could not generate HTML report: %v\n", err)
-		} else {
-			fmt.Printf("\n📄 HTML Report Generated: %s\n", htmlOutputPath)
-			fmt.Printf("   Open this file in your web browser for interactive charts and detailed analysis\n")
-		}
-
-		// Generate CSV reports
-		csvReport := &output.MonteCarloCSVReport{
-			Result: result,
-			Config: mcConfig,
-		}
-
-		csvOutputDir := "monte_carlo_csv"
-		if err := csvReport.GenerateAllCSVReports(csvOutputDir); err != nil {
-			fmt.Printf("\n⚠️  Warning: Could not generate CSV reports: %v\n", err)
-		} else {
-			fmt.Printf("\n📊 CSV Reports Generated in: %s/\n", csvOutputDir)
-			fmt.Printf("   - monte_carlo_summary.csv: Aggregate statistics\n")
-			fmt.Printf("   - monte_carlo_detailed.csv: Individual simulation results\n")
-			fmt.Printf("   - monte_carlo_percentiles.csv: Percentile analysis\n")
-		}
-
-		// Summary with color-coded success rate
-		successRateFloat, _ := successRatePercent.Float64()
-
-		fmt.Printf("\n" + strings.Repeat("=", 60) + "\n")
-		fmt.Printf("🎯 QUICK SUMMARY\n")
-		fmt.Printf("Success Rate: ")
-		if successRateFloat >= 90 {
-			fmt.Printf("🟢 %s%% (Excellent)\n", successRatePercent.StringFixed(1))
-		} else if successRateFloat >= 70 {
-			fmt.Printf("🟡 %s%% (Good)\n", successRatePercent.StringFixed(1))
-		} else {
-			fmt.Printf("🔴 %s%% (Needs Attention)\n", successRatePercent.StringFixed(1))
-		}
-		fmt.Printf("Median Income: $%s\n", result.MedianNetIncome.StringFixed(0))
-		fmt.Printf("Median Final TSP Balance: $%s\n", result.MedianFinalTSPBalance.StringFixed(0))
-		fmt.Printf("Risk Level: %s\n", riskLevel)
-		fmt.Printf(strings.Repeat("=", 60) + "\n")
-	},
-}
+// Monte Carlo command removed (legacy)
 
 func init() {
 	calculateCmd.Flags().StringP("format", "f", "console", "Output format (console, html, json, csv)")
@@ -382,16 +185,9 @@ func init() {
 	breakEvenCmd.Flags().Bool("debug", false, "Enable debug output for detailed calculations")
 
 	// FERS Monte Carlo command flags
-	fersMonteCarloCmd.Flags().IntP("simulations", "s", 1000, "Number of simulations to run")
-	fersMonteCarloCmd.Flags().BoolP("historical", "d", true, "Use historical data (false for statistical)")
-	fersMonteCarloCmd.Flags().Int64P("seed", "r", 0, "Random seed (0 for auto-generated)")
-	fersMonteCarloCmd.Flags().Bool("debug", false, "Enable debug output for detailed calculations")
-
 	rootCmd.AddCommand(calculateCmd)
-	rootCmd.AddCommand(exampleCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(breakEvenCmd)
-	rootCmd.AddCommand(fersMonteCarloCmd)
 
 	// Initialize historical command
 	initHistoricalCommand()
@@ -729,71 +525,7 @@ func calculateRiskLevel(successRate decimal.Decimal) (string, string) {
 	}
 }
 
-func generateRecommendations(result *calculation.FERSMonteCarloResult) []string {
-	var recommendations []string
-
-	if result.SuccessRate.LessThan(decimal.NewFromFloat(0.85)) {
-		recommendations = append(recommendations, "Consider reducing retirement spending or working longer")
-		recommendations = append(recommendations, "Increase allocation to bonds (F/G funds) for stability")
-		recommendations = append(recommendations, "Consider delaying Social Security benefits")
-		recommendations = append(recommendations, "Review FEHB plan options to reduce costs")
-	} else if result.SuccessRate.GreaterThan(decimal.NewFromFloat(0.95)) {
-		recommendations = append(recommendations, "Current plan appears sustainable")
-		recommendations = append(recommendations, "Consider increasing retirement spending")
-		recommendations = append(recommendations, "May be able to retire earlier or take more investment risk")
-	} else {
-		recommendations = append(recommendations, "Monitor plan regularly and adjust as needed")
-		recommendations = append(recommendations, "Consider guardrails withdrawal strategy")
-		recommendations = append(recommendations, "Review asset allocation for optimal risk/return")
-	}
-
-	// Add TSP-specific recommendations
-	if result.TSPDepletionRate.GreaterThan(decimal.NewFromFloat(0.1)) {
-		recommendations = append(recommendations, "TSP may deplete early - consider reducing withdrawal rate")
-	}
-
-	return recommendations
-}
-
-func calculateAverageInflation(result *calculation.FERSMonteCarloResult) decimal.Decimal {
-	if len(result.Simulations) == 0 {
-		return decimal.Zero
-	}
-
-	var total decimal.Decimal
-	count := 0
-	for _, sim := range result.Simulations {
-		if !sim.MarketConditions.InflationRate.IsZero() {
-			total = total.Add(sim.MarketConditions.InflationRate)
-			count++
-		}
-	}
-
-	if count == 0 {
-		return decimal.Zero
-	}
-	return total.Div(decimal.NewFromInt(int64(count)))
-}
-
-func calculateAverageCOLA(result *calculation.FERSMonteCarloResult) decimal.Decimal {
-	if len(result.Simulations) == 0 {
-		return decimal.Zero
-	}
-
-	var total decimal.Decimal
-	count := 0
-	for _, sim := range result.Simulations {
-		if !sim.MarketConditions.COLARate.IsZero() {
-			total = total.Add(sim.MarketConditions.COLARate)
-			count++
-		}
-	}
-
-	if count == 0 {
-		return decimal.Zero
-	}
-	return total.Div(decimal.NewFromInt(int64(count)))
-}
+// Legacy Monte Carlo helper functions removed
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {

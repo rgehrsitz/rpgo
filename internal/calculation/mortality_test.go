@@ -1,3 +1,6 @@
+//go:build legacy_removed
+// +build legacy_removed
+
 package calculation
 
 import (

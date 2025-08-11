@@ -209,20 +209,20 @@ func (rmd *RMDCalculator) CalculateRMD(traditionalBalance decimal.Decimal, age i
 	return decimal.Zero
 }
 
-// createTSPStrategy creates a TSP withdrawal strategy based on scenario configuration
-func (ce *CalculationEngine) createTSPStrategy(scenario *domain.RetirementScenario, initialBalance decimal.Decimal, inflationRate decimal.Decimal) TSPWithdrawalStrategy {
-	switch scenario.TSPWithdrawalStrategy {
+// createTSPStrategy creates a TSP withdrawal strategy based on scenario configuration inputs
+func (ce *CalculationEngine) createTSPStrategy(strategyName string, targetMonthly *decimal.Decimal, withdrawalRate *decimal.Decimal, initialBalance decimal.Decimal, inflationRate decimal.Decimal) TSPWithdrawalStrategy {
+	switch strategyName {
 	case "4_percent_rule":
 		return NewFourPercentRule(initialBalance, inflationRate)
 	case "need_based":
-		if scenario.TSPWithdrawalTargetMonthly != nil {
-			return NewNeedBasedWithdrawal(*scenario.TSPWithdrawalTargetMonthly)
+		if targetMonthly != nil {
+			return NewNeedBasedWithdrawal(*targetMonthly)
 		}
 		// Fallback to 4% rule if target not specified
 		return NewFourPercentRule(initialBalance, inflationRate)
 	case "variable_percentage":
-		if scenario.TSPWithdrawalRate != nil {
-			return NewVariablePercentageWithdrawal(initialBalance, *scenario.TSPWithdrawalRate, inflationRate)
+		if withdrawalRate != nil {
+			return NewVariablePercentageWithdrawal(initialBalance, *withdrawalRate, inflationRate)
 		}
 		// Fallback to 4% rule if rate not specified
 		return NewFourPercentRule(initialBalance, inflationRate)

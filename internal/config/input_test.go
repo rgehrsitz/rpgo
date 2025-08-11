@@ -8,37 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func TestConfigurationFormats(t *testing.T) {
-	// Test format detection
-	legacyConfig := &domain.Configuration{
-		PersonalDetails: map[string]domain.Employee{
-			"robert": {},
-			"dawn":   {},
-		},
-	}
-
-	if !legacyConfig.IsLegacyFormat() {
-		t.Error("Should detect legacy format")
-	}
-
-	if legacyConfig.IsNewFormat() {
-		t.Error("Should not detect new format for legacy config")
-	}
-
-	newConfig := &domain.Configuration{
-		Household: &domain.Household{
-			Participants: []domain.Participant{{}},
-		},
-	}
-
-	if !newConfig.IsNewFormat() {
-		t.Error("Should detect new format")
-	}
-
-	if newConfig.IsLegacyFormat() {
-		t.Error("Should not detect legacy format for new config")
-	}
-}
+// (Legacy format detection test removed - generic only)
 
 func TestParticipantValidation(t *testing.T) {
 	hireDate := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -67,7 +37,7 @@ func TestParticipantValidation(t *testing.T) {
 				},
 			},
 		},
-		GenericScenarios: []domain.GenericScenario{
+		Scenarios: []domain.GenericScenario{
 			{
 				Name: "Test Scenario",
 				ParticipantScenarios: map[string]domain.ParticipantScenario{
@@ -102,48 +72,4 @@ func TestParticipantValidation(t *testing.T) {
 	}
 }
 
-func TestConversion(t *testing.T) {
-	// Test Employee -> Participant -> Employee round trip
-	employee := domain.Employee{
-		Name:                           "Test Employee",
-		BirthDate:                      time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
-		HireDate:                       time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
-		CurrentSalary:                  decimal.NewFromInt(100000),
-		High3Salary:                    decimal.NewFromInt(95000),
-		TSPBalanceTraditional:          decimal.NewFromInt(400000),
-		TSPBalanceRoth:                 decimal.NewFromInt(50000),
-		TSPContributionPercent:         decimal.NewFromFloat(0.15),
-		SSBenefitFRA:                   decimal.NewFromInt(2500),
-		SSBenefit62:                    decimal.NewFromInt(1750),
-		SSBenefit70:                    decimal.NewFromInt(3100),
-		FEHBPremiumPerPayPeriod:        decimal.NewFromInt(500),
-		SurvivorBenefitElectionPercent: decimal.NewFromFloat(0.25),
-	}
-
-	// Convert to Participant
-	participant := domain.ParticipantFromEmployee(&employee)
-	if participant.Name != employee.Name {
-		t.Errorf("Expected name %s, got %s", employee.Name, participant.Name)
-	}
-
-	if !participant.IsFederal {
-		t.Error("Expected participant to be federal")
-	}
-
-	// Convert back to Employee
-	backToEmployee, err := participant.ToEmployee()
-	if err != nil {
-		t.Fatalf("Failed to convert back to employee: %s", err)
-	}
-
-	// Verify they match
-	if employee.Name != backToEmployee.Name {
-		t.Errorf("Names don't match: %s vs %s", employee.Name, backToEmployee.Name)
-	}
-	if !employee.CurrentSalary.Equal(backToEmployee.CurrentSalary) {
-		t.Errorf("Salaries don't match: %s vs %s", employee.CurrentSalary, backToEmployee.CurrentSalary)
-	}
-	if !employee.SSBenefitFRA.Equal(backToEmployee.SSBenefitFRA) {
-		t.Errorf("SS benefits don't match: %s vs %s", employee.SSBenefitFRA, backToEmployee.SSBenefitFRA)
-	}
-}
+// (Legacy conversion test removed)

@@ -1,3 +1,6 @@
+//go:build legacy_removed
+// +build legacy_removed
+
 package calculation
 
 import (
@@ -263,7 +266,6 @@ func (fmce *FERSMonteCarloEngine) runSingleFERSSimulation(simIndex int) (*FERSMo
 		TSPMetrics:       tspMetrics,
 	}, nil
 }
-
 
 // generateEnhancedMarketConditions generates market conditions with proper Monte Carlo variability
 func (fmce *FERSMonteCarloEngine) generateEnhancedMarketConditions() MarketCondition {
