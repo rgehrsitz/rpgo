@@ -53,14 +53,39 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 		}
 	}
 
-	matchRateCap := decimal.NewFromFloat(0.05)
-	matchThreshold := decimal.NewFromFloat(0.05)
+	totalEmployerPercent := decimal.NewFromFloat(0.05)
 	if federalRules.FERSRules.TSPMatchingRate.GreaterThan(decimalZero) {
-		matchRateCap = federalRules.FERSRules.TSPMatchingRate
+		totalEmployerPercent = federalRules.FERSRules.TSPMatchingRate
 	}
+	baseMatchThreshold := decimal.NewFromFloat(0.05)
 	if federalRules.FERSRules.TSPMatchingThreshold.GreaterThan(decimalZero) {
-		matchThreshold = federalRules.FERSRules.TSPMatchingThreshold
+		baseMatchThreshold = federalRules.FERSRules.TSPMatchingThreshold
 	}
+
+	autoContributionPercent := decimal.NewFromFloat(0.01)
+	if totalEmployerPercent.LessThanOrEqual(decimalZero) {
+		autoContributionPercent = decimalZero
+	} else if totalEmployerPercent.LessThan(autoContributionPercent) {
+		autoContributionPercent = totalEmployerPercent
+	}
+
+	matchPoolPercent := totalEmployerPercent.Sub(autoContributionPercent)
+	if matchPoolPercent.LessThan(decimalZero) {
+		matchPoolPercent = decimalZero
+	}
+
+	if baseMatchThreshold.LessThanOrEqual(decimalZero) {
+		baseMatchThreshold = decimal.NewFromFloat(0.05)
+	}
+
+	firstTierRatio := decimal.NewFromFloat(0.6) // 60% of threshold (first 3% when threshold is 5%)
+	secondTierRatio := decimalOne.Sub(firstTierRatio)
+	firstTierCapPercent := baseMatchThreshold.Mul(firstTierRatio)
+	secondTierCapPercent := baseMatchThreshold.Mul(secondTierRatio)
+	if secondTierCapPercent.LessThan(decimalZero) {
+		secondTierCapPercent = decimalZero
+	}
+	secondTierMatchRate := decimal.NewFromFloat(0.5)
 
 	type participantState struct {
 		currentSalary              decimal.Decimal
@@ -266,24 +291,77 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 				}
 			}
 
-			if salaryForYear.GreaterThan(decimalZero) && p.IsFederal && p.TSPContributionPercent != nil {
-				employeeContribution := salaryForYear.Mul(*p.TSPContributionPercent)
-				match := decimalZero
-				if matchRateCap.GreaterThan(decimalZero) {
-					matchablePercent := *p.TSPContributionPercent
-					if matchThreshold.GreaterThan(decimalZero) && matchablePercent.GreaterThan(matchThreshold) {
-						matchablePercent = matchThreshold
-					}
-					if matchThreshold.GreaterThan(decimalZero) {
-						ratio := matchRateCap.Div(matchThreshold)
-						match = salaryForYear.Mul(matchablePercent).Mul(ratio)
-					} else {
-						match = salaryForYear.Mul(matchRateCap)
+			employeeContributionAmount := decimalZero
+			if salaryForYear.GreaterThan(decimalZero) && p.IsFederal {
+				if autoContributionPercent.GreaterThan(decimalZero) {
+					autoContribution := salaryForYear.Mul(autoContributionPercent)
+					if autoContribution.GreaterThan(decimalZero) {
+						st.tspBalance = st.tspBalance.Add(autoContribution)
 					}
 				}
-				contribution := employeeContribution.Add(match)
-				st.tspBalance = st.tspBalance.Add(contribution)
-				cf.ParticipantTSPContributions[p.Name] = contribution
+
+				employeePct := decimalZero
+				if p.TSPContributionPercent != nil {
+					employeePct = *p.TSPContributionPercent
+					if employeePct.LessThan(decimalZero) {
+						employeePct = decimalZero
+					}
+				}
+
+				if employeePct.GreaterThan(decimalZero) {
+					employeeContribution := salaryForYear.Mul(employeePct)
+					if employeeContribution.GreaterThan(decimalZero) {
+						st.tspBalance = st.tspBalance.Add(employeeContribution)
+						employeeContributionAmount = employeeContributionAmount.Add(employeeContribution)
+					}
+
+					matchContribution := decimalZero
+					if matchPoolPercent.GreaterThan(decimalZero) {
+						firstTierEmployee := employeePct
+						if firstTierEmployee.GreaterThan(firstTierCapPercent) {
+							firstTierEmployee = firstTierCapPercent
+						}
+						if firstTierEmployee.LessThan(decimalZero) {
+							firstTierEmployee = decimalZero
+						}
+
+						firstTierMatchPercent := firstTierEmployee
+						if firstTierMatchPercent.GreaterThan(matchPoolPercent) {
+							firstTierMatchPercent = matchPoolPercent
+						}
+
+						remainingMatchPercent := matchPoolPercent.Sub(firstTierMatchPercent)
+						if remainingMatchPercent.LessThan(decimalZero) {
+							remainingMatchPercent = decimalZero
+						}
+
+						secondTierEmployee := decimalZero
+						if employeePct.GreaterThan(firstTierCapPercent) {
+							secondTierEmployee = employeePct.Sub(firstTierCapPercent)
+							if secondTierEmployee.GreaterThan(secondTierCapPercent) {
+								secondTierEmployee = secondTierCapPercent
+							}
+						}
+
+						secondTierMatchPercent := secondTierEmployee.Mul(secondTierMatchRate)
+						if secondTierMatchPercent.GreaterThan(remainingMatchPercent) {
+							secondTierMatchPercent = remainingMatchPercent
+						}
+
+						matchPercentTotal := firstTierMatchPercent.Add(secondTierMatchPercent)
+						if matchPercentTotal.GreaterThan(decimalZero) {
+							matchContribution = salaryForYear.Mul(matchPercentTotal)
+						}
+					}
+
+					if matchContribution.GreaterThan(decimalZero) {
+						st.tspBalance = st.tspBalance.Add(matchContribution)
+					}
+				}
+			}
+
+			if employeeContributionAmount.GreaterThan(decimalZero) {
+				cf.ParticipantTSPContributions[p.Name] = cf.ParticipantTSPContributions[p.Name].Add(employeeContributionAmount)
 			}
 
 			if st.retired && st.pensionAnnual.GreaterThan(decimalZero) {
