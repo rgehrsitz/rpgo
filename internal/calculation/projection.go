@@ -19,8 +19,6 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 		return nil
 	}
 
-	_ = federalRules
-
 	participantNames := make([]string, len(household.Participants))
 	for i, p := range household.Participants {
 		participantNames[i] = p.Name
@@ -40,31 +38,54 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 	}
 
 	tspTransferMode := ""
+	survivorSpendingFactor := decimalOne
 	if scenario != nil && scenario.Mortality != nil && scenario.Mortality.Assumptions != nil {
 		tspTransferMode = scenario.Mortality.Assumptions.TSPSpousalTransfer
+		if !scenario.Mortality.Assumptions.SurvivorSpendingFactor.IsZero() {
+			sf := scenario.Mortality.Assumptions.SurvivorSpendingFactor
+			if sf.LessThan(decimalZero) {
+				sf = decimalZero
+			}
+			if sf.GreaterThan(decimalOne) {
+				sf = decimalOne
+			}
+			survivorSpendingFactor = sf
+		}
+	}
+
+	matchRateCap := decimal.NewFromFloat(0.05)
+	matchThreshold := decimal.NewFromFloat(0.05)
+	if federalRules.FERSRules.TSPMatchingRate.GreaterThan(decimalZero) {
+		matchRateCap = federalRules.FERSRules.TSPMatchingRate
+	}
+	if federalRules.FERSRules.TSPMatchingThreshold.GreaterThan(decimalZero) {
+		matchThreshold = federalRules.FERSRules.TSPMatchingThreshold
 	}
 
 	type participantState struct {
-		currentSalary     decimal.Decimal
-		retired           bool
-		retirementYear    *int
-		retirementDate    *time.Time
-		pensionAnnual     decimal.Decimal
-		pensionStartYear  *int
-		survivorPension   decimal.Decimal
-		ssStartAge        int
-		ssStarted         bool
-		ssAnnual          decimal.Decimal
-		ssStartYear       *int
-		tspBalance        decimal.Decimal
-		tspWithdrawalBase decimal.Decimal
-		fehbPremium       decimal.Decimal
+		currentSalary              decimal.Decimal
+		retired                    bool
+		retirementYear             *int
+		retirementDate             *time.Time
+		pensionAnnual              decimal.Decimal
+		pensionStartYear           *int
+		survivorPension            decimal.Decimal
+		survivorPensionIncome      decimal.Decimal
+		survivorPensionLastUpdated int
+		survivorPensionDistributed bool
+		ssStartAge                 int
+		ssStarted                  bool
+		ssAnnual                   decimal.Decimal
+		ssStartYear                *int
+		tspBalance                 decimal.Decimal
+		tspWithdrawalBase          decimal.Decimal
+		fehbPremium                decimal.Decimal
 	}
 
 	states := make(map[string]*participantState, len(household.Participants))
 	for i := range household.Participants {
 		p := &household.Participants[i]
-		st := &participantState{currentSalary: decimalZero, ssStartAge: 67}
+		st := &participantState{currentSalary: decimalZero, ssStartAge: 67, survivorPensionLastUpdated: -1}
 
 		if p.CurrentSalary != nil {
 			st.currentSalary = *p.CurrentSalary
@@ -147,6 +168,11 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 		yearDate := time.Date(startYear+yr, 1, 1, 0, 0, 0, 0, time.UTC)
 		cf := domain.NewAnnualCashFlow(yr, yearDate, participantNames)
 		transferPool := decimalZero
+		aliveNames := aliveParticipantsForYear(household, deathYears, yr)
+		singleSurvivorName := ""
+		if len(aliveNames) == 1 {
+			singleSurvivorName = aliveNames[0]
+		}
 
 		for i := range household.Participants {
 			p := &household.Participants[i]
@@ -158,6 +184,13 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 
 			age := p.Age(yearDate)
 			cf.Ages[p.Name] = age
+			if st.survivorPensionIncome.GreaterThan(decimalZero) {
+				if st.survivorPensionLastUpdated < yr {
+					st.survivorPensionIncome = st.survivorPensionIncome.Mul(onePlus(cola))
+					st.survivorPensionLastUpdated = yr
+				}
+				cf.SurvivorPensions[p.Name] = st.survivorPensionIncome
+			}
 
 			var deathIdx *int
 			if dy, ok := deathYears[p.Name]; ok {
@@ -168,6 +201,22 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 			cf.IsDeceased[p.Name] = isDeceased
 
 			if isDeceased {
+				if !st.survivorPensionDistributed && st.survivorPension.GreaterThan(decimalZero) {
+					if len(aliveNames) > 0 {
+						share := st.survivorPension
+						if len(aliveNames) > 1 {
+							share = share.Div(decimal.NewFromInt(int64(len(aliveNames))))
+						}
+						for _, name := range aliveNames {
+							recipientState := states[name]
+							recipientState.survivorPensionIncome = recipientState.survivorPensionIncome.Add(share)
+							recipientState.survivorPensionLastUpdated = yr
+							cf.SurvivorPensions[name] = cf.SurvivorPensions[name].Add(share)
+						}
+					}
+					st.survivorPensionDistributed = true
+					st.survivorPension = decimalZero
+				}
 				if tspTransferMode == "merge" && deathIdx != nil && yr == *deathIdx && st.tspBalance.GreaterThan(decimalZero) {
 					transferPool = transferPool.Add(st.tspBalance)
 				}
@@ -219,12 +268,19 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 
 			if salaryForYear.GreaterThan(decimalZero) && p.IsFederal && p.TSPContributionPercent != nil {
 				employeeContribution := salaryForYear.Mul(*p.TSPContributionPercent)
-				matchRate := *p.TSPContributionPercent
-				maxMatch := decimal.NewFromFloat(0.05)
-				if matchRate.GreaterThan(maxMatch) {
-					matchRate = maxMatch
+				match := decimalZero
+				if matchRateCap.GreaterThan(decimalZero) {
+					matchablePercent := *p.TSPContributionPercent
+					if matchThreshold.GreaterThan(decimalZero) && matchablePercent.GreaterThan(matchThreshold) {
+						matchablePercent = matchThreshold
+					}
+					if matchThreshold.GreaterThan(decimalZero) {
+						ratio := matchRateCap.Div(matchThreshold)
+						match = salaryForYear.Mul(matchablePercent).Mul(ratio)
+					} else {
+						match = salaryForYear.Mul(matchRateCap)
+					}
 				}
-				match := salaryForYear.Mul(matchRate)
 				contribution := employeeContribution.Add(match)
 				st.tspBalance = st.tspBalance.Add(contribution)
 				cf.ParticipantTSPContributions[p.Name] = contribution
@@ -236,12 +292,21 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 					if p.IsFederal {
 						pensionValue = applyParticipantFERSCOLA(pensionValue, cola, age)
 						st.pensionAnnual = pensionValue
+						if st.survivorPension.GreaterThan(decimalZero) {
+							st.survivorPension = applyParticipantFERSCOLA(st.survivorPension, cola, age)
+						}
 					} else if p.ExternalPension != nil {
 						pensionValue = pensionValue.Mul(onePlus(p.ExternalPension.COLAAdjustment))
 						st.pensionAnnual = pensionValue
+						if st.survivorPension.GreaterThan(decimalZero) {
+							st.survivorPension = st.survivorPension.Mul(onePlus(p.ExternalPension.COLAAdjustment))
+						}
 					} else {
 						pensionValue = pensionValue.Mul(onePlus(cola))
 						st.pensionAnnual = pensionValue
+						if st.survivorPension.GreaterThan(decimalZero) {
+							st.survivorPension = st.survivorPension.Mul(onePlus(cola))
+						}
 					}
 				}
 
@@ -286,6 +351,11 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 						if ps.TSPWithdrawalRate != nil {
 							withdrawal = st.tspBalance.Mul(*ps.TSPWithdrawalRate)
 						}
+					}
+				}
+				if singleSurvivorName != "" && p.Name == singleSurvivorName {
+					if survivorSpendingFactor.LessThan(decimalOne) {
+						withdrawal = withdrawal.Mul(survivorSpendingFactor)
 					}
 				}
 				if withdrawal.GreaterThan(st.tspBalance) {
@@ -492,8 +562,6 @@ func calculateParticipantPension(p *domain.Participant, retirementDate time.Time
 		} else if survivorElection.Equals(quarter) {
 			reduced = pensionBase.Mul(decimal.NewFromFloat(0.95))
 			survivor = pensionBase.Mul(quarter)
-		} else {
-			survivorElection = decimalZero
 		}
 	}
 
@@ -536,6 +604,19 @@ func getBirthYear(h *domain.Household, name string) int {
 		}
 	}
 	return ProjectionBaseYear
+}
+
+func aliveParticipantsForYear(h *domain.Household, deathYears map[string]*int, year int) []string {
+	names := make([]string, 0, len(h.Participants))
+	for _, p := range h.Participants {
+		if dy, ok := deathYears[p.Name]; ok && dy != nil {
+			if year >= *dy {
+				continue
+			}
+		}
+		names = append(names, p.Name)
+	}
+	return names
 }
 
 // Legacy two-person GenerateAnnualProjection removed; use GenerateAnnualProjectionGeneric.

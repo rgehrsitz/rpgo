@@ -223,6 +223,15 @@ func (acf *AnnualCashFlow) GetTotalPension() decimal.Decimal {
 	return total
 }
 
+// GetTotalSurvivorPension returns the sum of all survivor pension amounts
+func (acf *AnnualCashFlow) GetTotalSurvivorPension() decimal.Decimal {
+	total := decimal.Zero
+	for _, pension := range acf.SurvivorPensions {
+		total = total.Add(pension)
+	}
+	return total
+}
+
 // GetTotalTSPWithdrawal returns the sum of all participant TSP withdrawals
 func (acf *AnnualCashFlow) GetTotalTSPWithdrawal() decimal.Decimal {
 	total := decimal.Zero
@@ -285,6 +294,7 @@ func (acf *AnnualCashFlow) GetDeceasedParticipants() []string {
 func (acf *AnnualCashFlow) CalculateTotalIncome() decimal.Decimal {
 	return acf.GetTotalSalary().
 		Add(acf.GetTotalPension()).
+		Add(acf.GetTotalSurvivorPension()).
 		Add(acf.GetTotalTSPWithdrawal()).
 		Add(acf.GetTotalSSBenefit()).
 		Add(acf.GetTotalFERSSupplement())
