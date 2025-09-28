@@ -3,28 +3,35 @@ package calculation
 import (
 	"time"
 
-	"github.com/rpgo/retirement-calculator/internal/domain"
+	"github.com/rgehrsitz/rpgo/internal/domain"
 	"github.com/shopspring/decimal"
 )
 
-// GenerateAnnualProjectionGeneric produces a basic projection for the generic participant model.
-// (Minimal implementation after legacy removal – TODO: expand with full pension/SS/TSP logic.)
+var (
+	decimalOne    = decimal.NewFromInt(1)
+	decimalZero   = decimal.Zero
+	decimalTwelve = decimal.NewFromInt(12)
+)
+
+// GenerateAnnualProjectionGeneric produces a projection for the generic participant model.
 func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.Household, scenario *domain.GenericScenario, assumptions *domain.GlobalAssumptions, federalRules domain.FederalRules) []domain.AnnualCashFlow {
-	var participantNames []string
-	var startYear int
-	var years int
-	// Restore variable initializations
-	participantNames = make([]string, len(household.Participants))
+	if household == nil || assumptions == nil || len(household.Participants) == 0 {
+		return nil
+	}
+
+	_ = federalRules
+
+	participantNames := make([]string, len(household.Participants))
 	for i, p := range household.Participants {
 		participantNames[i] = p.Name
 	}
-	startYear = ProjectionBaseYear
-	years = assumptions.ProjectionYears
-	// var years int (removed stray declaration)
+
+	startYear := ProjectionBaseYear
+	years := assumptions.ProjectionYears
+	if years <= 0 {
 		years = 1
 	}
 
-	// Map of participant name to scenario details
 	psMap := map[string]domain.ParticipantScenario{}
 	if scenario != nil {
 		for name, ps := range scenario.ParticipantScenarios {
@@ -32,268 +39,494 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 		}
 	}
 
-	// Track dynamic participant state across years
-	type pState struct {
-		salary          decimal.Decimal
-		retired         bool
-		retirementYear  *int
-		pensionAnnual   decimal.Decimal
-		ssStarted       bool
-		ssAnnual        decimal.Decimal
-		tspBalance      decimal.Decimal
-		tspInflationAdj decimal.Decimal // for 4% rule base amount
-		fehbPremium     decimal.Decimal // current annual FEHB premium (if primary)
+	tspTransferMode := ""
+	if scenario != nil && scenario.Mortality != nil && scenario.Mortality.Assumptions != nil {
+		tspTransferMode = scenario.Mortality.Assumptions.TSPSpousalTransfer
 	}
-	states := map[string]*pState{}
 
-	cola := assumptions.COLAGeneralRate
-	infl := assumptions.InflationRate
-	preRetReturn := assumptions.TSPReturnPreRetirement
-	postRetReturn := assumptions.TSPReturnPostRetirement
-	fehbInfl := assumptions.FEHBPremiumInflation
+	type participantState struct {
+		currentSalary     decimal.Decimal
+		retired           bool
+		retirementYear    *int
+		retirementDate    *time.Time
+		pensionAnnual     decimal.Decimal
+		pensionStartYear  *int
+		survivorPension   decimal.Decimal
+		ssStartAge        int
+		ssStarted         bool
+		ssAnnual          decimal.Decimal
+		ssStartYear       *int
+		tspBalance        decimal.Decimal
+		tspWithdrawalBase decimal.Decimal
+		fehbPremium       decimal.Decimal
+	}
 
-	// Initialize state
+	states := make(map[string]*participantState, len(household.Participants))
 	for i := range household.Participants {
 		p := &household.Participants[i]
-		st := &pState{}
+		st := &participantState{currentSalary: decimalZero, ssStartAge: 67}
+
 		if p.CurrentSalary != nil {
-			st.salary = *p.CurrentSalary
+			st.currentSalary = *p.CurrentSalary
 		}
-		if p.TSPBalanceTraditional != nil && p.TSPBalanceRoth != nil {
-			st.tspBalance = p.TSPBalanceTraditional.Add(*p.TSPBalanceRoth)
+
+		if ps, ok := psMap[p.Name]; ok {
+			if ps.RetirementDate != nil {
+				ry := ps.RetirementDate.Year() - startYear
+				if ry < 0 {
+					ry = 0
+				}
+				st.retirementYear = new(int)
+				*st.retirementYear = ry
+				st.retirementDate = ps.RetirementDate
+			}
+			if ps.SSStartAge >= 62 && ps.SSStartAge <= 70 {
+				st.ssStartAge = ps.SSStartAge
+			}
 		}
+
+		if st.retirementYear == nil && p.EmploymentEndDate != nil {
+			ry := p.EmploymentEndDate.Year() - startYear
+			if ry >= 0 {
+				st.retirementYear = new(int)
+				*st.retirementYear = ry
+				st.retirementDate = p.EmploymentEndDate
+			}
+		}
+
+		st.tspBalance = decimalZero
+		if p.TSPBalanceTraditional != nil {
+			st.tspBalance = st.tspBalance.Add(*p.TSPBalanceTraditional)
+		}
+		if p.TSPBalanceRoth != nil {
+			st.tspBalance = st.tspBalance.Add(*p.TSPBalanceRoth)
+		}
+
 		if p.IsPrimaryFEHBHolder && p.FEHBPremiumPerPayPeriod != nil {
 			st.fehbPremium = p.FEHBPremiumPerPayPeriod.Mul(decimal.NewFromInt(26))
 		}
-		// Determine retirement year index (year starting after retirement date)
-		if ps, ok := psMap[p.Name]; ok && ps.RetirementDate != nil {
-			ry := ps.RetirementDate.Year() - startYear
-			if ry < 0 {
-				ry = 0
-			}
-			st.retirementYear = &ry
-		}
+
 		states[p.Name] = st
 	}
 
-	// Death years
-	deathYear := map[string]*int{}
+	deathYears := map[string]*int{}
 	if scenario != nil && scenario.Mortality != nil && scenario.Mortality.Participants != nil {
-		for name, ms := range scenario.Mortality.Participants {
-			if ms == nil {
+		for name, spec := range scenario.Mortality.Participants {
+			if spec == nil {
 				continue
 			}
-			if ms.DeathDate != nil {
-				y := ms.DeathDate.Year() - startYear
-				if y >= 0 && y < years {
-					deathYear[name] = &y
+			if spec.DeathDate != nil {
+				idx := spec.DeathDate.Year() - startYear
+				if idx >= 0 && idx < years {
+					v := new(int)
+					*v = idx
+					deathYears[name] = v
 				}
 			}
-			if ms.DeathAge != nil {
-				y := (*ms.DeathAge) + getBirthYear(household, name) - startYear
-				if y >= 0 && y < years {
-					deathYear[name] = &y
+			if spec.DeathAge != nil {
+				birthYear := getBirthYear(household, name)
+				idx := *spec.DeathAge + birthYear - startYear
+				if idx >= 0 && idx < years {
+					v := new(int)
+					*v = idx
+					deathYears[name] = v
 				}
 			}
 		}
 	}
 
-	// Helper lambdas
-	fersMultiplier := func(ageAtRet int, yearsSvc decimal.Decimal) decimal.Decimal {
-		if yearsSvc.GreaterThanOrEqual(decimal.NewFromInt(20)) && ageAtRet >= 62 {
-			return decimal.NewFromFloat(0.011)
-		}
-		return decimal.NewFromFloat(0.01)
-	}
-	computePension := func(p *domain.Participant, retDate time.Time, age int) decimal.Decimal {
-		if !p.IsFederal || p.High3Salary == nil || p.HireDate == nil {
-			return decimal.Zero
-		}
-		yearsSvc := p.YearsOfService(retDate)
-		mult := fersMultiplier(age, yearsSvc)
-		return p.High3Salary.Mul(yearsSvc).Mul(mult)
-	}
-	computeSSBase := func(p *domain.Participant, startAge int) decimal.Decimal {
-		if startAge <= 62 {
-			return p.SSBenefit62
-		}
-		if startAge >= 70 {
-			return p.SSBenefit70
-		}
-		fraAge := 67
-		if startAge <= fraAge {
-			span := fraAge - 62
-			offset := startAge - 62
-			diff := p.SSBenefitFRA.Sub(p.SSBenefit62)
-			return p.SSBenefit62.Add(diff.Mul(decimal.NewFromInt(int64(offset))).Div(decimal.NewFromInt(int64(span))))
-		}
-		span := 70 - 67
-		offset := startAge - 67
-		diff := p.SSBenefit70.Sub(p.SSBenefitFRA)
-		return p.SSBenefitFRA.Add(diff.Mul(decimal.NewFromInt(int64(offset))).Div(decimal.NewFromInt(int64(span))))
-	}
-	years := assumptions.ProjectionYears
-	if years <= 0 {
-		years = 1
-	}
+	cola := assumptions.COLAGeneralRate
+	infl := assumptions.InflationRate
+	fehbInfl := assumptions.FEHBPremiumInflation
+	preRetReturn := assumptions.TSPReturnPreRetirement
+	postRetReturn := assumptions.TSPReturnPostRetirement
+
 	projection := make([]domain.AnnualCashFlow, years)
 
 	for yr := 0; yr < years; yr++ {
-		dt := time.Date(startYear+yr, 1, 1, 0, 0, 0, 0, time.UTC)
-		cf := domain.NewAnnualCashFlow(yr, dt, participantNames)
+		yearDate := time.Date(startYear+yr, 1, 1, 0, 0, 0, 0, time.UTC)
+		cf := domain.NewAnnualCashFlow(yr, yearDate, participantNames)
+		transferPool := decimalZero
 
 		for i := range household.Participants {
 			p := &household.Participants[i]
 			st := states[p.Name]
-			age := dt.Year() - p.BirthDate.Year(); if dt.YearDay() < p.BirthDate.YearDay() { age-- }
+
+			if st.fehbPremium.GreaterThan(decimalZero) && yr > 0 {
+				st.fehbPremium = st.fehbPremium.Mul(onePlus(fehbInfl))
+			}
+
+			age := p.Age(yearDate)
 			cf.Ages[p.Name] = age
 
-			// Death handling
-			if di, ok := deathYear[p.Name]; ok && yr >= *di { cf.IsDeceased[p.Name] = true; continue }
+			var deathIdx *int
+			if dy, ok := deathYears[p.Name]; ok {
+				deathIdx = dy
+			}
 
-			// Retirement transition
-			if st.retirementYear != nil && yr >= *st.retirementYear { if !st.retired { // retire this year
-					// compute pension
-					retDate := time.Date(startYear+*st.retirementYear, 1, 1, 0,0,0,0,time.UTC)
-							if y >= 0 && y < assumptions.ProjectionYears {
-					st.retired = true
-					st.tspInflationAdj = st.tspBalance // base for 4% rule
+			isDeceased := deathIdx != nil && yr >= *deathIdx
+			cf.IsDeceased[p.Name] = isDeceased
+
+			if isDeceased {
+				if tspTransferMode == "merge" && deathIdx != nil && yr == *deathIdx && st.tspBalance.GreaterThan(decimalZero) {
+					transferPool = transferPool.Add(st.tspBalance)
+				}
+				st.tspBalance = decimalZero
+				cf.Salaries[p.Name] = decimalZero
+				cf.Pensions[p.Name] = decimalZero
+				cf.SSBenefits[p.Name] = decimalZero
+				cf.TSPBalances[p.Name] = decimalZero
+				continue
+			}
+
+			if st.retirementYear == nil || yr <= *st.retirementYear {
+				if yr > 0 && st.currentSalary.GreaterThan(decimalZero) {
+					st.currentSalary = st.currentSalary.Mul(onePlus(cola))
 				}
 			}
 
-							if y >= 0 && y < assumptions.ProjectionYears {
-			if !st.retired && st.salary.GreaterThan(decimal.Zero) {
-				if yr > 0 { st.salary = st.salary.Mul(decimal.NewFromInt(1).Add(cola)) }
-				cf.Salaries[p.Name] = st.salary
-			} else {
-				cf.Salaries[p.Name] = decimal.Zero
+			salaryForYear := decimalZero
+			if st.currentSalary.GreaterThan(decimalZero) {
+				switch {
+				case st.retirementYear == nil || yr < *st.retirementYear:
+					salaryForYear = st.currentSalary
+				case st.retirementYear != nil && yr == *st.retirementYear:
+					fraction := computeWorkFraction(st.retirementDate, yearDate)
+					salaryForYear = st.currentSalary.Mul(fraction)
+				}
+			}
+			cf.Salaries[p.Name] = salaryForYear
+
+			if st.retirementYear != nil && yr >= *st.retirementYear && !st.retired {
+				st.retired = true
+				if st.retirementDate == nil {
+					rd := time.Date(startYear+*st.retirementYear, 1, 1, 0, 0, 0, 0, time.UTC)
+					st.retirementDate = &rd
+				}
+				st.tspWithdrawalBase = st.tspBalance
+				startYr := new(int)
+				*startYr = yr
+				st.pensionStartYear = startYr
+
+				if p.IsFederal && p.High3Salary != nil && p.HireDate != nil {
+					pension, survivor := calculateParticipantPension(p, *st.retirementDate)
+					st.pensionAnnual = pension
+					st.survivorPension = survivor
+				} else if p.ExternalPension != nil {
+					st.pensionAnnual = p.ExternalPension.MonthlyBenefit.Mul(decimalTwelve)
+				}
 			}
 
-			// FEHB premium (grow with FEHB inflation)
-			if st.fehbPremium.GreaterThan(decimal.Zero) {
-				if yr > 0 { st.fehbPremium = st.fehbPremium.Mul(decimal.NewFromInt(1).Add(fehbInfl)) }
-			}
-
-			// Pension (apply COLA after first year of receipt)
-			if st.retired && st.pensionAnnual.GreaterThan(decimal.Zero) {
-				if yr > *st.retirementYear { st.pensionAnnual = st.pensionAnnual.Mul(decimal.NewFromInt(1).Add(cola)) }
-				cf.Pensions[p.Name] = st.pensionAnnual
-			}
-
-			// Social Security start
-			if ps, ok := psMap[p.Name]; ok {
-				startAge := ps.SSStartAge
-				if !st.ssStarted && age >= startAge { st.ssAnnual = computeSSBase(p, startAge); st.ssStarted = true }
-			}
-			if st.ssStarted { if yr > 0 { st.ssAnnual = st.ssAnnual.Mul(decimal.NewFromInt(1).Add(cola)) }; cf.SSBenefits[p.Name] = st.ssAnnual }
-
-			// TSP contributions (pre-retirement)
-			contribution := decimal.Zero
-			if !st.retired && p.IsFederal && p.CurrentSalary != nil && p.TSPContributionPercent != nil && st.salary.GreaterThan(decimal.Zero) {
-				contribution = st.salary.Mul(*p.TSPContributionPercent)
-				agencyMatch := p.AgencyMatch() // uses current salary pointer
-				contribution = contribution.Add(agencyMatch)
+			if salaryForYear.GreaterThan(decimalZero) && p.IsFederal && p.TSPContributionPercent != nil {
+				employeeContribution := salaryForYear.Mul(*p.TSPContributionPercent)
+				matchRate := *p.TSPContributionPercent
+				maxMatch := decimal.NewFromFloat(0.05)
+				if matchRate.GreaterThan(maxMatch) {
+					matchRate = maxMatch
+				}
+				match := salaryForYear.Mul(matchRate)
+				contribution := employeeContribution.Add(match)
 				st.tspBalance = st.tspBalance.Add(contribution)
 				cf.ParticipantTSPContributions[p.Name] = contribution
 			}
 
-			// TSP withdrawals (post-retirement)
-			withdrawal := decimal.Zero
-			if st.retired && st.tspBalance.GreaterThan(decimal.Zero) {
-				if ps, ok := psMap[p.Name]; ok {
-					switch ps.TSPWithdrawalStrategy {
-				var years int
-				years = assumptions.ProjectionYears
-				if years <= 0 {
-					years = 1
-				}
-					case "4_percent_rule":
-						// Base first-year withdrawal 4% of balance at retirement; inflation adjust
-						base := st.tspInflationAdj.Mul(decimal.NewFromFloat(0.04))
-						if yr > *st.retirementYear { base = base.Mul(decimal.NewFromInt(1).Add(infl).Pow(decimal.NewFromInt(int64(yr-*st.retirementYear)))) }
-						withdrawal = base
-					case "need_based":
-						if ps.TSPWithdrawalTargetMonthly != nil { withdrawal = ps.TSPWithdrawalTargetMonthly.Mul(decimal.NewFromInt(12)) }
-					case "variable_percentage":
-						if ps.TSPWithdrawalRate != nil { withdrawal = st.tspBalance.Mul(*ps.TSPWithdrawalRate) }
+			if st.retired && st.pensionAnnual.GreaterThan(decimalZero) {
+				pensionValue := st.pensionAnnual
+				if st.pensionStartYear != nil && yr > *st.pensionStartYear {
+					if p.IsFederal {
+						pensionValue = applyParticipantFERSCOLA(pensionValue, cola, age)
+						st.pensionAnnual = pensionValue
+					} else if p.ExternalPension != nil {
+						pensionValue = pensionValue.Mul(onePlus(p.ExternalPension.COLAAdjustment))
+						st.pensionAnnual = pensionValue
+					} else {
+						pensionValue = pensionValue.Mul(onePlus(cola))
+						st.pensionAnnual = pensionValue
 					}
 				}
-				if withdrawal.GreaterThan(st.tspBalance) { withdrawal = st.tspBalance }
+
+				if st.pensionStartYear != nil && yr == *st.pensionStartYear {
+					fractionWorked := computeWorkFraction(st.retirementDate, yearDate)
+					pensionValue = st.pensionAnnual.Mul(decimalOne.Sub(fractionWorked))
+				}
+
+				cf.Pensions[p.Name] = pensionValue
+			}
+
+			if !st.ssStarted && age >= st.ssStartAge {
+				st.ssAnnual = computeSSAnnualBenefit(p, st.ssStartAge)
+				st.ssStarted = true
+				ssStart := new(int)
+				*ssStart = yr
+				st.ssStartYear = ssStart
+			}
+			if st.ssStarted {
+				if st.ssStartYear != nil && yr > *st.ssStartYear {
+					st.ssAnnual = st.ssAnnual.Mul(onePlus(cola))
+				}
+				cf.SSBenefits[p.Name] = st.ssAnnual
+			}
+
+			withdrawal := decimalZero
+			if st.retired && st.tspBalance.GreaterThan(decimalZero) {
+				if ps, ok := psMap[p.Name]; ok {
+					switch ps.TSPWithdrawalStrategy {
+					case "4_percent_rule":
+						if st.tspWithdrawalBase.IsZero() {
+							st.tspWithdrawalBase = st.tspBalance
+						} else if st.retirementYear != nil && yr > *st.retirementYear {
+							st.tspWithdrawalBase = st.tspWithdrawalBase.Mul(onePlus(infl))
+						}
+						withdrawal = st.tspWithdrawalBase.Mul(decimal.NewFromFloat(0.04))
+					case "need_based":
+						if ps.TSPWithdrawalTargetMonthly != nil {
+							withdrawal = ps.TSPWithdrawalTargetMonthly.Mul(decimalTwelve)
+						}
+					case "variable_percentage":
+						if ps.TSPWithdrawalRate != nil {
+							withdrawal = st.tspBalance.Mul(*ps.TSPWithdrawalRate)
+						}
+					}
+				}
+				if withdrawal.GreaterThan(st.tspBalance) {
+					withdrawal = st.tspBalance
+				}
 				st.tspBalance = st.tspBalance.Sub(withdrawal)
 				cf.TSPWithdrawals[p.Name] = withdrawal
 			}
 
-			// TSP growth
-			if !st.retired {
-				if !st.tspBalance.IsZero() { st.tspBalance = st.tspBalance.Mul(decimal.NewFromInt(1).Add(preRetReturn)) }
-			} else {
-				if !st.tspBalance.IsZero() { st.tspBalance = st.tspBalance.Mul(decimal.NewFromInt(1).Add(postRetReturn)) }
+			growthRate := preRetReturn
+			if st.retired {
+				growthRate = postRetReturn
+			}
+			if !st.tspBalance.IsZero() {
+				st.tspBalance = st.tspBalance.Mul(onePlus(growthRate))
 			}
 			cf.TSPBalances[p.Name] = st.tspBalance
 		}
 
-		// Household-level deductions (FEHB, TSP contributions)
-		fehbTotal := decimal.Zero
-		tspContribTotal := decimal.Zero
+		livingNames := make([]string, 0, len(participantNames))
+		for _, name := range participantNames {
+			if !cf.IsDeceased[name] {
+				livingNames = append(livingNames, name)
+			}
+		}
+		if transferPool.GreaterThan(decimalZero) && len(livingNames) > 0 {
+			share := transferPool.Div(decimal.NewFromInt(int64(len(livingNames))))
+			for _, name := range livingNames {
+				st := states[name]
+				st.tspBalance = st.tspBalance.Add(share)
+				cf.TSPBalances[name] = st.tspBalance
+			}
+		}
+
+		fehbTotal := decimalZero
+		tspContributionTotal := decimalZero
 		for _, name := range participantNames {
 			st := states[name]
-			if st.fehbPremium.GreaterThan(decimal.Zero) { fehbTotal = fehbTotal.Add(st.fehbPremium) }
-			tspContribTotal = tspContribTotal.Add(cf.ParticipantTSPContributions[name])
+			if !cf.IsDeceased[name] && st.fehbPremium.GreaterThan(decimalZero) {
+				fehbTotal = fehbTotal.Add(st.fehbPremium)
+			}
+			tspContributionTotal = tspContributionTotal.Add(cf.ParticipantTSPContributions[name])
 		}
 		cf.FEHBPremium = fehbTotal
-		cf.TotalTSPContributions = tspContribTotal
+		cf.TotalTSPContributions = tspContributionTotal
 
-		// TAX CALCULATION
-		// Aggregate household taxable income
+		livingCount := len(livingNames)
+		filingStatus := household.FilingStatus
+		if filingStatus == "" {
+			filingStatus = "single"
+		}
+		if filingStatus != "single" && livingCount <= 1 {
+			cf.FilingStatusSingle = true
+			filingStatus = "single"
+		} else {
+			cf.FilingStatusSingle = filingStatus == "single"
+		}
+		cf.FederalFilingStatus = filingStatus
+
+		seniors := 0
+		for name, age := range cf.Ages {
+			if cf.IsDeceased[name] {
+				continue
+			}
+			if age >= 65 {
+				seniors++
+			}
+		}
+
 		taxable := domain.TaxableIncome{
 			Salary:             cf.GetTotalSalary(),
 			FERSPension:        cf.GetTotalPension(),
 			TSPWithdrawalsTrad: cf.GetTotalTSPWithdrawal(),
 			TaxableSSBenefits:  cf.GetTotalSSBenefit(),
-			OtherTaxableIncome: decimal.Zero,
+			OtherTaxableIncome: decimalZero,
 			WageIncome:         cf.GetTotalSalary(),
-			InterestIncome:     decimal.Zero,
+			InterestIncome:     decimalZero,
 		}
-		// Determine filing status and seniors
-		filingStatus := household.FilingStatus
-		seniors := 0
-		for _, age := range cf.Ages {
-			if age >= 65 {
-				seniors++
-			}
-		}
-		// FICA only on wage income if not retired
-		isRetired := true
-		for _, st := range states {
-			if !st.retired {
-				isRetired = false
+
+		isRetiredHousehold := true
+		for _, name := range participantNames {
+			st := states[name]
+			if !cf.IsDeceased[name] && !st.retired {
+				isRetiredHousehold = false
 				break
 			}
 		}
-		// Use engine's tax calculator
-		federalTax := decimal.Zero
-		stateTax := decimal.Zero
-		localTax := decimal.Zero
-		ficaTax := decimal.Zero
+
 		if ce != nil && ce.TaxCalc != nil {
-			federalTax = ce.TaxCalc.calculateFederalTaxWithStatus(taxable, filingStatus, seniors)
-			stateTax = ce.TaxCalc.StateTaxCalc.CalculateTax(taxable, isRetired)
-			localTax = ce.TaxCalc.LocalTaxCalc.CalculateEIT(taxable.WageIncome, isRetired)
-			if !isRetired {
-				ficaTax = ce.TaxCalc.FICATaxCalc.CalculateFICA(taxable.WageIncome, taxable.WageIncome)
+			cf.FederalTax = ce.TaxCalc.calculateFederalTaxWithStatus(taxable, filingStatus, seniors)
+			cf.StateTax = ce.TaxCalc.StateTaxCalc.CalculateTax(taxable, isRetiredHousehold)
+			cf.LocalTax = ce.TaxCalc.LocalTaxCalc.CalculateEIT(taxable.WageIncome, isRetiredHousehold)
+			if !isRetiredHousehold {
+				cf.FICATax = ce.TaxCalc.FICATaxCalc.CalculateFICA(taxable.WageIncome, taxable.WageIncome)
 			}
 		}
-		cf.FederalTax = federalTax
-		cf.StateTax = stateTax
-		cf.LocalTax = localTax
-		cf.FICATax = ficaTax
 
-		// Compute gross and net
 		cf.TotalGrossIncome = cf.CalculateTotalIncome()
 		cf.CalculateNetIncome()
+
 		projection[yr] = *cf
 	}
+
 	return projection
+}
+
+func computeWorkFraction(retirementDate *time.Time, yearStart time.Time) decimal.Decimal {
+	if retirementDate == nil {
+		return decimal.NewFromFloat(0.5)
+	}
+	if retirementDate.Year() < yearStart.Year() {
+		return decimalZero
+	}
+	if retirementDate.Year() > yearStart.Year() {
+		return decimalOne
+	}
+	if retirementDate.Before(yearStart) {
+		return decimalZero
+	}
+
+	daysWorked := retirementDate.Sub(yearStart).Hours() / 24
+	daysInYear := 365.0
+	if isLeapYear(yearStart.Year()) {
+		daysInYear = 366.0
+	}
+
+	fraction := daysWorked / daysInYear
+	if fraction < 0 {
+		fraction = 0
+	}
+	if fraction > 1 {
+		fraction = 1
+	}
+
+	return decimal.NewFromFloat(fraction)
+}
+
+func computeSSAnnualBenefit(p *domain.Participant, startAge int) decimal.Decimal {
+	return computeSSMonthlyBenefit(p, startAge).Mul(decimalTwelve)
+}
+
+func computeSSMonthlyBenefit(p *domain.Participant, startAge int) decimal.Decimal {
+	if startAge <= 62 {
+		return p.SSBenefit62
+	}
+	if startAge >= 70 {
+		return p.SSBenefit70
+	}
+
+	fraAge := 67
+	if startAge <= fraAge {
+		span := fraAge - 62
+		if span <= 0 {
+			return p.SSBenefitFRA
+		}
+		offset := startAge - 62
+		diff := p.SSBenefitFRA.Sub(p.SSBenefit62)
+		return p.SSBenefit62.Add(diff.Mul(decimal.NewFromInt(int64(offset))).Div(decimal.NewFromInt(int64(span))))
+	}
+
+	span := 70 - fraAge
+	if span <= 0 {
+		return p.SSBenefitFRA
+	}
+	offset := startAge - fraAge
+	diff := p.SSBenefit70.Sub(p.SSBenefitFRA)
+	return p.SSBenefitFRA.Add(diff.Mul(decimal.NewFromInt(int64(offset))).Div(decimal.NewFromInt(int64(span))))
+}
+
+func calculateParticipantPension(p *domain.Participant, retirementDate time.Time) (decimal.Decimal, decimal.Decimal) {
+	if !p.IsFederal || p.High3Salary == nil || p.HireDate == nil {
+		return decimalZero, decimalZero
+	}
+
+	serviceYears := p.YearsOfService(retirementDate)
+	retirementAge := p.Age(retirementDate)
+
+	multiplier := decimal.NewFromFloat(0.01)
+	if retirementAge >= 62 && serviceYears.GreaterThanOrEqual(decimal.NewFromInt(20)) {
+		multiplier = decimal.NewFromFloat(0.011)
+	}
+
+	pensionBase := p.High3Salary.Mul(serviceYears).Mul(multiplier)
+
+	survivorElection := decimalZero
+	if p.SurvivorBenefitElectionPercent != nil {
+		survivorElection = *p.SurvivorBenefitElectionPercent
+	}
+
+	reduced := pensionBase
+	survivor := decimalZero
+	if survivorElection.GreaterThan(decimalZero) {
+		half := decimal.NewFromFloat(0.5)
+		quarter := decimal.NewFromFloat(0.25)
+		if survivorElection.GreaterThan(decimal.NewFromFloat(0.4)) {
+			survivorElection = half
+		} else if survivorElection.GreaterThan(decimal.NewFromFloat(0.20)) && survivorElection.LessThan(decimal.NewFromFloat(0.30)) {
+			survivorElection = quarter
+		}
+
+		if survivorElection.Equals(half) {
+			reduced = pensionBase.Mul(decimal.NewFromFloat(0.90))
+			survivor = pensionBase.Mul(half)
+		} else if survivorElection.Equals(quarter) {
+			reduced = pensionBase.Mul(decimal.NewFromFloat(0.95))
+			survivor = pensionBase.Mul(quarter)
+		} else {
+			survivorElection = decimalZero
+		}
+	}
+
+	return reduced, survivor
+}
+
+func applyParticipantFERSCOLA(currentPension decimal.Decimal, inflationRate decimal.Decimal, annuitantAge int) decimal.Decimal {
+	if annuitantAge < 62 {
+		return currentPension
+	}
+
+	if inflationRate.LessThanOrEqual(decimal.NewFromFloat(0.02)) {
+		return currentPension.Mul(onePlus(inflationRate))
+	}
+	if inflationRate.LessThanOrEqual(decimal.NewFromFloat(0.03)) {
+		return currentPension.Mul(onePlus(decimal.NewFromFloat(0.02)))
+	}
+
+	return currentPension.Mul(onePlus(inflationRate.Sub(decimal.NewFromFloat(0.01))))
+}
+
+func onePlus(value decimal.Decimal) decimal.Decimal {
+	return decimalOne.Add(value)
+}
+
+func isLeapYear(year int) bool {
+	if year%400 == 0 {
+		return true
+	}
+	if year%100 == 0 {
+		return false
+	}
+	return year%4 == 0
 }
 
 func getBirthYear(h *domain.Household, name string) int {

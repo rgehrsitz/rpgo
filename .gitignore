@@ -83,3 +83,4 @@ example_config_comprehensive.yaml
 .crush/
 
 *.console
+external/rpgo-0.1.0.0

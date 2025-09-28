@@ -3,8 +3,8 @@ package calculation
 import (
 	"time"
 
-	"github.com/rpgo/retirement-calculator/internal/domain"
-	"github.com/rpgo/retirement-calculator/pkg/dateutil"
+	"github.com/rgehrsitz/rpgo/internal/domain"
+	"github.com/rgehrsitz/rpgo/pkg/dateutil"
 	"github.com/shopspring/decimal"
 )
 

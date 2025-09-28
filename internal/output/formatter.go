@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rpgo/retirement-calculator/internal/domain"
+	"github.com/rgehrsitz/rpgo/internal/domain"
 )
 
 // Formatter defines a pluggable output formatter that returns a byte slice.

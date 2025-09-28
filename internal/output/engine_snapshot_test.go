@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rpgo/retirement-calculator/internal/calculation"
-	"github.com/rpgo/retirement-calculator/internal/config"
+	"github.com/rgehrsitz/rpgo/internal/calculation"
+	"github.com/rgehrsitz/rpgo/internal/config"
 )
 
 // TestEngineSnapshot produces a deterministic snapshot of core scenario metrics.

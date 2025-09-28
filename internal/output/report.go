@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rpgo/retirement-calculator/internal/domain"
+	"github.com/rgehrsitz/rpgo/internal/domain"
 	"gopkg.in/yaml.v3"
 )
 

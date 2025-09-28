@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/rpgo/retirement-calculator/internal/calculation"
-	"github.com/rpgo/retirement-calculator/internal/config"
+	"github.com/rgehrsitz/rpgo/internal/calculation"
+	"github.com/rgehrsitz/rpgo/internal/config"
 	"github.com/shopspring/decimal"
 )
 

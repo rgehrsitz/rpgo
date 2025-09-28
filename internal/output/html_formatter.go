@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"html/template"
 
-	"github.com/rpgo/retirement-calculator/internal/domain"
+	"github.com/rgehrsitz/rpgo/internal/domain"
 )
 
 // HTMLFormatter produces an HTML report (current implementation ports legacy static HTML).

@@ -3,7 +3,7 @@ package output
 import (
 	"encoding/json"
 
-	"github.com/rpgo/retirement-calculator/internal/domain"
+	"github.com/rgehrsitz/rpgo/internal/domain"
 )
 
 // JSONFormatter serializes the scenario comparison as pretty-printed JSON.

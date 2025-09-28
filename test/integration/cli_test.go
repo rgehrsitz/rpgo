@@ -3,9 +3,9 @@ package integration
 import (
 	"testing"
 
-	"github.com/rpgo/retirement-calculator/internal/calculation"
-	"github.com/rpgo/retirement-calculator/internal/config"
-	"github.com/rpgo/retirement-calculator/internal/output"
+	"github.com/rgehrsitz/rpgo/internal/calculation"
+	"github.com/rgehrsitz/rpgo/internal/config"
+	"github.com/rgehrsitz/rpgo/internal/output"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 )

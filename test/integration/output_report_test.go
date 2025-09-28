@@ -8,8 +8,8 @@ import (
 
 	stddec "github.com/shopspring/decimal"
 
-	"github.com/rpgo/retirement-calculator/internal/domain"
-	"github.com/rpgo/retirement-calculator/internal/output"
+	"github.com/rgehrsitz/rpgo/internal/domain"
+	"github.com/rgehrsitz/rpgo/internal/output"
 )
 
 func TestFormatters(t *testing.T) {

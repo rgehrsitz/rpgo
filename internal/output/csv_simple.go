@@ -5,7 +5,7 @@ import (
 	"encoding/csv"
 	"sort"
 
-	"github.com/rpgo/retirement-calculator/internal/domain"
+	"github.com/rgehrsitz/rpgo/internal/domain"
 )
 
 // CSVSummarizer implements the simple summary CSV output (one row per scenario).

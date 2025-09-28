@@ -1,6 +1,8 @@
-module github.com/rpgo/retirement-calculator
+module github.com/rgehrsitz/rpgo
 
-go 1.21
+go 1.22
+
+toolchain go1.22.0
 
 require (
 	github.com/shopspring/decimal v1.3.1

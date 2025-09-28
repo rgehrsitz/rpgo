@@ -9,7 +9,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/rpgo/retirement-calculator/internal/calculation"
+	"github.com/rgehrsitz/rpgo/internal/calculation"
 	"github.com/shopspring/decimal"
 )
 

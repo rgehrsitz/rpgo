@@ -1,0 +1,38 @@
+project_name: rpgo
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: rpgo
+    main: ./cmd/rpgo
+    binary: rpgo
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+
+archives:
+  - builds:
+      - rpgo
+    format: tar.gz
+    files:
+      - LICENSE
+      - README.md
+
+release:
+  github:
+    owner: rgehrsitz
+    name: rpgo
