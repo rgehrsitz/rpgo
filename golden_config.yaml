@@ -14,81 +14,52 @@
 # DUMMY DATA: Personal details are fictional for demonstration purposes
 # ================================================================================================
 
-personal_details:
-  # ================================================================================================
-  # EMPLOYEE 1: "Robert Gehrsitz" - FICTIONAL PRIMARY EMPLOYEE (REQUIRED NAME: "robert")
-  # ================================================================================================
-  robert:
-    name: "Robert Gehrsitz"
-    birth_date: "1965-03-15T00:00:00Z"        # Age 60 in 2025 - eligible for immediate FERS retirement
-    hire_date: "1987-06-01T00:00:00Z"         # 38+ years federal service by 2025
-    
-    # ========== SALARY DATA (Dummy Values) ==========
-    current_salary: 145000                    # DUMMY: GS-14 equivalent salary
-    high_3_salary: 142000                     # DUMMY: Average of highest 3 consecutive years
-    
-    # ========== TSP ACCOUNT DATA (Dummy Values) ==========
-    tsp_balance_traditional: 850000           # DUMMY: Realistic balance for 38-year career
-    tsp_balance_roth: 175000                  # DUMMY: Started Roth TSP in later career
-    tsp_contribution_percent: 0.15            # DUMMY: 15% total contribution rate
-    
-    # ========== TSP ALLOCATION (Required for Monte Carlo Variability) ==========
-    # Manual allocation percentages - CRITICAL for Monte Carlo simulations
-    # These percentages reflect a moderate risk allocation for someone near retirement
-    tsp_allocation:
-      c_fund: "0.45"   # 45% C Fund (S&P 500) - Historical mean: 11.25%, std dev: 17.44%
-      s_fund: "0.15"   # 15% S Fund (Small Cap) - Historical mean: 11.17%, std dev: 19.33%
-      i_fund: "0.15"   # 15% I Fund (International) - Historical mean: 6.34%, std dev: 18.63%
-      f_fund: "0.20"   # 20% F Fund (Bonds) - Historical mean: 5.32%, std dev: 5.65%
-      g_fund: "0.05"   # 5% G Fund (Gov Securities) - Historical mean: 4.93%, std dev: 1.65%
-    
-    # ========== SOCIAL SECURITY DATA (Dummy Values) ==========
-    ss_benefit_fra: 3200                     # DUMMY: Monthly benefit at Full Retirement Age (67)
-    ss_benefit_62: 2240                      # DUMMY: 70% of FRA benefit if claimed at 62
-    ss_benefit_70: 3968                      # DUMMY: 124% of FRA benefit if delayed to 70
-    
-    # ========== FEHB DATA (Dummy Values) ==========
-    fehb_premium_monthly: 745                # DUMMY: Family FEHB plan premium (employee portion)
-    
-    # ========== FERS PENSION ELECTIONS ==========
-    survivor_benefit_election_percent: 0.0   # DUMMY: No survivor benefit (100% pension)
+household:
+  filing_status: "married_filing_jointly"
+  participants:
+    - name: "Robert Gehrsitz"
+      is_federal: true
+      birth_date: "1965-03-15T00:00:00Z"
+      hire_date: "1987-06-01T00:00:00Z"
+      current_salary: 145000
+      high_3_salary: 142000
+      tsp_balance_traditional: 850000
+      tsp_balance_roth: 175000
+      tsp_contribution_percent: 0.15
+      tsp_allocation:
+        c_fund: "0.45"
+        s_fund: "0.15"
+        i_fund: "0.15"
+        f_fund: "0.20"
+        g_fund: "0.05"
+      ss_benefit_fra: 3200
+      ss_benefit_62: 2240
+      ss_benefit_70: 3968
+      fehb_premium_per_pay_period: "343.85"
+      is_primary_fehb_holder: true
+      survivor_benefit_election_percent: 0.0
 
-  # ================================================================================================
-  # EMPLOYEE 2: "Dawn Gehrsitz" - FICTIONAL SPOUSE (REQUIRED NAME: "dawn")
-  # ================================================================================================
-  dawn:
-    name: "Dawn Gehrsitz"
-    birth_date: "1968-09-22T00:00:00Z"        # Age 57 in 2025 - younger spouse
-    hire_date: "1992-08-15T00:00:00Z"         # 33+ years federal service by 2025
-    
-    # ========== SALARY DATA (Dummy Values) ==========
-    current_salary: 125000                    # DUMMY: GS-13 equivalent salary
-    high_3_salary: 122000                     # DUMMY: Average of highest 3 consecutive years
-    
-    # ========== TSP ACCOUNT DATA (Dummy Values) ==========
-    tsp_balance_traditional: 650000           # DUMMY: Slightly lower balance due to later start
-    tsp_balance_roth: 85000                   # DUMMY: Smaller Roth balance
-    tsp_contribution_percent: 0.12            # DUMMY: 12% total contribution rate
-    
-    # ========== TSP ALLOCATION (Required for Monte Carlo Variability) ==========
-    # More conservative allocation for younger spouse who will retire later
-    tsp_allocation:
-      c_fund: "0.35"   # 35% C Fund - More conservative than older spouse
-      s_fund: "0.10"   # 10% S Fund
-      i_fund: "0.10"   # 10% I Fund
-      f_fund: "0.35"   # 35% F Fund - Higher bond allocation for stability
-      g_fund: "0.10"   # 10% G Fund - Higher guaranteed portion
-    
-    # ========== SOCIAL SECURITY DATA (Dummy Values) ==========
-    ss_benefit_fra: 2850                     # DUMMY: Slightly lower benefit due to shorter career
-    ss_benefit_62: 1995                      # DUMMY: 70% of FRA benefit
-    ss_benefit_70: 3534                      # DUMMY: 124% of FRA benefit
-    
-    # ========== FEHB DATA ==========
-    fehb_premium_monthly: 0.0                # Covered under spouse's plan
-    
-    # ========== FERS PENSION ELECTIONS ==========
-    survivor_benefit_election_percent: 0.0   # DUMMY: No survivor benefit
+    - name: "Dawn Gehrsitz"
+      is_federal: true
+      birth_date: "1968-09-22T00:00:00Z"
+      hire_date: "1992-08-15T00:00:00Z"
+      current_salary: 125000
+      high_3_salary: 122000
+      tsp_balance_traditional: 650000
+      tsp_balance_roth: 85000
+      tsp_contribution_percent: 0.12
+      tsp_allocation:
+        c_fund: "0.35"
+        s_fund: "0.10"
+        i_fund: "0.10"
+        f_fund: "0.35"
+        g_fund: "0.10"
+      ss_benefit_fra: 2850
+      ss_benefit_62: 1995
+      ss_benefit_70: 3534
+      fehb_premium_per_pay_period: 0.0
+      is_primary_fehb_holder: false
+      survivor_benefit_election_percent: 0.0
 
 # ================================================================================================
 # GLOBAL ASSUMPTIONS - HISTORICALLY ACCURATE STATISTICAL VALUES
@@ -254,53 +225,50 @@ scenarios:
   # ========== SCENARIO 1: EARLY RETIREMENT (2026) ==========
   - name: "Early Retirement 2026 - Both Retire Together"
     description: "Both employees retire early at minimum retirement age"
-    
-    robert:
-      employee_name: "robert"
-      retirement_date: "2026-06-01T00:00:00Z"          # Robert's 39th anniversary - eligible for immediate retirement
-      ss_start_age: 62                       # Claim SS at earliest age (reduced benefit)
-      tsp_withdrawal_strategy: "4_percent_rule"  # Classic 4% withdrawal strategy
-      
-    dawn:
-      employee_name: "dawn"  
-      retirement_date: "2026-08-15T00:00:00Z"          # Dawn's 34th anniversary - eligible for immediate retirement
-      ss_start_age: 62                       # Claim SS at earliest age
-      tsp_withdrawal_strategy: "4_percent_rule"
+    participant_scenarios:
+      "Robert Gehrsitz":
+        participant_name: "Robert Gehrsitz"
+        retirement_date: "2026-06-01T00:00:00Z"
+        ss_start_age: 62
+        tsp_withdrawal_strategy: "4_percent_rule"
+      "Dawn Gehrsitz":
+        participant_name: "Dawn Gehrsitz"
+        retirement_date: "2026-08-15T00:00:00Z"
+        ss_start_age: 62
+        tsp_withdrawal_strategy: "4_percent_rule"
 
   # ========== SCENARIO 2: OPTIMIZED RETIREMENT (2028) ==========
   - name: "Optimized Retirement 2028 - Delayed for Higher Benefits"
     description: "Strategic retirement timing to maximize benefits"
-    
-    robert:
-      employee_name: "robert"
-      retirement_date: "2028-03-15T00:00:00Z"          # Robert retires at 63 for higher pension
-      ss_start_age: 67                       # Wait for Full Retirement Age (no reduction)
-      tsp_withdrawal_strategy: "need_based"  # Withdraw only what's needed
-      tsp_withdrawal_target_monthly: 4000    # $4,000/month target withdrawal
-      
-    dawn:
-      employee_name: "dawn"
-      retirement_date: "2029-08-15T00:00:00Z"          # Dawn works one more year
-      ss_start_age: 67                       # Wait for Full Retirement Age
-      tsp_withdrawal_strategy: "need_based"
-      tsp_withdrawal_target_monthly: 3500    # $3,500/month target withdrawal
+    participant_scenarios:
+      "Robert Gehrsitz":
+        participant_name: "Robert Gehrsitz"
+        retirement_date: "2028-03-15T00:00:00Z"
+        ss_start_age: 67
+        tsp_withdrawal_strategy: "need_based"
+        tsp_withdrawal_target_monthly: 4000
+      "Dawn Gehrsitz":
+        participant_name: "Dawn Gehrsitz"
+        retirement_date: "2029-08-15T00:00:00Z"
+        ss_start_age: 67
+        tsp_withdrawal_strategy: "need_based"
+        tsp_withdrawal_target_monthly: 3500
 
   # ========== SCENARIO 3: MAXIMUM BENEFIT STRATEGY (2030) ==========
   - name: "Maximum Benefit Strategy 2030 - Delayed SS Claims"
     description: "Work longer and delay SS claims for maximum lifetime benefits"
-    
-    robert:
-      employee_name: "robert"
-      retirement_date: "2030-03-15T00:00:00Z"          # Robert works until 65
-      ss_start_age: 70                       # Delay SS to age 70 for maximum benefit (132% of FRA)
-      tsp_withdrawal_strategy: "need_based"
-      tsp_withdrawal_target_monthly: 5000    # Higher withdrawal to bridge to SS
-      
-    dawn:
-      employee_name: "dawn"
-      retirement_date: "2031-08-15T00:00:00Z"          # Dawn works until 63
-      ss_start_age: 67                       # Dawn claims at FRA (good balance)
-      tsp_withdrawal_strategy: "4_percent_rule"
+    participant_scenarios:
+      "Robert Gehrsitz":
+        participant_name: "Robert Gehrsitz"
+        retirement_date: "2030-03-15T00:00:00Z"
+        ss_start_age: 70
+        tsp_withdrawal_strategy: "need_based"
+        tsp_withdrawal_target_monthly: 5000
+      "Dawn Gehrsitz":
+        participant_name: "Dawn Gehrsitz"
+        retirement_date: "2031-08-15T00:00:00Z"
+        ss_start_age: 67
+        tsp_withdrawal_strategy: "4_percent_rule"
 
 # ================================================================================================
 # NOTES AND ASSUMPTIONS

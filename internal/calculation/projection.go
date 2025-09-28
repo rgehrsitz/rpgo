@@ -521,6 +521,7 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 				break
 			}
 		}
+		cf.IsRetired = isRetiredHousehold
 
 		if ce != nil && ce.TaxCalc != nil {
 			cf.FederalTax = ce.TaxCalc.calculateFederalTaxWithStatus(taxable, filingStatus, seniors)

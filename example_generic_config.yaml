@@ -137,7 +137,7 @@ global_assumptions:
       mean_return: "0.0493"
       standard_deviation: "0.0165"
 
-generic_scenarios:
+scenarios:
   - name: "Early Retirement 2026 - Both Retire Together"
     participant_scenarios:
       "John Smith":
