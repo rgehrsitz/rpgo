@@ -35,80 +35,50 @@ A comprehensive retirement planning calculator for Federal Employees Retirement 
 git clone https://github.com/rgehrsitz/rpgo.git
 cd rpgo
 go mod tidy
-go build -o fers-calc cmd/cli/main.go
+go build -o fers-calc ./cmd/rpgo
 ```
 
 ## Usage
 
 ### Quick Start
 
-1. **Generate an example configuration**:
-   ```bash
-   ./fers-calc example config.yaml
-   ```
+1. **Copy the sample configuration**
 
-2. **Run calculations**:
-   ```bash
-   ./fers-calc calculate config.yaml
-   ```
+  ```bash
+  cp example_config.yaml my_config.yaml
+  ```
 
-3. **Generate HTML report**:
-   ```bash
-   ./fers-calc calculate config.yaml --format html > report.html
-   ```
+  Then edit `my_config.yaml` to match your household.
 
-4. **Run Monte Carlo simulations**:
-   ```bash
-   # Simple portfolio Monte Carlo (uses flags)
-   ./fers-calc historical monte-carlo ./data --simulations 1000 --balance 1000000 --withdrawal 40000
-   
-   # Comprehensive FERS Monte Carlo (uses config file)
-   ./fers-calc monte-carlo config.yaml ./data --simulations 1000
-   ```
+1. **Run calculations**
 
-   **Important**: For Monte Carlo simulations, ensure your configuration uses manual `tsp_allocation` settings rather than `tsp_lifecycle_fund` settings to get proper market variability in results.
+  ```bash
+  ./fers-calc calculate my_config.yaml
+  ```
 
-### Command Line Options
+1. **Generate an HTML report**
 
-To help you understand the core commands, here's a breakdown:
+  ```bash
+  ./fers-calc calculate my_config.yaml --format html > report.html
+  ```
 
-- **`./fers-calc calculate [input-file]`**: Runs a single, deterministic retirement projection based on the fixed assumptions in your input configuration file. This provides a detailed report for one specific set of conditions.
+1. **Run portfolio Monte Carlo simulations**
 
-- **`./fers-calc historical monte-carlo [data-path] [flags]`**: Executes simple portfolio Monte Carlo simulations. This command is focused on assessing the sustainability of a specific investment balance with a defined withdrawal strategy, using historical (or statistical) market data. It does not model the full FERS retirement system.
+  ```bash
+  ./fers-calc historical monte-carlo ./data --simulations 1000 --balance 1000000 --withdrawal 40000
+  ```
 
-- **`./fers-calc monte-carlo [config-file] [data-path]`**: Runs comprehensive FERS Monte Carlo simulations. This command integrates your full retirement configuration (pension, Social Security, TSP, taxes, FEHB) with historical market data to run thousands of scenarios, providing a probabilistic assessment of your complete retirement plan's success.
+### Core CLI commands
 
-```bash
-# Basic calculation
-./fers-calc calculate [input-file]
+- `./fers-calc calculate [input-file]` — deterministic retirement projection using a YAML configuration.
+- `./fers-calc validate [input-file]` — schema and rules validation without running a projection.
+- `./fers-calc break-even [input-file]` — computes TSP withdrawal rates needed to match current net income.
+- `./fers-calc historical load [data-path]` — load and summarize historical datasets.
+- `./fers-calc historical stats [data-path]` — print descriptive statistics for historical datasets.
+- `./fers-calc historical query [data-path] [year] [fund]` — fetch a single data point (fund return, inflation, or COLA).
+- `./fers-calc historical monte-carlo [data-path] [flags]` — run portfolio-only Monte Carlo simulations using flag-driven parameters.
 
-# With options
-./fers-calc calculate [input-file] --format html --verbose --debug > report.html
-
-# Validate configuration
-./fers-calc validate [input-file]
-
-# Generate example
-./fers-calc example [output-file]
-
-# Break-even analysis
-./fers-calc break-even [input-file]
-
-# Historical data management
-./fers-calc historical load ./data
-./fers-calc historical stats ./data
-./fers-calc historical query ./data 2020 C
-
-# Simple Portfolio Monte Carlo simulations
-./fers-calc historical monte-carlo ./data --simulations 1000 --balance 1000000 --withdrawal 40000
-./fers-calc historical monte-carlo ./data --strategy guardrails --years 30
-
-# Comprehensive FERS Monte Carlo simulations
-./fers-calc monte-carlo config.yaml ./data --simulations 1000
-./fers-calc monte-carlo config.yaml ./data --simulations 5000 --seed 12345 --debug
-```
-
-#### Logging and Debug Mode
+### Logging and Debug Mode
 
 - Use `--debug` on CLI commands (calculate, break-even, monte-carlo) to enable detailed debug logs.
 - Debug logs are generated via an internal Logger interface; the CLI wires a simple logger that prints level-prefixed lines (DEBUG/INFO/WARN/ERROR).
@@ -332,24 +302,8 @@ tsp_allocation:
 
 ### Monte Carlo Analysis
 
-#### Simple Portfolio Monte Carlo
-- **Historical Data**: Real TSP fund returns, inflation, and COLA data (1990-2023)
-- **Withdrawal Strategies**: Fixed amount, percentage, inflation-adjusted, guardrails
-- **Risk Assessment**: Success rates, percentile analysis, drawdown tracking
-- **Asset Allocation**: Customizable TSP fund allocations (C, S, I, F, G funds)
-- **Parallel Processing**: Efficient simulation execution for 1000+ scenarios
+The current CLI ships with a portfolio-only Monte Carlo simulator under the `historical` command group. It models withdrawal strategies against TSP fund return histories (or statistical distributions) without processing a full FERS configuration.
 
-#### Comprehensive FERS Monte Carlo
-- **Full FERS Integration**: Models all retirement components (pension, SS, TSP, taxes, FEHB)
-- **Market Variability**: Historical or statistical market condition generation
-- **Income Sustainability**: Success rates based on complete retirement income
-- **TSP Longevity**: Tracks when TSP balances deplete
-- **Tax Implications**: Includes all federal, state, and local taxes
-- **Healthcare Costs**: Models FEHB premium increases over time
-
-#### Monte Carlo Examples
-
-**Conservative 4% Rule (25 years)**
 ```bash
 ./fers-calc historical monte-carlo ./data \
   --simulations 1000 \
@@ -357,44 +311,16 @@ tsp_allocation:
   --withdrawal 40000 \
   --strategy fixed_amount
 ```
-*Result: 99% success rate, median ending balance $6.6M*
 
-**Comprehensive FERS Analysis**
-```bash
-./fers-calc monte-carlo config.yaml ./data \
-  --simulations 1000
-```
-*Result: 100% success rate, median net income $234,681, low risk assessment*
+Key options:
 
-**High-Precision FERS Analysis**
-```bash
-./fers-calc monte-carlo config.yaml ./data \
-  --simulations 5000 \
-  --seed 12345
-```
-*Result: Reproducible results with comprehensive risk analysis*
+- `--balance`, `--withdrawal` – starting balance and annual draw.
+- `--strategy` – choose among `fixed_amount`, `fixed_percentage`, `inflation_adjusted`, or `guardrails`.
+- `--historical` – toggle between true historical draws (default) and statistical mode.
+- `--years` – projection length.
+- `--simulations` – number of trials.
 
-**Aggressive 6% Rule with Guardrails (Simple Portfolio)**
-```bash
-./fers-calc historical monte-carlo ./data \
-  --simulations 1000 \
-  --balance 500000 \
-  --withdrawal 30000 \
-  --strategy guardrails \
-  --years 30
-```
-*Result: 82% success rate, high risk assessment*
-
-**Inflation-Adjusted Strategy (Simple Portfolio)**
-```bash
-./fers-calc historical monte-carlo ./data \
-  --simulations 500 \
-  --balance 750000 \
-  --withdrawal 35000 \
-  --strategy inflation_adjusted \
-  --years 30
-```
-*Result: 84% success rate, moderate risk assessment*
+> ℹ️ Config-driven “comprehensive FERS” Monte Carlo was removed from the CLI. Use deterministic `calculate` runs to compare scenario files, and rely on the portfolio simulator for withdrawal stress-testing.
 
 ### Social Security
 
@@ -411,9 +337,9 @@ tsp_allocation:
 
 ## Project Structure
 
-```
+```text
 rpgo/
-├── cmd/cli/                 # Command line interface
+├── cmd/rpgo/               # Command line interface
 ├── data/                   # Historical financial data
 │   ├── tsp-returns/        # TSP fund historical returns
 │   ├── inflation/          # CPI-U inflation rates
@@ -432,13 +358,13 @@ rpgo/
 
 ## Testing
 
-Run the test suite:
+Run the full suite:
 
 ```bash
 go test ./...
 ```
 
-Run specific test packages:
+Run specific packages:
 
 ```bash
 go test ./internal/calculation

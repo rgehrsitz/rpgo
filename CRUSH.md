@@ -2,8 +2,8 @@
 
 ## Build/Lint/Test Commands
 
-- **Build**: `go build -o rpgo cmd/cli/main.go`
-- **Run**: `./rpgo --help` or `go run cmd/cli/main.go --help`
+- **Build**: `go build -o fers-calc ./cmd/rpgo`
+- **Run**: `./fers-calc --help` or `go run ./cmd/rpgo --help`
 - **Run all tests**: `go test ./...`
 - **Run tests with verbose output**: `go test -v ./...`
 - **Run tests for specific package**: `go test ./internal/calculation`

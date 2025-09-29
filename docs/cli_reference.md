@@ -2,209 +2,135 @@
 
 ## Overview
 
-The FERS Retirement Calculator provides a comprehensive command-line interface for retirement planning analysis, including deterministic calculations and probabilistic Monte Carlo simulations.
+The FERS Retirement Calculator CLI (`fers-calc`) provides comprehensive retirement planning tools for federal employees, including deterministic calculations, Monte Carlo risk analysis, and historical data management.
 
 ## Main Commands
 
-### `calculate` - Run Retirement Scenarios
+### `calculate [input-file]` — Run retirement scenarios
+
+Calculate retirement scenarios using a YAML configuration file.
+
+**Flags:**
+- `--format, -f`: Output format (default: "console")
+- `--verbose, -v`: Enable verbose output
+- `--debug`: Enable debug output for detailed calculations
+
+**Supported output formats:**
+- `console` (default): Verbose console summary
+- `console-lite`: Compact console summary
+- `csv`: Summary CSV format
+- `detailed-csv`: Full year-by-year CSV
+- `html`: Interactive HTML report with charts
+- `json`: Structured JSON output
+- `all`: Writes multiple outputs with timestamps
+
+**Examples:**
 ```bash
-./fers-calc calculate [input-file] [flags]
+# Basic calculation with console output
+./rpgo calculate config.yaml
+
+# Generate HTML report
+./rpgo calculate config.yaml --format html > report.html
+
+# Verbose console output
+./rpgo calculate config.yaml --verbose
+
+# Debug mode for troubleshooting
+./rpgo calculate config.yaml --debug
 ```
 
-**Description**: Calculate retirement scenarios using deterministic projections.
+### `validate [input-file]` — Validate configuration file
 
-**Flags**:
-- `--format, -f`: Output format (console, console-lite, csv, detailed-csv, html, json, all) [default: console]
-- `--verbose, -v`: Verbose output [default: false]
-- `--debug`: Enable debug logging (detailed calculation breakdowns)
+Validate a YAML configuration file for syntax and structural correctness.
 
-**Examples**:
+**Example:**
 ```bash
-# Basic calculation
-./fers-calc calculate config.yaml
-
-# Generate HTML report (save to file)
-./fers-calc calculate config.yaml --format html > report.html
-
-# Enable detailed debug logging
-./fers-calc calculate config.yaml --debug
+./rpgo validate config.yaml
 ```
 
-### `example` - Generate Example Configuration
+### `break-even [input-file]` — Calculate break-even analysis
+
+Calculate the TSP withdrawal rate needed to match current net income in retirement.
+
+**Flags:**
+- `--debug`: Enable debug output for detailed calculations
+
+**Example:**
 ```bash
-./fers-calc example [output-file]
+./rpgo break-even config.yaml
 ```
 
-**Description**: Generate an example configuration file to get started.
+### `historical` — Manage and analyze historical financial data
 
-**Example**:
+Subcommands for loading, analyzing, and querying historical TSP, inflation, and COLA data.
+
+#### `historical load [data-path]`
+
+Load historical data from the specified directory path.
+
+**Example:**
 ```bash
-./fers-calc example my_config.yaml
+./rpgo historical load ./data
 ```
 
-### `validate` - Validate Configuration
+#### `historical stats [data-path]`
+
+Display statistical summaries of historical data including TSP fund returns, inflation, and COLA rates.
+
+**Example:**
 ```bash
-./fers-calc validate [input-file]
+./rpgo historical stats ./data
 ```
 
-**Description**: Validate a configuration file without running calculations.
+#### `historical query [data-path] [year] [fund-type]`
 
-**Example**:
+Query specific historical data for a given year and fund type.
+
+**Fund types:** C, S, I, F, G, inflation, cola
+
+**Example:**
 ```bash
-./fers-calc validate config.yaml
-```
-
-### `break-even` - Break-Even Analysis
-```bash
-./fers-calc break-even [input-file]
-```
-
-**Description**: Calculate break-even TSP withdrawal rates to match current net income.
-
-**Flags**:
-- `--debug`: Enable debug logging
-
-**Example**:
-```bash
-./fers-calc break-even config.yaml
-```
-
-### `monte-carlo` - FERS Monte Carlo Simulations
-```bash
-./fers-calc monte-carlo [config-file] [data-path] [flags]
-```
-
-**Description**: Run comprehensive FERS Monte Carlo simulations that model all retirement components (pension, SS, TSP, taxes, FEHB) with variable market conditions.
-
-**Important**: For proper TSP balance variation in Monte Carlo results, ensure your configuration file uses manual `tsp_allocation` settings rather than `tsp_lifecycle_fund` settings.
-
-**Flags**:
-- `--simulations, -s`: Number of simulations to run [default: 1000]
-- `--historical, -d`: Use historical data (false for statistical) [default: true]
-- `--seed, -r`: Random seed (0 for auto-generated) [default: 0]
-- `--debug`: Enable debug logging
-
-**Examples**:
-```bash
-# Basic FERS Monte Carlo simulation
-./fers-calc monte-carlo config.yaml ./data
-
-# High-precision simulation with 5000 runs
-./fers-calc monte-carlo config.yaml ./data --simulations 5000
-
-# Statistical mode (not historical data)
-./fers-calc monte-carlo config.yaml ./data --historical false
-
-# Reproducible results with fixed seed
-./fers-calc monte-carlo config.yaml ./data --seed 12345
-```
-
-## Historical Data Commands
-
-### `historical load` - Load Historical Data
-```bash
-./fers-calc historical load [data-path]
-```
-
-**Description**: Load and validate historical financial data.
-
-**Example**:
-```bash
-./fers-calc historical load ./data
-```
-
-### `historical stats` - Display Statistics
-```bash
-./fers-calc historical stats [data-path]
-```
-
-**Description**: Display statistical summaries of historical data.
-
-**Example**:
-```bash
-./fers-calc historical stats ./data
-```
-
-### `historical query` - Query Specific Data
-```bash
-./fers-calc historical query [data-path] [year] [fund-type]
-```
-
-**Description**: Query specific historical data for a given year and fund type.
-
-**Fund Types**: C, S, I, F, G, inflation, cola
-
-**Examples**:
-```bash
-# Query TSP C Fund return for 2020
-./fers-calc historical query ./data 2020 C
+# Query C Fund returns for 2020
+./rpgo historical query ./data 2020 C
 
 # Query inflation rate for 2020
-./fers-calc historical query ./data 2020 inflation
+./rpgo historical query ./data 2020 inflation
 
 # Query COLA rate for 2020
-./fers-calc historical query ./data 2020 cola
+./rpgo historical query ./data 2020 cola
 ```
 
-## Monte Carlo Simulation Commands
+#### `historical monte-carlo [data-path]` — Run Monte Carlo simulations
 
-### Command Types Comparison
+Run Monte Carlo simulations to analyze retirement portfolio sustainability using historical or statistical market data.
 
-**Configuration-Based Commands** (use YAML config files):
-- `calculate` - Uses `config.yaml` for all parameters
-- `break-even` - Uses `config.yaml` for employee data
+**Flags:**
+- `--simulations, -s`: Number of simulations to run (default: 1000)
+- `--years, -y`: Number of years to project (default: 25)
+- `--historical, -d`: Use historical data (default: true)
+- `--balance, -b`: Initial portfolio balance (default: 1000000)
+- `--withdrawal, -w`: Annual withdrawal amount (default: 40000)
+- `--strategy, -t`: Withdrawal strategy (default: "fixed_amount")
 
-**Flag-Based Commands** (use command-line flags):
-- `historical monte-carlo` - Uses flags for all parameters, `[data-path]` for historical data location
-- `monte-carlo` - Uses config file + flags, comprehensive FERS analysis
-
-### `historical monte-carlo` - Run Simple Portfolio Monte Carlo Simulations
-```bash
-./fers-calc historical monte-carlo [data-path] [flags]
-```
-
-**Description**: Run Monte Carlo simulations to analyze simple portfolio withdrawal sustainability.
-
-**Note**: This command uses command-line flags to specify all parameters directly. The `[data-path]` parameter specifies the directory containing historical data files (e.g., `./data`). This is a simplified portfolio-only analysis.
-
-### `monte-carlo` - Run Comprehensive FERS Monte Carlo Simulations
-```bash
-./fers-calc monte-carlo [config-file] [data-path] [flags]
-```
-
-**Description**: Run comprehensive FERS Monte Carlo simulations that model all retirement components (pension, SS, TSP, taxes, FEHB) with variable market conditions.
-
-**Note**: This command uses a configuration file (like `calculate`) to specify all FERS retirement details, plus command-line flags for Monte Carlo parameters. This provides a complete FERS retirement risk analysis.
-
-**Flags**:
-- `--simulations, -s`: Number of simulations to run [default: 1000]
-- `--years, -y`: Number of years to project [default: 25]
-- `--historical, -d`: Use historical data (false for statistical) [default: true]
-- `--balance, -b`: Initial portfolio balance [default: 1000000]
-- `--withdrawal, -w`: Annual withdrawal amount [default: 40000]
-- `--strategy, -t`: Withdrawal strategy [default: fixed_amount]
-
-**Withdrawal Strategies**:
+**Withdrawal strategies:**
 - `fixed_amount`: Same dollar amount each year
 - `fixed_percentage`: Percentage of current portfolio balance
-- `inflation_adjusted`: Initial amount adjusted for inflation
-- `guardrails`: Dynamic adjustment based on portfolio performance
+- `inflation_adjusted`: Initial amount adjusted for inflation annually
+- `guardrails`: Dynamically adjusts withdrawals based on portfolio performance
 
-**Examples**:
+**Examples:**
 
-**Basic 4% Rule Analysis**:
+**Baseline (4% Rule) Analysis:**
 ```bash
-# Note: ./data is the historical data directory, not a config file
-./fers-calc historical monte-carlo ./data \
+./rpgo historical monte-carlo ./data \
   --simulations 1000 \
   --balance 1000000 \
   --withdrawal 40000
 ```
 
-**Conservative Analysis with Guardrails**:
+**Guardrails Strategy for 30 Years:**
 ```bash
-# ./data contains historical TSP returns, inflation, and COLA data
-./fers-calc historical monte-carlo ./data \
+./rpgo historical monte-carlo ./data \
   --simulations 1000 \
   --balance 500000 \
   --withdrawal 25000 \
@@ -212,10 +138,9 @@ The FERS Retirement Calculator provides a comprehensive command-line interface f
   --years 30
 ```
 
-**Statistical Mode (Not Historical)**:
+**Statistical Sampling Mode:**
 ```bash
-# Uses statistical distributions instead of historical data
-./fers-calc historical monte-carlo ./data \
+./rpgo historical monte-carlo ./data \
   --simulations 500 \
   --historical false \
   --balance 750000 \
@@ -223,69 +148,62 @@ The FERS Retirement Calculator provides a comprehensive command-line interface f
   --strategy inflation_adjusted
 ```
 
-**Quick Test Run**:
+### `version` — Show version information
+
+Display version, commit, and build information.
+
+**Example:**
 ```bash
-# Quick test with fewer simulations for faster results
-./fers-calc historical monte-carlo ./data \
-  --simulations 100 \
-  --years 20 \
-  --balance 500000 \
-  --withdrawal 25000
+./rpgo version
 ```
 
 ## Common Use Cases
 
 ### 1. Initial Setup
 ```bash
-# Generate example configuration
-./fers-calc example config.yaml
-
 # Validate configuration
-./fers-calc validate config.yaml
+./rpgo validate config.yaml
 
 # Load historical data
-./fers-calc historical load ./data
+./rpgo historical load ./data
 ```
 
 ### 2. Basic Retirement Analysis
 ```bash
 # Run deterministic calculations
-./fers-calc calculate config.yaml
+./rpgo calculate config.yaml
 
 # Generate HTML report (save to file)
-./fers-calc calculate config.yaml --format html > report.html
+./rpgo calculate config.yaml --format html > report.html
 
 # Run break-even analysis
-./fers-calc break-even config.yaml
+./rpgo break-even config.yaml
 ```
 
 ### 3. Monte Carlo Risk Analysis
 ```bash
 # Conservative 4% rule test (simple portfolio)
-./fers-calc historical monte-carlo ./data \
+./rpgo historical monte-carlo ./data \
   --simulations 1000 \
   --balance 1000000 \
   --withdrawal 40000
 
-# Comprehensive FERS Monte Carlo analysis
-./fers-calc monte-carlo config.yaml ./data \
-  --simulations 1000
-
-# High-precision FERS analysis
-./fers-calc monte-carlo config.yaml ./data \
+# High-precision analysis with more simulations
+./rpgo historical monte-carlo ./data \
   --simulations 5000 \
-  --seed 12345
+  --balance 1000000 \
+  --withdrawal 40000
 
-# Aggressive 6% rule with guardrails (simple portfolio)
-./fers-calc historical monte-carlo ./data \
+# Aggressive withdrawal with guardrails strategy
+./rpgo historical monte-carlo ./data \
   --simulations 1000 \
   --balance 500000 \
   --withdrawal 30000 \
   --strategy guardrails \
   --years 30
 
-# Inflation-adjusted strategy (simple portfolio)
-./fers-calc historical monte-carlo ./data \
+# Inflation-adjusted withdrawal strategy
+./rpgo historical monte-carlo ./data \
   --simulations 500 \
   --balance 750000 \
   --withdrawal 35000 \
@@ -295,12 +213,12 @@ The FERS Retirement Calculator provides a comprehensive command-line interface f
 ### 4. Data Analysis
 ```bash
 # View historical statistics
-./fers-calc historical stats ./data
+./rpgo historical stats ./data
 
 # Query specific data points
-./fers-calc historical query ./data 2020 C
-./fers-calc historical query ./data 2020 inflation
-./fers-calc historical query ./data 2020 cola
+./rpgo historical query ./data 2020 C
+./rpgo historical query ./data 2020 inflation
+./rpgo historical query ./data 2020 cola
 ```
 
 ## HTML Reports
@@ -319,7 +237,7 @@ The HTML output format generates interactive reports with visualizations to help
 ### Usage
 ```bash
 # Generate and save HTML report
-./fers-calc calculate config.yaml --format html > retirement_analysis.html
+./rpgo calculate config.yaml --format html > retirement_analysis.html
 
 # Open in browser (macOS)
 open retirement_analysis.html
@@ -422,7 +340,7 @@ Error: Data path './data' does not exist
 ```bash
 Error: Configuration file is invalid
 ```
-*Solution*: Use `./fers-calc validate config.yaml` to check for errors.
+*Solution*: Use `./rpgo validate config.yaml` to check for errors.
 
 **Simulation Errors**:
 ```bash
@@ -434,15 +352,15 @@ Error: Failed to run Monte Carlo simulation
 
 ```bash
 # General help
-./fers-calc --help
+./rpgo --help
 
 # Command-specific help
-./fers-calc calculate --help
-./fers-calc historical --help
-./fers-calc historical monte-carlo --help
+./rpgo calculate --help
+./rpgo historical --help
+./rpgo historical monte-carlo --help
 
 # Validate configuration
-./fers-calc validate config.yaml
+./rpgo validate config.yaml
 ```
 
-This CLI reference provides comprehensive guidance for using all features of the FERS Retirement Calculator, from basic deterministic calculations to advanced Monte Carlo risk analysis. 
+This CLI reference provides comprehensive guidance for using all features of the FERS Retirement Calculator, from basic deterministic calculations to advanced Monte Carlo risk analysis.
