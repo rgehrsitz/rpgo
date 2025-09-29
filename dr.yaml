@@ -79,6 +79,8 @@ global_assumptions:
   tsp_return_post_retirement: "0.04"
   cola_general_rate: "0.02"
   projection_years: 30
+  # TSP Contribution Policy: "continue_until_retirement" (realistic) or "zero_in_retirement_view" (comparison-mode)
+  tsp_contrib_policy: "zero_in_retirement_view"
   current_location:
     state: "PA"
     county: "Bucks"

@@ -13,6 +13,58 @@ var (
 	decimalTwelve = decimal.NewFromInt(12)
 )
 
+// tspContribForYear calculates TSP employee contributions based on policy
+func tspContribForYear(wagesYear decimal.Decimal, contribPct decimal.Decimal, payPeriods int, retireDate *time.Time, yr int, startYear int, policy string) decimal.Decimal {
+	if wagesYear.LessThanOrEqual(decimalZero) || contribPct.LessThanOrEqual(decimalZero) {
+		return decimalZero
+	}
+
+	currentYear := startYear + yr
+	if retireDate == nil {
+		// Still working full year
+		return wagesYear.Mul(contribPct)
+	}
+
+	switch policy {
+	case "zero_in_retirement_view":
+		// Once scenario is "retirement", contributions cease (comparison-mode)
+		if retireDate.Year() <= currentYear {
+			return decimalZero
+		}
+		return wagesYear.Mul(contribPct) // working full year
+	default: // "continue_until_retirement"
+		if retireDate.Year() < currentYear {
+			return decimalZero // retired before this year
+		}
+		if retireDate.Year() > currentYear {
+			return wagesYear.Mul(contribPct) // full year
+		}
+		// retiring this year: simple proration by pay periods through the last period before retirement
+		periodsWorked := int(float64(payPeriods) * float64(retireDate.YearDay()) / 365.0)
+		if periodsWorked < 0 {
+			periodsWorked = 0
+		}
+		if periodsWorked > payPeriods {
+			periodsWorked = payPeriods
+		}
+		return (wagesYear.Mul(contribPct)).Mul(decimal.NewFromInt(int64(periodsWorked))).Div(decimal.NewFromInt(int64(payPeriods)))
+	}
+}
+
+// SSMonthsPaidInYear returns the number of benefit payments in `year` if claiming at `claimAgeYears`
+// Rule: first payment is the month AFTER the claim month (SSA timing)
+func SSMonthsPaidInYear(dob time.Time, claimAgeYears int, year int) int {
+	claimMonth := time.Date(dob.Year()+claimAgeYears, dob.Month(), 1, 0, 0, 0, 0, time.UTC)
+	firstPaid := claimMonth.AddDate(0, 1, 0)
+	if firstPaid.Year() > year {
+		return 0
+	}
+	if firstPaid.Year() < year {
+		return 12
+	}
+	return 12 - int(firstPaid.Month()) + 1
+}
+
 // GenerateAnnualProjectionGeneric produces a projection for the generic participant model.
 func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.Household, scenario *domain.GenericScenario, assumptions *domain.GlobalAssumptions, federalRules domain.FederalRules) []domain.AnnualCashFlow {
 	if household == nil || assumptions == nil || len(household.Participants) == 0 {
@@ -105,6 +157,8 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 		tspBalance                 decimal.Decimal
 		tspWithdrawalBase          decimal.Decimal
 		fehbPremium                decimal.Decimal
+		fersSupplementAnnual       decimal.Decimal
+		fersSupplementStartYear    *int
 	}
 
 	states := make(map[string]*participantState, len(household.Participants))
@@ -302,6 +356,14 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 					pension, survivor := calculateParticipantPension(p, *st.retirementDate)
 					st.pensionAnnual = pension
 					st.survivorPension = survivor
+
+					// Calculate FERS Special Retirement Supplement if eligible
+					retirementAge := p.Age(*st.retirementDate)
+					if retirementAge < 62 && p.SSBenefit62.GreaterThan(decimalZero) {
+						serviceYears := p.YearsOfService(*st.retirementDate)
+						st.fersSupplementAnnual = CalculateFERSSpecialRetirementSupplement(p.SSBenefit62, serviceYears, retirementAge)
+						st.fersSupplementStartYear = startYr
+					}
 				} else if p.ExternalPension != nil {
 					st.pensionAnnual = p.ExternalPension.MonthlyBenefit.Mul(decimalTwelve)
 				}
@@ -325,7 +387,14 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 				}
 
 				if employeePct.GreaterThan(decimalZero) {
-					employeeContribution := salaryForYear.Mul(employeePct)
+					// Get TSP contribution policy from assumptions
+					policy := "continue_until_retirement" // default
+					if assumptions.TSPContribPolicy != "" {
+						policy = assumptions.TSPContribPolicy
+					}
+
+					// Use policy-aware contribution calculation
+					employeeContribution := tspContribForYear(salaryForYear, employeePct, 26, st.retirementDate, yr, startYear, policy)
 					if employeeContribution.GreaterThan(decimalZero) {
 						st.tspBalance = st.tspBalance.Add(employeeContribution)
 						employeeContributionAmount = employeeContributionAmount.Add(employeeContribution)
@@ -411,6 +480,28 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 
 				cf.Pensions[p.Name] = pensionValue
 			}
+
+			// Handle FERS Special Retirement Supplement
+			fersSupplementValue := decimalZero
+			if st.retired && st.fersSupplementAnnual.GreaterThan(decimalZero) && age < 62 {
+				// Apply COLA to FERS supplement (same as pension COLA rules)
+				if st.fersSupplementStartYear != nil && yr > *st.fersSupplementStartYear {
+					if p.IsFederal {
+						st.fersSupplementAnnual = applyParticipantFERSCOLA(st.fersSupplementAnnual, cola, age)
+					} else {
+						st.fersSupplementAnnual = st.fersSupplementAnnual.Mul(onePlus(cola))
+					}
+				}
+
+				fersSupplementValue = st.fersSupplementAnnual
+
+				// Apply retirement year proration if applicable
+				if st.fersSupplementStartYear != nil && yr == *st.fersSupplementStartYear {
+					fractionWorked := computeWorkFraction(st.retirementDate, yearDate)
+					fersSupplementValue = st.fersSupplementAnnual.Mul(decimalOne.Sub(fractionWorked))
+				}
+			}
+			cf.FERSSupplements[p.Name] = fersSupplementValue
 
 			ssBenefit := decimalZero
 			if st.ssStarted {
@@ -559,7 +650,23 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 			applyRetiredExemption := isRetiredHousehold && !hasWageIncome
 			cf.LocalTax = ce.TaxCalc.LocalTaxCalc.CalculateEIT(taxable.WageIncome, applyRetiredExemption)
 			if hasWageIncome {
-				cf.FICATax = ce.TaxCalc.FICATaxCalc.CalculateFICA(taxable.WageIncome, taxable.WageIncome)
+				// Calculate FICA per person with separate wage-base caps
+				participantWages := make([]decimal.Decimal, 0, len(participantNames))
+				for _, name := range participantNames {
+					if !cf.IsDeceased[name] {
+						participantWages = append(participantWages, cf.Salaries[name])
+					}
+				}
+
+				// Handle different numbers of living participants
+				if len(participantWages) == 2 {
+					cf.FICATax = ce.TaxCalc.FICATaxCalc.CalculateFICAForTwoPersons(participantWages[0], participantWages[1])
+				} else if len(participantWages) == 1 {
+					cf.FICATax = ce.TaxCalc.FICATaxCalc.CalculateFICA(participantWages[0], participantWages[0])
+				} else {
+					// Fallback to original method for more than 2 people
+					cf.FICATax = ce.TaxCalc.FICATaxCalc.CalculateFICA(taxable.WageIncome, taxable.WageIncome)
+				}
 			} else {
 				cf.FICATax = decimalZero
 			}

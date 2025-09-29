@@ -221,6 +221,55 @@ func NewFICACalculator(config domain.FICATaxConfig) *FICACalculator {
 	}
 }
 
+// ficaParams holds FICA tax parameters for per-person calculation
+type ficaParams struct {
+	SSRate        decimal.Decimal
+	MedicareRate  decimal.Decimal
+	AddlMedRate   decimal.Decimal
+	SSWageBase    decimal.Decimal
+	AddlMedMFJThr decimal.Decimal
+}
+
+// ficaOnPerson calculates FICA taxes for a single person
+func ficaOnPerson(wages decimal.Decimal, r ficaParams) (ss, medicare decimal.Decimal) {
+	if wages.LessThanOrEqual(decimal.Zero) {
+		return decimal.Zero, decimal.Zero
+	}
+	ssBase := wages
+	if ssBase.GreaterThan(r.SSWageBase) {
+		ssBase = r.SSWageBase
+	}
+	ss = ssBase.Mul(r.SSRate)
+	medicare = wages.Mul(r.MedicareRate)
+	return ss, medicare
+}
+
+// CalculateFICAForTwoPersons calculates FICA taxes for two people with separate wage-base caps
+func (fc *FICACalculator) CalculateFICAForTwoPersons(wagesA, wagesB decimal.Decimal) decimal.Decimal {
+	rates := ficaParams{
+		SSRate:        fc.SSRate,
+		MedicareRate:  fc.MedicareRate,
+		AddlMedRate:   fc.AdditionalRate,
+		SSWageBase:    fc.SSWageBase,
+		AddlMedMFJThr: fc.HighIncomeThreshold,
+	}
+
+	// Compute per-person FICA (SS + Medicare)
+	ssA, medA := ficaOnPerson(wagesA, rates)
+	ssB, medB := ficaOnPerson(wagesB, rates)
+
+	// Additional Medicare is based on MFJ combined earned income above the threshold
+	combinedWages := wagesA.Add(wagesB)
+	addlMed := decimal.Zero
+	if combinedWages.GreaterThan(fc.HighIncomeThreshold) {
+		excess := combinedWages.Sub(fc.HighIncomeThreshold)
+		addlMed = excess.Mul(fc.AdditionalRate)
+	}
+
+	// Record FICA as sum of the three pieces
+	return ssA.Add(medA).Add(ssB).Add(medB).Add(addlMed)
+}
+
 // CalculateFICA calculates FICA taxes (Social Security and Medicare)
 func (fc *FICACalculator) CalculateFICA(wages decimal.Decimal, totalHouseholdWages decimal.Decimal) decimal.Decimal {
 	// Social Security tax (capped per individual)

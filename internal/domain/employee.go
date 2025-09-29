@@ -63,6 +63,9 @@ type GlobalAssumptions struct {
 	ProjectionYears         int             `yaml:"projection_years" json:"projection_years"`
 	CurrentLocation         Location        `yaml:"current_location" json:"current_location"`
 
+	// TSP Contribution Policy Configuration
+	TSPContribPolicy string `yaml:"tsp_contrib_policy" json:"tsp_contrib_policy"` // "continue_until_retirement" or "zero_in_retirement_view"
+
 	// Monte Carlo Configuration
 	MonteCarloSettings MonteCarloSettings `yaml:"monte_carlo_settings" json:"monte_carlo_settings"`
 
