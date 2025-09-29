@@ -100,7 +100,7 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 		survivorPensionDistributed bool
 		ssStartAge                 int
 		ssStarted                  bool
-		ssAnnual                   decimal.Decimal
+		ssAnnualFull               decimal.Decimal
 		ssStartYear                *int
 		tspBalance                 decimal.Decimal
 		tspWithdrawalBase          decimal.Decimal
@@ -191,6 +191,7 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 
 	for yr := 0; yr < years; yr++ {
 		yearDate := time.Date(startYear+yr, 1, 1, 0, 0, 0, 0, time.UTC)
+		yearEnd := time.Date(startYear+yr, 12, 31, 23, 59, 59, 0, time.UTC)
 		cf := domain.NewAnnualCashFlow(yr, yearDate, participantNames)
 		transferPool := decimalZero
 		aliveNames := aliveParticipantsForYear(household, deathYears, yr)
@@ -208,6 +209,7 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 			}
 
 			age := p.Age(yearDate)
+			ageEnd := p.Age(yearEnd)
 			cf.Ages[p.Name] = age
 			if st.survivorPensionIncome.GreaterThan(decimalZero) {
 				if st.survivorPensionLastUpdated < yr {
@@ -259,17 +261,31 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 				}
 			}
 
+			workFraction := decimalZero
 			salaryForYear := decimalZero
 			if st.currentSalary.GreaterThan(decimalZero) {
 				switch {
 				case st.retirementYear == nil || yr < *st.retirementYear:
+					workFraction = decimalOne
 					salaryForYear = st.currentSalary
 				case st.retirementYear != nil && yr == *st.retirementYear:
 					fraction := computeWorkFraction(st.retirementDate, yearDate)
-					salaryForYear = st.currentSalary.Mul(fraction)
+					workFraction = fraction
+					salaryForYear = st.currentSalary.Mul(workFraction)
+				default:
+					workFraction = decimalZero
 				}
 			}
 			cf.Salaries[p.Name] = salaryForYear
+
+			retiredThisYear := st.retirementYear != nil && yr == *st.retirementYear
+			retiredFraction := decimalZero
+			if retiredThisYear {
+				retiredFraction = decimalOne.Sub(workFraction)
+				if retiredFraction.LessThan(decimalZero) {
+					retiredFraction = decimalZero
+				}
+			}
 
 			if st.retirementYear != nil && yr >= *st.retirementYear && !st.retired {
 				st.retired = true
@@ -396,18 +412,28 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 				cf.Pensions[p.Name] = pensionValue
 			}
 
-			if !st.ssStarted && age >= st.ssStartAge {
-				st.ssAnnual = computeSSAnnualBenefit(p, st.ssStartAge)
-				st.ssStarted = true
-				ssStart := new(int)
-				*ssStart = yr
-				st.ssStartYear = ssStart
-			}
+			ssBenefit := decimalZero
 			if st.ssStarted {
 				if st.ssStartYear != nil && yr > *st.ssStartYear {
-					st.ssAnnual = st.ssAnnual.Mul(onePlus(cola))
+					st.ssAnnualFull = st.ssAnnualFull.Mul(onePlus(cola))
 				}
-				cf.SSBenefits[p.Name] = st.ssAnnual
+				ssBenefit = st.ssAnnualFull
+			} else if ageEnd >= st.ssStartAge {
+				fullAnnual := computeSSAnnualBenefit(p, st.ssStartAge)
+				benefit := fullAnnual
+				benefit = computeSSBirthdayProration(benefit, p, st.ssStartAge, st.retirementYear, st.retirementDate, yr, yearDate, yearEnd, age, ageEnd)
+				benefit = computeSSRetirementAdjustment(benefit, fullAnnual, p, st.ssStartAge, st.retirementYear, st.retirementDate, yr, yearDate)
+				if benefit.GreaterThan(decimalZero) {
+					st.ssAnnualFull = fullAnnual
+					st.ssStarted = true
+					startIdx := new(int)
+					*startIdx = yr
+					st.ssStartYear = startIdx
+					ssBenefit = benefit
+				}
+			}
+			if st.ssStarted {
+				cf.SSBenefits[p.Name] = ssBenefit
 			}
 
 			withdrawal := decimalZero
@@ -430,6 +456,9 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 							withdrawal = st.tspBalance.Mul(*ps.TSPWithdrawalRate)
 						}
 					}
+				}
+				if retiredThisYear && withdrawal.GreaterThan(decimalZero) {
+					withdrawal = withdrawal.Mul(retiredFraction)
 				}
 				if singleSurvivorName != "" && p.Name == singleSurvivorName {
 					if survivorSpendingFactor.LessThan(decimalOne) {
@@ -526,9 +555,13 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 		if ce != nil && ce.TaxCalc != nil {
 			cf.FederalTax = ce.TaxCalc.calculateFederalTaxWithStatus(taxable, filingStatus, seniors)
 			cf.StateTax = ce.TaxCalc.StateTaxCalc.CalculateTax(taxable, isRetiredHousehold)
-			cf.LocalTax = ce.TaxCalc.LocalTaxCalc.CalculateEIT(taxable.WageIncome, isRetiredHousehold)
-			if !isRetiredHousehold {
+			hasWageIncome := taxable.WageIncome.GreaterThan(decimalZero)
+			applyRetiredExemption := isRetiredHousehold && !hasWageIncome
+			cf.LocalTax = ce.TaxCalc.LocalTaxCalc.CalculateEIT(taxable.WageIncome, applyRetiredExemption)
+			if hasWageIncome {
 				cf.FICATax = ce.TaxCalc.FICATaxCalc.CalculateFICA(taxable.WageIncome, taxable.WageIncome)
+			} else {
+				cf.FICATax = decimalZero
 			}
 		}
 
@@ -602,6 +635,69 @@ func computeSSMonthlyBenefit(p *domain.Participant, startAge int) decimal.Decima
 	offset := startAge - fraAge
 	diff := p.SSBenefit70.Sub(p.SSBenefitFRA)
 	return p.SSBenefitFRA.Add(diff.Mul(decimal.NewFromInt(int64(offset))).Div(decimal.NewFromInt(int64(span))))
+}
+
+func computeSSBirthdayProration(currentBenefit decimal.Decimal, p *domain.Participant, ssStartAge int, retirementYear *int, retirementDate *time.Time, yearIdx int, yearStart, yearEnd time.Time, ageAtStart, ageAtEnd int) decimal.Decimal {
+	if currentBenefit.LessThanOrEqual(decimalZero) {
+		return currentBenefit
+	}
+
+	if ageAtStart >= ssStartAge || ageAtEnd < ssStartAge {
+		return currentBenefit
+	}
+
+	if retirementYear != nil && retirementDate != nil && yearIdx == *retirementYear {
+		birthdayThisYear := time.Date(yearStart.Year(), p.BirthDate.Month(), p.BirthDate.Day(), 0, 0, 0, 0, time.UTC)
+		if retirementDate.Before(birthdayThisYear) {
+			return currentBenefit
+		}
+	}
+
+	birthdayThisYear := time.Date(yearStart.Year(), p.BirthDate.Month(), p.BirthDate.Day(), 0, 0, 0, 0, time.UTC)
+	daysAfter := yearEnd.Sub(birthdayThisYear).Hours() / 24.0
+	daysInYear := 365.0
+	if isLeapYear(yearStart.Year()) {
+		daysInYear = 366.0
+	}
+	fraction := daysAfter / daysInYear
+	if fraction < 0 {
+		fraction = 0
+	}
+	if fraction > 1 {
+		fraction = 1
+	}
+
+	return currentBenefit.Mul(decimal.NewFromFloat(fraction))
+}
+
+func computeSSRetirementAdjustment(currentBenefit, fullAnnual decimal.Decimal, p *domain.Participant, ssStartAge int, retirementYear *int, retirementDate *time.Time, yearIdx int, yearStart time.Time) decimal.Decimal {
+	if retirementYear == nil || retirementDate == nil || yearIdx != *retirementYear {
+		return currentBenefit
+	}
+
+	ageAtRetirement := p.Age(*retirementDate)
+	if ageAtRetirement < ssStartAge {
+		return decimalZero
+	}
+
+	birthdayThisYear := time.Date(yearStart.Year(), p.BirthDate.Month(), p.BirthDate.Day(), 0, 0, 0, 0, time.UTC)
+	if retirementDate.Before(birthdayThisYear) {
+		ssStartDate := time.Date(retirementDate.Year(), retirementDate.Month()+1, 1, 0, 0, 0, 0, time.UTC)
+		monthsOfBenefits := 12 - int(ssStartDate.Month()) + 1
+		if ssStartDate.Year() > retirementDate.Year() {
+			monthsOfBenefits = 0
+		}
+		if monthsOfBenefits < 0 {
+			monthsOfBenefits = 0
+		}
+		if monthsOfBenefits > 12 {
+			monthsOfBenefits = 12
+		}
+		monthlyBenefit := fullAnnual.Div(decimalTwelve)
+		return monthlyBenefit.Mul(decimal.NewFromInt(int64(monthsOfBenefits)))
+	}
+
+	return currentBenefit
 }
 
 func calculateParticipantPension(p *domain.Participant, retirementDate time.Time) (decimal.Decimal, decimal.Decimal) {
@@ -699,13 +795,3 @@ func aliveParticipantsForYear(h *domain.Household, deathYears map[string]*int, y
 }
 
 // Legacy two-person GenerateAnnualProjection removed; use GenerateAnnualProjectionGeneric.
-
-// Helper function to get participant name for a given age (simplified)
-func getParticipantNameForAge(ages map[string]int, targetAge int) string {
-	for name, age := range ages {
-		if age == targetAge {
-			return name
-		}
-	}
-	return ""
-}

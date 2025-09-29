@@ -84,12 +84,20 @@ go build -o fers-calc ./cmd/rpgo
 - Debug logs are generated via an internal Logger interface; the CLI wires a simple logger that prints level-prefixed lines (DEBUG/INFO/WARN/ERROR).
 - When `--debug` is off, a no-op logger is used to keep output clean.
 
+#### First-year behavior
+
+- TSP withdrawals in the first retirement year are prorated based on how many months a participant is actually retired.
+- Employee TSP contributions, FICA, and local Earned Income Tax continue for the portion of the year where wage income is present and stop once the participant is fully retired.
+- Social Security benefits begin in the year a participant reaches the configured start age, with partial-year payments when eligibility occurs mid-year.
+
 #### Output formats and aliases
 
 Supported `--format` values:
+
 - `console`, `console-lite`, `csv`, `detailed-csv`, `html`, `json`, `all`
 
 Aliases map to canonical names:
+
 - `console-verbose` → `console`; `verbose` → `console`
 - `csv-detailed` → `detailed-csv`; `csv-summary` → `csv`
 - `html-report` → `html`; `json-pretty` → `json`
@@ -267,11 +275,14 @@ scenarios:
 ### TSP Configuration
 
 #### TSP Allocations vs Lifecycle Funds
+
 For **deterministic calculations**, both approaches work equivalently:
+
 - **Manual TSP Allocation**: Specify exact percentages for each fund (C, S, I, F, G)
 - **TSP Lifecycle Fund**: Use predefined lifecycle funds (L2030, L2035, L2040, L Income)
 
 For **Monte Carlo simulations**, use **manual TSP allocations** for proper market variability:
+
 ```yaml
 # ✅ Recommended for Monte Carlo
 tsp_allocation:
@@ -287,6 +298,7 @@ tsp_allocation:
 ```
 
 #### TSP Fund Types
+
 - **C Fund**: S&P 500 Index (Large Cap Stock)
 - **S Fund**: Small Cap Stock Index (Russell 2000)
 - **I Fund**: International Stock Index (MSCI World ex-US)

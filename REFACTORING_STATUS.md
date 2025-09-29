@@ -5,30 +5,35 @@ This document summarizes the progress made in making the FERS retirement calcula
 ## Completed Phase 1: Foundational Code and Data Refactoring ✅
 
 ### ✅ New Domain Structures
+
 - **`domain.Participant`**: Generic participant struct supporting both federal and non-federal employees
 - **`domain.Household`**: Container for participants with filing status
 - **`domain.ParticipantScenario`**: Flexible scenario definition per participant  
 - **`domain.GenericScenario`**: Household-level scenario with multiple participants
 
 ### ✅ Backwards Compatibility
+
 - Legacy `robert`/`dawn` configuration format still fully supported
 - Automatic format detection and conversion
 - Seamless transition path for existing users
 - All existing configuration files continue to work unchanged
 
 ### ✅ Configuration Schema Updates
+
 - New participant-based YAML format with `household` and `generic_scenarios` sections
 - Support for mixed households (federal + non-federal employees)
 - Support for single federal employee scenarios
 - Enhanced validation for participant-specific rules (FEHB holders, federal employee requirements)
 
 ### ✅ Calculation Engine Updates  
+
 - `RunScenarioAuto()`: Automatic format detection and routing
 - `RunGenericScenario()`: New method for participant-based calculations
 - Legacy conversion bridge for calculation compatibility
 - Maintained all existing calculation accuracy and logic
 
 ### ✅ Testing and Validation
+
 - Comprehensive unit tests for format detection and conversion
 - Table-driven tests covering multiple household configurations:
   - Single federal employee
@@ -40,9 +45,11 @@ This document summarizes the progress made in making the FERS retirement calcula
 ## Current Limitations 🔄
 
 ### Output Generation Still Hardcoded
+
 While the calculation engine now supports generic participants, the output formatting still contains hardcoded references to "Robert" and "Dawn". This is because:
 
 1. **Core Data Structures**: The `domain.AnnualCashFlow` struct contains hardcoded fields:
+
    ```go
    type AnnualCashFlow struct {
        SalaryRobert     decimal.Decimal
@@ -57,6 +64,7 @@ While the calculation engine now supports generic participants, the output forma
 3. **Projection Logic**: The core projection generation in `internal/calculation/projection.go` populates these hardcoded fields
 
 ### Current Workaround
+
 The system currently uses the legacy conversion bridge, which maps participants to "robert"/"dawn" for internal processing. This works correctly but means output still shows these labels regardless of actual participant names.
 
 ## Phase 2: Complete Output Generification (Future Work) 📋
@@ -64,7 +72,9 @@ The system currently uses the legacy conversion bridge, which maps participants 
 To fully complete the genericization, the following work remains:
 
 ### 1. Refactor AnnualCashFlow Structure
+
 Replace hardcoded fields with dynamic participant maps:
+
 ```go
 type AnnualCashFlow struct {
     Year      int
@@ -78,20 +88,26 @@ type AnnualCashFlow struct {
 ```
 
 ### 2. Update Projection Generation
+
 Modify `internal/calculation/projection.go` to:
+
 - Iterate over participants instead of hardcoded robert/dawn
 - Use participant names as keys in the new map-based structure
 - Maintain calculation accuracy while supporting flexible participants
 
 ### 3. Refactor Output Formatters
+
 Update all output formatters to:
+
 - Use participant names from the actual configuration
 - Support variable numbers of participants (1, 2, 3+)
 - Maintain readable output formatting with dynamic labels
 - Update HTML templates to be participant-agnostic
 
 ### 4. Enhanced Validation
+
 Add validation for:
+
 - Maximum practical number of participants (performance considerations)
 - Mixed scenarios validation (federal vs non-federal timing rules)
 - Complex mortality scenarios with multiple participants
@@ -120,7 +136,9 @@ The current implementation successfully supports:
 ## Migration Guide
 
 ### For New Configurations
+
 Use the new participant-based format:
+
 ```yaml
 household:
   filing_status: "married_filing_jointly" 
@@ -131,7 +149,9 @@ household:
 ```
 
 ### For Existing Configurations  
+
 No changes required - legacy format continues to work:
+
 ```yaml
 personal_details:
   robert:
@@ -153,6 +173,7 @@ personal_details:
 ## Performance Impact
 
 The refactoring maintains performance characteristics:
+
 - Legacy format: No performance impact (direct processing)
 - New format: Minimal overhead from format conversion bridge
 - Memory usage: Slightly increased due to format flexibility, but negligible for practical scenarios
