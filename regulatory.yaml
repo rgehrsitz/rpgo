@@ -1,0 +1,166 @@
+# Federal Retirement Regulatory Configuration
+# Contains the most current available tax laws, federal rules, and market data
+# Used for all retirement projections regardless of target year
+
+metadata:
+  data_year: 2025  # Year this data represents (for reference only)
+  last_updated: "2025-01-15"
+  description: "Latest available regulatory data - used for all projections"
+
+# Federal Tax Configuration (Current Law)
+federal_tax:
+  standard_deduction:
+    married_filing_jointly: "30000"
+    single: "15000"
+    head_of_household: "22500"
+  additional_deduction_65_plus: "1550"
+
+  brackets_married_filing_jointly:
+    - min: "0"
+      max: "23850"
+      rate: "0.10"
+    - min: "23851"
+      max: "96950"
+      rate: "0.12"
+    - min: "96951"
+      max: "206700"
+      rate: "0.22"
+    - min: "206701"
+      max: "394600"
+      rate: "0.24"
+    - min: "394601"
+      max: "501050"
+      rate: "0.32"
+    - min: "501051"
+      max: "751600"
+      rate: "0.35"
+    - min: "751601"
+      max: "999999999"
+      rate: "0.37"
+
+# FICA Tax Configuration
+fica:
+  social_security:
+    rate: "0.062"
+    wage_base: "176100"
+  medicare:
+    rate: "0.0145"
+    additional_rate: "0.009"
+    high_income_threshold_mfj: "250000"
+
+# Social Security Rules
+social_security:
+  taxation_thresholds:
+    married_filing_jointly:
+      threshold_1: "32000"
+      threshold_2: "44000"
+    single:
+      threshold_1: "25000"
+      threshold_2: "34000"
+  benefit_adjustments:
+    early_retirement_reduction:
+      first_36_months_rate: "0.0055556"
+      additional_months_rate: "0.0041667"
+    delayed_retirement_credit: "0.0066667"
+
+# Medicare Configuration
+medicare:
+  part_b_base_premium: "185.00"
+  irmaa_tiers:
+    - income_threshold_single: "103000"
+      income_threshold_joint: "206000"
+      monthly_surcharge: "69.90"
+    - income_threshold_single: "129000"
+      income_threshold_joint: "258000"
+      monthly_surcharge: "174.70"
+    - income_threshold_single: "161000"
+      income_threshold_joint: "322000"
+      monthly_surcharge: "279.50"
+    - income_threshold_single: "193000"
+      income_threshold_joint: "386000"
+      monthly_surcharge: "384.30"
+    - income_threshold_single: "500000"
+      income_threshold_joint: "750000"
+      monthly_surcharge: "489.10"
+
+# State Tax Configurations
+states:
+  pennsylvania:
+    rate: "0.0307"
+    pension_exemption: true  # FERS pensions exempt
+    social_security_exemption: true  # Social Security exempt
+  virginia:
+    rate: "0.0575"
+    pension_exemption: false
+    social_security_exemption: true
+
+# TSP Historical Performance Data
+tsp_funds:
+  c_fund:
+    mean: "0.1125"
+    standard_dev: "0.1744"
+    data_source: "TSP.gov 1988-2024"
+    last_updated: "2025-01-01"
+  s_fund:
+    mean: "0.1117"
+    standard_dev: "0.1933"
+    data_source: "TSP.gov 1988-2024"
+    last_updated: "2025-01-01"
+  i_fund:
+    mean: "0.0634"
+    standard_dev: "0.1863"
+    data_source: "TSP.gov 1988-2024"
+    last_updated: "2025-01-01"
+  f_fund:
+    mean: "0.0532"
+    standard_dev: "0.0565"
+    data_source: "TSP.gov 1988-2024"
+    last_updated: "2025-01-01"
+  g_fund:
+    mean: "0.0493"
+    standard_dev: "0.0165"
+    data_source: "TSP.gov 1988-2024"
+    last_updated: "2025-01-01"
+
+# FERS Program Rules
+fers:
+  tsp_matching_rate: "0.05"
+  tsp_matching_threshold: "0.05"
+
+  # Minimum Retirement Ages by Birth Year
+  minimum_retirement_ages:
+    before_1948: 55
+    1948: "55y2m"
+    1949: "55y4m"
+    1950: "55y6m"
+    1951: "55y8m"
+    1952: "55y10m"
+    1953_to_1964: 56
+    1965: "56y2m"
+    1966: "56y4m"
+    1967: "56y6m"
+    1968: "56y8m"
+    1969: "56y10m"
+    1970_and_after: 57
+
+# FEHB Configuration
+fehb:
+  pay_periods_per_year: 26
+  retirement_calculation_method: "same_as_active"
+  retirement_premium_multiplier: "1.0"
+
+# Default Monte Carlo Settings
+monte_carlo:
+  tsp_return_variability: "0.15"
+  inflation_variability: "0.02"
+  cola_variability: "0.02"
+  fehb_variability: "0.05"
+  max_reasonable_income: "50000000"
+
+  # Default TSP asset allocation
+  default_tsp_allocation:
+    c_fund: "0.60"
+    s_fund: "0.20"
+    i_fund: "0.10"
+    f_fund: "0.10"
+    g_fund: "0.00"

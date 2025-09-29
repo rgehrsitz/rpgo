@@ -1,0 +1,193 @@
+# FERS Retirement Calculator - Personal Configuration Only
+# Regulatory data (tax brackets, federal rules, TSP data, etc.) loaded from regulatory.yaml
+
+household:
+  filing_status: "married_filing_jointly"
+  participants:
+    - name: "Person A"
+      is_federal: true
+      birth_date: "1965-02-25T00:00:00Z"
+      hire_date: "1987-06-22T00:00:00Z"
+      current_salary: "190779.00"
+      high_3_salary: "186572.00"
+      tsp_balance_traditional: "1966168.86"
+      tsp_balance_roth: "0.00"
+      tsp_contribution_percent: "0.128"
+      ss_benefit_62: "2795.00"
+      ss_benefit_fra: "4012.00"
+      ss_benefit_70: "5000.00"
+      fehb_premium_per_pay_period: "488.49"
+      is_primary_fehb_holder: true
+      survivor_benefit_election_percent: "0.00"
+      sick_leave_hours: "1872.0"
+
+      tsp_allocation:
+        c_fund: "0.312"
+        s_fund: "0.078"
+        i_fund: "0.210"
+        f_fund: "0.055"
+        g_fund: "0.345"
+
+    - name: "Person B"
+      is_federal: true
+      birth_date: "1963-07-31T00:00:00Z"
+      hire_date: "1995-07-11T00:00:00Z"
+      current_salary: "176620.00"
+      high_3_salary: "164000.00"
+      tsp_balance_traditional: "1525175.90"
+      tsp_balance_roth: "0.00"
+      tsp_contribution_percent: "0.153"
+      ss_benefit_62: "2527.00"
+      ss_benefit_fra: "3826.00"
+      ss_benefit_70: "4860.00"
+      fehb_premium_per_pay_period: "0.00"
+      is_primary_fehb_holder: false
+      survivor_benefit_election_percent: "0.00"
+      sick_leave_hours: "1057.5"
+
+      tsp_allocation:
+        c_fund: "0.1403"
+        s_fund: "0.0351"
+        i_fund: "0.0945"
+        f_fund: "0.0548"
+        g_fund: "0.6753"
+
+# Personal assumptions (regulatory data comes from regulatory.yaml)
+global_assumptions:
+  inflation_rate: "0.025"
+  fehb_premium_inflation: "0.06"
+  tsp_return_pre_retirement: "0.06"
+  tsp_return_post_retirement: "0.04"
+  cola_general_rate: "0.02"
+  projection_years: 30
+  tsp_contrib_policy: "zero_in_retirement_view"
+  current_location:
+    state: "PA"
+    county: "Bucks"
+    municipality: "Upper Makefield Township"
+
+  # Placeholder - all regulatory data loaded from regulatory.yaml
+  federal_rules:
+    social_security_tax_thresholds:
+      married_filing_jointly:
+        threshold_1: "0"
+        threshold_2: "0"
+      single:
+        threshold_1: "0"
+        threshold_2: "0"
+    social_security_rules:
+      early_retirement_reduction:
+        first_36_months_rate: "0"
+        additional_months_rate: "0"
+      delayed_retirement_credit: "0"
+    fers_rules:
+      tsp_matching_rate: "0"
+      tsp_matching_threshold: "0"
+    federal_tax_config:
+      standard_deduction_mfj: "0"
+      additional_standard_deduction_65_plus: "0"
+      tax_brackets_2025: []
+    state_local_tax_config:
+      pennsylvania_rate: "0"
+      upper_makefield_eit_rate: "0"
+    fica_tax_config:
+      social_security_wage_base: "0"
+      social_security_rate: "0"
+      medicare_rate: "0"
+      additional_medicare_rate: "0"
+      high_income_threshold_mfj: "0"
+    medicare_config:
+      base_premium_2025: "0"
+      irmaa_thresholds: []
+    fehb_config:
+      pay_periods_per_year: 0
+      retirement_calculation_method: ""
+      retirement_premium_multiplier: "0"
+
+  # Placeholder - TSP data loaded from regulatory.yaml
+  tsp_statistical_models:
+    c_fund:
+      mean: "0"
+      standard_dev: "0"
+      data_source: ""
+      last_updated: ""
+    s_fund:
+      mean: "0"
+      standard_dev: "0"
+      data_source: ""
+      last_updated: ""
+    i_fund:
+      mean: "0"
+      standard_dev: "0"
+      data_source: ""
+      last_updated: ""
+    f_fund:
+      mean: "0"
+      standard_dev: "0"
+      data_source: ""
+      last_updated: ""
+    g_fund:
+      mean: "0"
+      standard_dev: "0"
+      data_source: ""
+      last_updated: ""
+
+  # Placeholder - Monte Carlo defaults from regulatory.yaml
+  monte_carlo_settings:
+    tsp_return_variability: "0"
+    inflation_variability: "0"
+    cola_variability: "0"
+    fehb_variability: "0"
+    max_reasonable_income: "0"
+    default_tsp_allocation:
+      c_fund: "0"
+      s_fund: "0"
+      i_fund: "0"
+      f_fund: "0"
+      g_fund: "0"
+
+scenarios:
+  - name: "Rob Retires Dec 2025"
+    participant_scenarios:
+      "Person A":
+        participant_name: "Person A"
+        retirement_date: "2025-12-31T00:00:00Z"
+        ss_start_age: 62
+        tsp_withdrawal_strategy: "variable_percentage"
+        tsp_withdrawal_rate: "0.02"
+      "Person B":
+        participant_name: "Person B"
+        retirement_date: "2025-08-30T00:00:00Z"
+        ss_start_age: 62
+        tsp_withdrawal_strategy: "variable_percentage"
+        tsp_withdrawal_rate: "0.02"
+
+  - name: "Rob Retires Feb 2026"
+    participant_scenarios:
+      "Person A":
+        participant_name: "Person A"
+        retirement_date: "2026-02-28T00:00:00Z"
+        ss_start_age: 62
+        tsp_withdrawal_strategy: "variable_percentage"
+        tsp_withdrawal_rate: "0.02"
+      "Person B":
+        participant_name: "Person B"
+        retirement_date: "2025-08-30T00:00:00Z"
+        ss_start_age: 62
+        tsp_withdrawal_strategy: "variable_percentage"
+        tsp_withdrawal_rate: "0.02"
+
+  - name: "Rob Retires at 62 - Feb 2027"
+    participant_scenarios:
+      "Person A":
+        participant_name: "Person A"
+        retirement_date: "2027-02-28T00:00:00Z"
+        ss_start_age: 62
+        tsp_withdrawal_strategy: "variable_percentage"
+        tsp_withdrawal_rate: "0.02"
+      "Person B":
+        participant_name: "Person B"
+        retirement_date: "2025-08-30T00:00:00Z"
+        ss_start_age: 62
+        tsp_withdrawal_strategy: "variable_percentage"
+        tsp_withdrawal_rate: "0.02"

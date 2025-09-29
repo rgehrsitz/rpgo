@@ -406,3 +406,156 @@ func (ip *InputParser) validateGlobalAssumptions(assumptions *domain.GlobalAssum
 
 	return nil
 }
+
+// LoadRegulatoryConfig loads regulatory configuration from regulatory.yaml
+func (ip *InputParser) LoadRegulatoryConfig(filename string) (*domain.RegulatoryConfig, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read regulatory config file %s: %w", filename, err)
+	}
+
+	var regConfig domain.RegulatoryConfig
+	if err := yaml.Unmarshal(data, &regConfig); err != nil {
+		return nil, fmt.Errorf("failed to parse regulatory YAML: %w", err)
+	}
+
+	// Basic validation of regulatory config
+	if err := ip.validateRegulatoryConfig(&regConfig); err != nil {
+		return nil, fmt.Errorf("regulatory configuration validation failed: %w", err)
+	}
+
+	return &regConfig, nil
+}
+
+// LoadFromFileWithRegulatory loads both scenario and regulatory configs and merges them
+func (ip *InputParser) LoadFromFileWithRegulatory(scenarioFile, regulatoryFile string) (*domain.Configuration, error) {
+	// Load regulatory config first
+	regConfig, err := ip.LoadRegulatoryConfig(regulatoryFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load regulatory config: %w", err)
+	}
+
+	// Load scenario config
+	config, err := ip.LoadFromFile(scenarioFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load scenario config: %w", err)
+	}
+
+	// Merge regulatory config into global assumptions
+	if err := ip.mergeRegulatoryIntoConfig(regConfig, config); err != nil {
+		return nil, fmt.Errorf("failed to merge regulatory config: %w", err)
+	}
+
+	return config, nil
+}
+
+// validateRegulatoryConfig validates the regulatory configuration
+func (ip *InputParser) validateRegulatoryConfig(regConfig *domain.RegulatoryConfig) error {
+	if regConfig.Metadata.DataYear < 2020 || regConfig.Metadata.DataYear > 2030 {
+		return fmt.Errorf("regulatory data year %d seems invalid", regConfig.Metadata.DataYear)
+	}
+
+	// Validate federal tax brackets
+	if len(regConfig.FederalTax.BracketsMFJ) == 0 {
+		return fmt.Errorf("federal tax brackets are required")
+	}
+
+	// Validate FICA rates
+	if regConfig.FICA.SocialSecurity.Rate.LessThanOrEqual(decimal.Zero) {
+		return fmt.Errorf("Social Security rate must be positive")
+	}
+	if regConfig.FICA.Medicare.Rate.LessThanOrEqual(decimal.Zero) {
+		return fmt.Errorf("Medicare rate must be positive")
+	}
+
+	return nil
+}
+
+// mergeRegulatoryIntoConfig merges regulatory config into global assumptions
+func (ip *InputParser) mergeRegulatoryIntoConfig(regConfig *domain.RegulatoryConfig, config *domain.Configuration) error {
+	// Convert regulatory config to existing GlobalAssumptions structure
+	// This maintains backward compatibility while using new regulatory structure
+
+	// Federal Tax Config
+	config.GlobalAssumptions.FederalRules.FederalTaxConfig.StandardDeductionMFJ = regConfig.FederalTax.StandardDeduction.MarriedFilingJointly
+	config.GlobalAssumptions.FederalRules.FederalTaxConfig.AdditionalStandardDeduction = regConfig.FederalTax.AdditionalDeduction65Plus
+	config.GlobalAssumptions.FederalRules.FederalTaxConfig.TaxBrackets2025 = regConfig.FederalTax.BracketsMFJ
+
+	// FICA Config
+	config.GlobalAssumptions.FederalRules.FICATaxConfig.SocialSecurityWageBase = regConfig.FICA.SocialSecurity.WageBase
+	config.GlobalAssumptions.FederalRules.FICATaxConfig.SocialSecurityRate = regConfig.FICA.SocialSecurity.Rate
+	config.GlobalAssumptions.FederalRules.FICATaxConfig.MedicareRate = regConfig.FICA.Medicare.Rate
+	config.GlobalAssumptions.FederalRules.FICATaxConfig.AdditionalMedicareRate = regConfig.FICA.Medicare.AdditionalRate
+	config.GlobalAssumptions.FederalRules.FICATaxConfig.HighIncomeThresholdMFJ = regConfig.FICA.Medicare.HighIncomeThresholdMFJ
+
+	// Medicare Config
+	config.GlobalAssumptions.FederalRules.MedicareConfig.BasePremium2025 = regConfig.Medicare.PartBBasePremium
+	config.GlobalAssumptions.FederalRules.MedicareConfig.IRMAAThresholds = regConfig.Medicare.IRMAAThresholds
+
+	// Social Security Rules
+	config.GlobalAssumptions.FederalRules.SocialSecurityRules.EarlyRetirementReduction.First36MonthsRate = regConfig.SocialSecurity.BenefitAdjustments.EarlyRetirementReduction.First36MonthsRate
+	config.GlobalAssumptions.FederalRules.SocialSecurityRules.EarlyRetirementReduction.AdditionalMonthsRate = regConfig.SocialSecurity.BenefitAdjustments.EarlyRetirementReduction.AdditionalMonthsRate
+	config.GlobalAssumptions.FederalRules.SocialSecurityRules.DelayedRetirementCredit = regConfig.SocialSecurity.BenefitAdjustments.DelayedRetirementCredit
+
+	// Social Security Tax Thresholds
+	config.GlobalAssumptions.FederalRules.SocialSecurityTaxThresholds.MarriedFilingJointly.Threshold1 = regConfig.SocialSecurity.TaxationThresholds.MarriedFilingJointly.Threshold1
+	config.GlobalAssumptions.FederalRules.SocialSecurityTaxThresholds.MarriedFilingJointly.Threshold2 = regConfig.SocialSecurity.TaxationThresholds.MarriedFilingJointly.Threshold2
+	config.GlobalAssumptions.FederalRules.SocialSecurityTaxThresholds.Single.Threshold1 = regConfig.SocialSecurity.TaxationThresholds.Single.Threshold1
+	config.GlobalAssumptions.FederalRules.SocialSecurityTaxThresholds.Single.Threshold2 = regConfig.SocialSecurity.TaxationThresholds.Single.Threshold2
+
+	// FERS Rules
+	config.GlobalAssumptions.FederalRules.FERSRules.TSPMatchingRate = regConfig.FERS.TSPMatchingRate
+	config.GlobalAssumptions.FederalRules.FERSRules.TSPMatchingThreshold = regConfig.FERS.TSPMatchingThreshold
+
+	// FEHB Config
+	config.GlobalAssumptions.FederalRules.FEHBConfig.PayPeriodsPerYear = regConfig.FEHB.PayPeriodsPerYear
+	config.GlobalAssumptions.FederalRules.FEHBConfig.RetirementCalculationMethod = regConfig.FEHB.RetirementCalculationMethod
+	config.GlobalAssumptions.FederalRules.FEHBConfig.RetirementPremiumMultiplier = regConfig.FEHB.RetirementPremiumMultiplier
+
+	// State Tax Config (for Pennsylvania)
+	if paRules, exists := regConfig.States["pennsylvania"]; exists {
+		config.GlobalAssumptions.FederalRules.StateLocalTaxConfig.PennsylvaniaRate = paRules.Rate
+	}
+
+	// TSP Statistical Models
+	config.GlobalAssumptions.TSPStatisticalModels.CFund.Mean = regConfig.TSPFunds.CFund.Mean
+	config.GlobalAssumptions.TSPStatisticalModels.CFund.StandardDev = regConfig.TSPFunds.CFund.StandardDev
+	config.GlobalAssumptions.TSPStatisticalModels.CFund.DataSource = regConfig.TSPFunds.CFund.DataSource
+	config.GlobalAssumptions.TSPStatisticalModels.CFund.LastUpdated = regConfig.TSPFunds.CFund.LastUpdated
+
+	config.GlobalAssumptions.TSPStatisticalModels.SFund.Mean = regConfig.TSPFunds.SFund.Mean
+	config.GlobalAssumptions.TSPStatisticalModels.SFund.StandardDev = regConfig.TSPFunds.SFund.StandardDev
+	config.GlobalAssumptions.TSPStatisticalModels.SFund.DataSource = regConfig.TSPFunds.SFund.DataSource
+	config.GlobalAssumptions.TSPStatisticalModels.SFund.LastUpdated = regConfig.TSPFunds.SFund.LastUpdated
+
+	config.GlobalAssumptions.TSPStatisticalModels.IFund.Mean = regConfig.TSPFunds.IFund.Mean
+	config.GlobalAssumptions.TSPStatisticalModels.IFund.StandardDev = regConfig.TSPFunds.IFund.StandardDev
+	config.GlobalAssumptions.TSPStatisticalModels.IFund.DataSource = regConfig.TSPFunds.IFund.DataSource
+	config.GlobalAssumptions.TSPStatisticalModels.IFund.LastUpdated = regConfig.TSPFunds.IFund.LastUpdated
+
+	config.GlobalAssumptions.TSPStatisticalModels.FFund.Mean = regConfig.TSPFunds.FFund.Mean
+	config.GlobalAssumptions.TSPStatisticalModels.FFund.StandardDev = regConfig.TSPFunds.FFund.StandardDev
+	config.GlobalAssumptions.TSPStatisticalModels.FFund.DataSource = regConfig.TSPFunds.FFund.DataSource
+	config.GlobalAssumptions.TSPStatisticalModels.FFund.LastUpdated = regConfig.TSPFunds.FFund.LastUpdated
+
+	config.GlobalAssumptions.TSPStatisticalModels.GFund.Mean = regConfig.TSPFunds.GFund.Mean
+	config.GlobalAssumptions.TSPStatisticalModels.GFund.StandardDev = regConfig.TSPFunds.GFund.StandardDev
+	config.GlobalAssumptions.TSPStatisticalModels.GFund.DataSource = regConfig.TSPFunds.GFund.DataSource
+	config.GlobalAssumptions.TSPStatisticalModels.GFund.LastUpdated = regConfig.TSPFunds.GFund.LastUpdated
+
+	// Monte Carlo Settings
+	config.GlobalAssumptions.MonteCarloSettings.TSPReturnVariability = regConfig.MonteCarlo.TSPReturnVariability
+	config.GlobalAssumptions.MonteCarloSettings.InflationVariability = regConfig.MonteCarlo.InflationVariability
+	config.GlobalAssumptions.MonteCarloSettings.COLAVariability = regConfig.MonteCarlo.COLAVariability
+	config.GlobalAssumptions.MonteCarloSettings.FEHBVariability = regConfig.MonteCarlo.FEHBVariability
+	config.GlobalAssumptions.MonteCarloSettings.MaxReasonableIncome = regConfig.MonteCarlo.MaxReasonableIncome
+
+	// Default TSP Allocation
+	config.GlobalAssumptions.MonteCarloSettings.DefaultTSPAllocation.CFund = regConfig.MonteCarlo.DefaultTSPAllocation.CFund
+	config.GlobalAssumptions.MonteCarloSettings.DefaultTSPAllocation.SFund = regConfig.MonteCarlo.DefaultTSPAllocation.SFund
+	config.GlobalAssumptions.MonteCarloSettings.DefaultTSPAllocation.IFund = regConfig.MonteCarlo.DefaultTSPAllocation.IFund
+	config.GlobalAssumptions.MonteCarloSettings.DefaultTSPAllocation.FFund = regConfig.MonteCarlo.DefaultTSPAllocation.FFund
+	config.GlobalAssumptions.MonteCarloSettings.DefaultTSPAllocation.GFund = regConfig.MonteCarlo.DefaultTSPAllocation.GFund
+
+	return nil
+}
