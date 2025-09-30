@@ -104,11 +104,13 @@ scenarios:
 ### 1. FERS Pension (Annuity) Calculations
 
 **Core Pension Formula:**
-```
+
+```text
 Annual Pension = High-3 Average Salary × Years of Service × Multiplier
 ```
 
 **Multiplier Logic:**
+
 - Standard: 1.0% per year of service
 - Enhanced: 1.1% per year if retiring at age 62+ with 20+ years service
 - Implementation must check both age at retirement and years of service
@@ -141,12 +143,14 @@ func CalculateFERSPension(employee Employee, retirementDate time.Time) PensionCa
 ```
 
 **FERS Special Retirement Supplement (SRS):**
+
 - Applies if retiring before age 62 with immediate annuity
 - Formula: `SS_Benefit_at_62 × (FERS_Service_Years ÷ 40)`
 - Subject to earnings test after Minimum Retirement Age ($23,400 limit for 2025)
 - Terminates at age 62 regardless of SS claiming decision
 
 **FERS COLA Implementation:**
+
 ```go
 func ApplyFERSCOLA(pensionAmount decimal.Decimal, cpiIncrease decimal.Decimal, retireeAge int) decimal.Decimal {
     // FERS COLAs only apply after age 62
@@ -170,6 +174,7 @@ func ApplyFERSCOLA(pensionAmount decimal.Decimal, cpiIncrease decimal.Decimal, r
 ### 2. TSP Modeling with Historical Performance Integration
 
 **Historical Performance Data for Modeling:**
+
 - C Fund (S&P 500): Long-term average 12.29% (1988-2020), 2024 return 24.96%
 - F Fund (Bond Index): Long-term average 6.29%, 2024 return 1.33%
 - G Fund (Government Securities): Long-term average 4.7%, stable but low returns
@@ -792,7 +797,7 @@ func GenerateScenarioComparison(baseline AnnualCashFlow, scenarios []RetirementS
 
 **Recommended Project Structure:**
 
-```
+```text
 fers-retirement-calculator/
 ├── cmd/
 │   └── cli/
@@ -1047,33 +1052,38 @@ func BenchmarkTSPProjection(b *testing.B) {
 
 ### 10. Development Roadmap and Implementation Phases
 
-**Phase 1: Core Calculations (4-6 weeks)**
+#### Phase 1: Core Calculations (4-6 weeks)
+
 - Implement basic FERS pension calculations with all multiplier rules
 - Build TSP withdrawal strategies and balance tracking
 - Create Social Security benefit calculations with WEP/GPO removal
 - Implement federal tax calculations with 2025 brackets
 - Add Pennsylvania and local tax rules
 
-**Phase 2: Advanced Features (3-4 weeks)**
+#### Phase 2: Advanced Features (3-4 weeks)
+
 - Implement FERS COLA rules and application logic
 - Add RMD calculations and compliance checking
 - Build FEHB premium tracking and Medicare integration
 - Create scenario comparison and analysis tools
 - Add comprehensive input validation
 
-**Phase 3: Output and Visualization (2-3 weeks)**
+#### Phase 3: Output and Visualization (2-3 weeks)
+
 - Build CLI interface with flexible output options
 - Create HTML report generation with embedded charts
 - Implement CSV export for external analysis
 - Add summary statistics and key insights generation
 
-**Phase 4: Monte Carlo and Advanced Analysis (3-4 weeks)**
+#### Phase 4: Monte Carlo and Advanced Analysis (3-4 weeks)
+
 - Integrate historical market data (TSP funds, inflation, interest rates)
 - Implement Monte Carlo simulation engine
 - Add portfolio longevity analysis and success rate calculations
 - Create sensitivity analysis for key parameters
 
-**Phase 5: Testing and Documentation (2-3 weeks)**
+#### Phase 5: Testing and Documentation (2-3 weeks)
+
 - Comprehensive unit test coverage (target 80%+)
 - Integration testing with real-world scenarios
 - Performance optimization for large simulations
@@ -1082,6 +1092,7 @@ func BenchmarkTSPProjection(b *testing.B) {
 ### Implementation Best Practices
 
 **Code Quality Guidelines:**
+
 - Use table-driven tests for all financial calculations
 - Implement comprehensive logging for debugging complex scenarios
 - Include extensive comments explaining financial calculation rationale
@@ -1089,6 +1100,7 @@ func BenchmarkTSPProjection(b *testing.B) {
 - Implement circuit breakers for external data sources
 
 **Financial Calculation Standards:**
+
 - Always use banker's rounding for monetary calculations
 - Round final results to cents, maintain precision during calculations
 - Validate all input ranges and handle edge cases
@@ -1096,6 +1108,7 @@ func BenchmarkTSPProjection(b *testing.B) {
 - Cross-reference calculations with authoritative sources
 
 **Data Management:**
+
 - Store historical data in versioned files with source attribution
 - Implement data validation and outlier detection
 - Provide fallback defaults for missing historical data

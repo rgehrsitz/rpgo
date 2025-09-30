@@ -30,7 +30,7 @@ The current Monte Carlo implementation (`internal/calculation/montecarlo.go`) is
 
 ### 🎯 **Integration Architecture**
 
-```
+```text
 Monte Carlo FERS Engine
 ├── Uses existing CalculationEngine
 ├── Uses existing domain.Configuration
@@ -45,6 +45,7 @@ Monte Carlo FERS Engine
 ### 📋 **Implementation Plan**
 
 #### Phase 1: Enhanced Monte Carlo Configuration
+
 ```go
 type FERSMonteCarloConfig struct {
     // Base configuration (reuses existing domain.Configuration)
@@ -64,6 +65,7 @@ type FERSMonteCarloConfig struct {
 ```
 
 #### Phase 2: Enhanced Monte Carlo Engine
+
 ```go
 type FERSMonteCarloEngine struct {
     CalculationEngine *CalculationEngine
@@ -82,6 +84,7 @@ func (fmce *FERSMonteCarloEngine) RunFERSMonteCarlo() (*FERSMonteCarloResult, er
 ```
 
 #### Phase 3: Enhanced Results Structure
+
 ```go
 type FERSMonteCarloResult struct {
     // Success metrics
@@ -107,6 +110,7 @@ type FERSMonteCarloResult struct {
 ### 🔧 **Technical Implementation**
 
 #### Step 1: Create FERS Monte Carlo Engine
+
 ```go
 // internal/calculation/fers_montecarlo.go
 package calculation
@@ -131,6 +135,7 @@ func NewFERSMonteCarloEngine(baseConfig *domain.Configuration, historicalData *H
 ```
 
 #### Step 2: Market Condition Generation
+
 ```go
 func (fmce *FERSMonteCarloEngine) generateMarketConditions() *domain.GlobalAssumptions {
     assumptions := fmce.config.BaseConfig.GlobalAssumptions.Clone()
@@ -153,6 +158,7 @@ func (fmce *FERSMonteCarloEngine) generateMarketConditions() *domain.GlobalAssum
 ```
 
 #### Step 3: Full FERS Simulation
+
 ```go
 func (fmce *FERSMonteCarloEngine) runSingleFERSSimulation() (*FERSMonteCarloSimulation, error) {
     // Generate market conditions
@@ -182,6 +188,7 @@ func (fmce *FERSMonteCarloEngine) runSingleFERSSimulation() (*FERSMonteCarloSimu
 ### 🎯 **CLI Integration**
 
 #### Enhanced Command Structure
+
 ```bash
 # Use existing config file with Monte Carlo
 ./rpgo calculate config.yaml --monte-carlo --simulations 1000
@@ -191,6 +198,7 @@ func (fmce *FERSMonteCarloEngine) runSingleFERSSimulation() (*FERSMonteCarloSimu
 ```
 
 #### Configuration File Integration
+
 ```yaml
 # config.yaml
 personal_details:
@@ -221,18 +229,21 @@ monte_carlo:
 ### 📊 **Enhanced Output**
 
 #### Success Metrics
+
 - **Income Sustainability Rate**: % of simulations where net income stays above target
 - **TSP Longevity**: Distribution of years until TSP depletion
 - **Income Volatility**: Standard deviation of annual net income
 - **Worst/Best Case**: 5th and 95th percentile outcomes
 
 #### Risk Assessment
+
 - **Low Risk**: 95%+ income sustainability, TSP lasts 25+ years
 - **Moderate Risk**: 85-95% sustainability, TSP lasts 20-25 years  
 - **High Risk**: 75-85% sustainability, TSP lasts 15-20 years
 - **Very High Risk**: <75% sustainability, TSP depletes early
 
 #### Recommendations
+
 - **For Low Success Rates**: Reduce retirement spending, work longer, increase savings
 - **For High Success Rates**: Consider more aggressive spending or earlier retirement
 - **Asset Allocation**: Optimize TSP fund allocation based on risk tolerance
@@ -254,4 +265,4 @@ monte_carlo:
 4. **Scenario Comparison**: Can compare different retirement strategies
 5. **Actionable Insights**: Provides specific recommendations for FERS employees
 
-This integration will transform the Monte Carlo from a simple portfolio tool into a comprehensive FERS retirement risk analysis system. 
+This integration will transform the Monte Carlo from a simple portfolio tool into a comprehensive FERS retirement risk analysis system.

@@ -74,23 +74,27 @@ result, err := simulator.RunSimulation(config)
 ## Withdrawal Strategies
 
 ### 1. Fixed Amount
+
 - **Description**: Withdraw the same dollar amount each year
 - **Use Case**: Simple budgeting, predictable income
 - **Risk**: No inflation protection, may deplete portfolio in high-inflation periods
 
 ### 2. Fixed Percentage
+
 - **Description**: Withdraw a fixed percentage of current portfolio balance
 - **Use Case**: Income varies with portfolio performance
 - **Risk**: Income volatility, may be insufficient in down markets
 
 ### 3. Inflation-Adjusted
+
 - **Description**: Initial withdrawal adjusted annually for inflation
 - **Use Case**: Maintains purchasing power over time
 - **Risk**: May deplete portfolio if returns don't keep pace with inflation
 
 ### 4. Guardrails
+
 - **Description**: Dynamic adjustment based on portfolio performance
-- **Logic**: 
+- **Logic**:
   - Reduce withdrawal by 10% if withdrawal rate exceeds 6%
   - Floor: Don't reduce below 80% of original withdrawal
 - **Use Case**: Balance income needs with portfolio sustainability
@@ -99,9 +103,11 @@ result, err := simulator.RunSimulation(config)
 ## TSP Configuration
 
 ### Important Limitation
+
 For Monte Carlo simulations to show proper TSP balance variability, **manual TSP allocations must be used instead of lifecycle funds**:
 
 ✅ **Recommended (shows variation)**:
+
 ```yaml
 tsp_allocation:
   c_fund: "0.60"  # 60% C Fund
@@ -112,6 +118,7 @@ tsp_allocation:
 ```
 
 ❌ **Avoid for Monte Carlo (produces identical results)**:
+
 ```yaml
 tsp_lifecycle_fund:
   fund_name: "L2030"
@@ -133,7 +140,8 @@ The simulation supports all TSP funds with customizable allocations:
 
 ### Example Allocations
 
-**Conservative (30/70)**
+#### Conservative (30/70)
+
 ```go
 {
     "F": decimal.NewFromFloat(0.7), // 70% bonds
@@ -141,7 +149,8 @@ The simulation supports all TSP funds with customizable allocations:
 }
 ```
 
-**Moderate (60/40)**
+#### Moderate (60/40)
+
 ```go
 {
     "C": decimal.NewFromFloat(0.4), // 40% large cap
@@ -150,7 +159,8 @@ The simulation supports all TSP funds with customizable allocations:
 }
 ```
 
-**Aggressive (80/20)**
+#### Aggressive (80/20)
+
 ```go
 {
     "C": decimal.NewFromFloat(0.5), // 50% large cap
@@ -163,12 +173,14 @@ The simulation supports all TSP funds with customizable allocations:
 ## Market Data Sources
 
 ### Historical Mode
+
 - **TSP Returns**: Actual annual returns from TSP.gov (1990-2023)
 - **Inflation**: CPI-U rates from BLS.gov
 - **COLA**: Social Security COLA rates from SSA.gov
 - **Sampling**: Random selection from historical years
 
 ### Statistical Mode
+
 - **Distributions**: Normal distributions based on historical statistics
 - **Correlation**: Simplified correlation modeling
 - **Advantage**: More scenarios, but less realistic market sequences
@@ -178,6 +190,7 @@ The simulation supports all TSP funds with customizable allocations:
 ### Success Metrics
 
 **Success Rate**: Percentage of simulations where portfolio lasts the full projection period
+
 - 🟢 **Low Risk**: 95%+ success rate
 - 🟡 **Moderate Risk**: 85-95% success rate  
 - 🟠 **High Risk**: 75-85% success rate
@@ -186,6 +199,7 @@ The simulation supports all TSP funds with customizable allocations:
 ### Percentile Analysis
 
 **Ending Balance Percentiles**: Distribution of final portfolio values
+
 - **P10**: 10% of simulations end with this balance or less
 - **P25**: 25% of simulations end with this balance or less
 - **P50**: Median ending balance
@@ -200,11 +214,13 @@ The simulation supports all TSP funds with customizable allocations:
 ## Performance Considerations
 
 ### Parallel Processing
+
 - Simulations run concurrently with semaphore limiting
 - Optimal for 1000+ simulations
 - Memory usage scales with simulation count
 
 ### Optimization Tips
+
 - Use 100-500 simulations for quick testing
 - Use 1000-5000 simulations for final analysis
 - Historical mode is more realistic but slower
@@ -213,7 +229,8 @@ The simulation supports all TSP funds with customizable allocations:
 ## Example Results
 
 ### Scenario 1: Conservative 4% Rule
-```
+
+```text
 Initial Balance: $1,000,000
 Annual Withdrawal: $40,000 (4%)
 Asset Allocation: 60% C, 20% S, 10% I, 10% F
@@ -226,7 +243,8 @@ Results:
 ```
 
 ### Scenario 2: Aggressive 6% Rule
-```
+
+```text
 Initial Balance: $500,000
 Annual Withdrawal: $30,000 (6%)
 Asset Allocation: 80% C, 20% S
@@ -241,18 +259,21 @@ Results:
 ## Recommendations
 
 ### For Low Success Rates (<85%)
+
 - Reduce withdrawal amount
 - Increase bond allocation (F/G funds)
 - Consider working longer
 - Increase savings rate
 
 ### For High Success Rates (>95%)
+
 - Current plan appears sustainable
 - Consider increasing withdrawal
 - Take more investment risk
 - Plan for legacy goals
 
 ### General Guidelines
+
 - Start with 4% withdrawal rate
 - Use guardrails strategy for flexibility
 - Maintain 20-40% bond allocation
@@ -261,6 +282,7 @@ Results:
 ## Future Enhancements
 
 ### Planned Features
+
 - **Correlation Modeling**: More sophisticated asset correlation
 - **Tax Modeling**: Include tax implications in simulations
 - **Sequence Risk Analysis**: Focus on early retirement years
@@ -268,6 +290,7 @@ Results:
 - **Scenario Comparison**: Side-by-side strategy analysis
 
 ### Advanced Withdrawal Strategies
+
 - **Floor-Ceiling**: Minimum/maximum withdrawal bounds
 - **Bond Tent**: Dynamic asset allocation based on age
 - **Variable Percentage**: Dynamic withdrawal rates
@@ -276,6 +299,7 @@ Results:
 ## Testing
 
 ### Test Coverage
+
 - ✅ Basic simulation functionality
 - ✅ Historical vs statistical modes
 - ✅ All withdrawal strategies
@@ -284,6 +308,7 @@ Results:
 - ✅ Error handling
 
 ### Validation
+
 - Success rates align with academic research
 - Historical replay matches known outcomes
 - Statistical distributions match historical data
@@ -298,4 +323,4 @@ The Monte Carlo engine integrates with the existing FERS retirement calculator:
 - **CLI Interface**: Consistent with other commands
 - **Output Formats**: Can be extended to HTML/JSON reports
 
-This implementation provides a robust foundation for probabilistic retirement planning analysis while maintaining compatibility with the existing deterministic calculation engine. 
+This implementation provides a robust foundation for probabilistic retirement planning analysis while maintaining compatibility with the existing deterministic calculation engine.
