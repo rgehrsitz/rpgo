@@ -299,8 +299,6 @@ func (ce *CalculationEngine) calculateCurrentNetIncomeGeneric(household *domain.
 
 // Legacy two-person GenerateAnnualProjection removed; generic projection handled via GenerateAnnualProjectionGeneric
 
-// calculateMedicarePremium moved to medicare.go
-
 // RunScenarios runs all scenarios and returns a comparison
 func (ce *CalculationEngine) RunScenarios(config *domain.Configuration) (*domain.ScenarioComparison, error) {
 	ctx := context.Background()

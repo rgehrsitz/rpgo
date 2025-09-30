@@ -27,10 +27,10 @@ The Monte Carlo simulation engine provides probabilistic analysis of retirement 
 
 ```bash
 # Basic Monte Carlo simulation
-./fers-calc historical monte-carlo ./data
+./rpgo historical monte-carlo ./data
 
 # Customized simulation
-./fers-calc historical monte-carlo ./data \
+./rpgo historical monte-carlo ./data \
   --simulations 1000 \
   --years 30 \
   --balance 1000000 \
@@ -38,7 +38,7 @@ The Monte Carlo simulation engine provides probabilistic analysis of retirement 
   --strategy guardrails
 
 # Statistical mode (not historical)
-./fers-calc historical monte-carlo ./data \
+./rpgo historical monte-carlo ./data \
   --simulations 500 \
   --historical false
 ```

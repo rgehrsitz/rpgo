@@ -184,10 +184,10 @@ func (fmce *FERSMonteCarloEngine) runSingleFERSSimulation() (*FERSMonteCarloSimu
 #### Enhanced Command Structure
 ```bash
 # Use existing config file with Monte Carlo
-./fers-calc calculate config.yaml --monte-carlo --simulations 1000
+./rpgo calculate config.yaml --monte-carlo --simulations 1000
 
 # Or dedicated Monte Carlo command with config
-./fers-calc monte-carlo config.yaml --simulations 1000 --historical
+./rpgo monte-carlo config.yaml --simulations 1000 --historical
 ```
 
 #### Configuration File Integration

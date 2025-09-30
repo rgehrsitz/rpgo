@@ -35,7 +35,7 @@ A comprehensive retirement planning calculator for Federal Employees Retirement 
 git clone https://github.com/rgehrsitz/rpgo.git
 cd rpgo
 go mod tidy
-go build -o fers-calc ./cmd/rpgo
+go build -o rpgo ./cmd/rpgo
 ```
 
 ## Usage
@@ -53,30 +53,30 @@ go build -o fers-calc ./cmd/rpgo
 1. **Run calculations**
 
   ```bash
-  ./fers-calc calculate my_config.yaml
+  ./rpgo calculate my_config.yaml
   ```
 
 1. **Generate an HTML report**
 
   ```bash
-  ./fers-calc calculate my_config.yaml --format html > report.html
+  ./rpgo calculate my_config.yaml --format html > report.html
   ```
 
 1. **Run portfolio Monte Carlo simulations**
 
   ```bash
-  ./fers-calc historical monte-carlo ./data --simulations 1000 --balance 1000000 --withdrawal 40000
+  ./rpgo historical monte-carlo ./data --simulations 1000 --balance 1000000 --withdrawal 40000
   ```
 
 ### Core CLI commands
 
-- `./fers-calc calculate [input-file]` — deterministic retirement projection using a YAML configuration.
-- `./fers-calc validate [input-file]` — schema and rules validation without running a projection.
-- `./fers-calc break-even [input-file]` — computes TSP withdrawal rates needed to match current net income.
-- `./fers-calc historical load [data-path]` — load and summarize historical datasets.
-- `./fers-calc historical stats [data-path]` — print descriptive statistics for historical datasets.
-- `./fers-calc historical query [data-path] [year] [fund]` — fetch a single data point (fund return, inflation, or COLA).
-- `./fers-calc historical monte-carlo [data-path] [flags]` — run portfolio-only Monte Carlo simulations using flag-driven parameters.
+- `./rpgo calculate [input-file]` — deterministic retirement projection using a YAML configuration.
+- `./rpgo validate [input-file]` — schema and rules validation without running a projection.
+- `./rpgo break-even [input-file]` — computes TSP withdrawal rates needed to match current net income.
+- `./rpgo historical load [data-path]` — load and summarize historical datasets.
+- `./rpgo historical stats [data-path]` — print descriptive statistics for historical datasets.
+- `./rpgo historical query [data-path] [year] [fund]` — fetch a single data point (fund return, inflation, or COLA).
+- `./rpgo historical monte-carlo [data-path] [flags]` — run portfolio-only Monte Carlo simulations using flag-driven parameters.
 
 ### Logging and Debug Mode
 
@@ -317,7 +317,7 @@ tsp_allocation:
 The current CLI ships with a portfolio-only Monte Carlo simulator under the `historical` command group. It models withdrawal strategies against TSP fund return histories (or statistical distributions) without processing a full FERS configuration.
 
 ```bash
-./fers-calc historical monte-carlo ./data \
+./rpgo historical monte-carlo ./data \
   --simulations 1000 \
   --balance 1000000 \
   --withdrawal 40000 \

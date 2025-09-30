@@ -899,7 +899,7 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-    Use:   "fers-calc",
+    Use:   "rpgo",
     Short: "FERS Retirement Calculator",
     Long:  "Comprehensive retirement planning calculator for federal employees",
 }

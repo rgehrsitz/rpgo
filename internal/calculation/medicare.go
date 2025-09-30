@@ -170,37 +170,3 @@ func IsMedicareEligible(birthDate, atDate time.Time) bool {
 	}
 	return age >= 65
 }
-
-// calculateMedicarePremium calculates Medicare Part B premiums with IRMAA considerations
-// based on current year income (simplified - real IRMAA uses 2-year-old MAGI)
-func (ce *CalculationEngine) calculateMedicarePremium(robert, dawn *domain.Employee, projectionDate time.Time,
-	pensionRobert, pensionDawn, tspWithdrawalRobert, tspWithdrawalDawn, ssRobert, ssDawn decimal.Decimal) decimal.Decimal {
-	var totalPremium decimal.Decimal
-
-	// Estimate MAGI for IRMAA calculation (simplified)
-	// In reality, IRMAA uses MAGI from 2 years prior
-	totalPensionIncome := pensionRobert.Add(pensionDawn)
-	totalTSPWithdrawals := tspWithdrawalRobert.Add(tspWithdrawalDawn)
-
-	// Calculate taxable portion of Social Security (simplified)
-	totalSSBenefits := ssRobert.Add(ssDawn)
-	otherIncome := totalPensionIncome.Add(totalTSPWithdrawals)
-	taxableSSBenefits := ce.TaxCalc.CalculateSocialSecurityTaxation(totalSSBenefits, otherIncome)
-
-	// Estimate combined MAGI
-	estimatedMAGI := EstimateMAGI(totalPensionIncome, totalTSPWithdrawals, taxableSSBenefits, decimal.Zero)
-
-	// Check if Robert is Medicare eligible
-	if IsMedicareEligible(robert.BirthDate, projectionDate) {
-		robertPremium := ce.MedicareCalc.CalculateAnnualPartBCost(estimatedMAGI, true) // Married filing jointly
-		totalPremium = totalPremium.Add(robertPremium)
-	}
-
-	// Check if Dawn is Medicare eligible
-	if IsMedicareEligible(dawn.BirthDate, projectionDate) {
-		dawnPremium := ce.MedicareCalc.CalculateAnnualPartBCost(estimatedMAGI, true) // Married filing jointly
-		totalPremium = totalPremium.Add(dawnPremium)
-	}
-
-	return totalPremium
-}
