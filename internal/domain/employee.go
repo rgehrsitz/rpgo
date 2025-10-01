@@ -487,6 +487,76 @@ type GenericScenarioMortality struct {
 	Assumptions  *MortalityAssumptions     `yaml:"assumptions,omitempty" json:"assumptions,omitempty"`
 }
 
+// DeepCopy creates a deep copy of the GenericScenario
+func (gs *GenericScenario) DeepCopy() *GenericScenario {
+	if gs == nil {
+		return nil
+	}
+
+	// Copy the scenario
+	copy := &GenericScenario{
+		Name:                 gs.Name,
+		ParticipantScenarios: make(map[string]ParticipantScenario),
+	}
+
+	// Deep copy participant scenarios
+	for name, ps := range gs.ParticipantScenarios {
+		psCopy := ParticipantScenario{
+			ParticipantName:       ps.ParticipantName,
+			SSStartAge:            ps.SSStartAge,
+			TSPWithdrawalStrategy: ps.TSPWithdrawalStrategy,
+		}
+
+		// Copy pointer fields
+		if ps.RetirementDate != nil {
+			dateCopy := *ps.RetirementDate
+			psCopy.RetirementDate = &dateCopy
+		}
+		if ps.TSPWithdrawalTargetMonthly != nil {
+			valCopy := *ps.TSPWithdrawalTargetMonthly
+			psCopy.TSPWithdrawalTargetMonthly = &valCopy
+		}
+		if ps.TSPWithdrawalRate != nil {
+			valCopy := *ps.TSPWithdrawalRate
+			psCopy.TSPWithdrawalRate = &valCopy
+		}
+
+		copy.ParticipantScenarios[name] = psCopy
+	}
+
+	// Deep copy mortality if present
+	if gs.Mortality != nil {
+		copy.Mortality = &GenericScenarioMortality{
+			Participants: make(map[string]*MortalitySpec),
+		}
+
+		for name, spec := range gs.Mortality.Participants {
+			if spec != nil {
+				specCopy := &MortalitySpec{}
+				if spec.DeathDate != nil {
+					dateCopy := *spec.DeathDate
+					specCopy.DeathDate = &dateCopy
+				}
+				if spec.DeathAge != nil {
+					ageCopy := *spec.DeathAge
+					specCopy.DeathAge = &ageCopy
+				}
+				copy.Mortality.Participants[name] = specCopy
+			}
+		}
+
+		if gs.Mortality.Assumptions != nil {
+			copy.Mortality.Assumptions = &MortalityAssumptions{
+				TSPSpousalTransfer:     gs.Mortality.Assumptions.TSPSpousalTransfer,
+				FilingStatusSwitch:     gs.Mortality.Assumptions.FilingStatusSwitch,
+				SurvivorSpendingFactor: gs.Mortality.Assumptions.SurvivorSpendingFactor,
+			}
+		}
+	}
+
+	return copy
+}
+
 // Age calculates the age of the participant at a given date
 func (p *Participant) Age(atDate time.Time) int {
 	age := atDate.Year() - p.BirthDate.Year()
