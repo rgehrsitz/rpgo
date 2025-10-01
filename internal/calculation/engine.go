@@ -263,24 +263,26 @@ func (ce *CalculationEngine) calculateCurrentNetIncomeGeneric(household *domain.
 		}
 	}
 
-	// Calculate taxes (simplified - use first two participants' ages)
-	ageFirst := 0
-	ageSecond := 0
-	salaryFirst := decimal.Zero
-	salarySecond := decimal.Zero
+	// Calculate taxes (simplified - use first two participants' ages and salaries)
+	// For households with more than 2 participants, only the first two are considered
+	// for age-based deductions (consistent with married filing jointly tax treatment)
+	ageParticipant1 := 0
+	ageParticipant2 := 0
+	salaryParticipant1 := decimal.Zero
+	salaryParticipant2 := decimal.Zero
 
 	if len(ages) > 0 {
-		ageFirst = ages[0]
-		salaryFirst = salaries[0]
+		ageParticipant1 = ages[0]
+		salaryParticipant1 = salaries[0]
 	}
 	if len(ages) > 1 {
-		ageSecond = ages[1]
-		salarySecond = salaries[1]
+		ageParticipant2 = ages[1]
+		salaryParticipant2 = salaries[1]
 	}
 
 	// Calculate taxes (excluding FICA for now, will calculate separately)
-	currentTaxableIncome := CalculateCurrentTaxableIncome(salaryFirst, salarySecond)
-	federalTax, stateTax, localTax, _ := ce.TaxCalc.CalculateTotalTaxes(currentTaxableIncome, false, ageFirst, ageSecond, grossIncome)
+	currentTaxableIncome := CalculateCurrentTaxableIncome(salaryParticipant1, salaryParticipant2)
+	federalTax, stateTax, localTax, _ := ce.TaxCalc.CalculateTotalTaxes(currentTaxableIncome, false, ageParticipant1, ageParticipant2, grossIncome)
 
 	// Calculate FICA taxes for each individual separately
 	ficaTax := decimal.Zero
@@ -329,11 +331,14 @@ func (ce *CalculationEngine) RunScenarios(config *domain.Configuration) (*domain
 	return comparison, nil
 }
 
+// Calculate is a LEGACY function for backwards compatibility with old integration tests only.
+// New code should use calculateCurrentNetIncomeGeneric() which works with any participant names.
+// The parameter names 'robert' and 'dawn' are legacy names representing first and second participants.
 func (nic *NetIncomeCalculator) Calculate(robert, dawn *domain.Employee, debug bool) decimal.Decimal {
 	// Calculate gross income
 	grossIncome := robert.CurrentSalary.Add(dawn.CurrentSalary)
 
-	// Calculate FEHB premiums (only Robert pays FEHB, Dawn has FSA-HC)
+	// Calculate FEHB premiums (only first participant pays FEHB in legacy format)
 	fehbPremium := robert.FEHBPremiumPerPayPeriod.Mul(decimal.NewFromInt(26)) // 26 pay periods per year
 
 	// Calculate TSP contributions (pre-tax)
@@ -342,27 +347,27 @@ func (nic *NetIncomeCalculator) Calculate(robert, dawn *domain.Employee, debug b
 	// Calculate taxes - use projection start date for age calculation
 	projectionStartYear := ProjectionBaseYear
 	projectionStartDate := time.Date(projectionStartYear, 1, 1, 0, 0, 0, 0, time.UTC)
-	ageRobert := robert.Age(projectionStartDate)
-	ageDawn := dawn.Age(projectionStartDate)
+	ageParticipant1 := robert.Age(projectionStartDate)
+	ageParticipant2 := dawn.Age(projectionStartDate)
 
 	// Calculate taxes (excluding FICA for now, will calculate separately)
 	currentTaxableIncome := CalculateCurrentTaxableIncome(robert.CurrentSalary, dawn.CurrentSalary)
-	federalTax, stateTax, localTax, _ := nic.TaxCalc.CalculateTotalTaxes(currentTaxableIncome, false, ageRobert, ageDawn, grossIncome)
+	federalTax, stateTax, localTax, _ := nic.TaxCalc.CalculateTotalTaxes(currentTaxableIncome, false, ageParticipant1, ageParticipant2, grossIncome)
 
 	// Calculate FICA taxes for each individual separately, as SS wage base applies per individual
-	robertFICA := nic.TaxCalc.FICATaxCalc.CalculateFICA(robert.CurrentSalary, robert.CurrentSalary)
-	dawnFICA := nic.TaxCalc.FICATaxCalc.CalculateFICA(dawn.CurrentSalary, dawn.CurrentSalary)
-	ficaTax := robertFICA.Add(dawnFICA)
+	participant1FICA := nic.TaxCalc.FICATaxCalc.CalculateFICA(robert.CurrentSalary, robert.CurrentSalary)
+	participant2FICA := nic.TaxCalc.FICATaxCalc.CalculateFICA(dawn.CurrentSalary, dawn.CurrentSalary)
+	ficaTax := participant1FICA.Add(participant2FICA)
 
 	// Calculate net income: gross - taxes - FEHB - TSP contributions
 	netIncome := grossIncome.Sub(federalTax).Sub(stateTax).Sub(localTax).Sub(ficaTax).Sub(fehbPremium).Sub(tspContributions)
 
-	// Debug output for verification
+	// Debug output for verification (LEGACY output - use generic calculation for new code)
 	if debug {
-		nic.Logger.Debugf("CURRENT NET INCOME CALCULATION BREAKDOWN:")
-		nic.Logger.Debugf("=========================================")
-		nic.Logger.Debugf("Robert's Salary:        $%s", robert.CurrentSalary.StringFixed(2))
-		nic.Logger.Debugf("Dawn's Salary:          $%s", dawn.CurrentSalary.StringFixed(2))
+		nic.Logger.Debugf("CURRENT NET INCOME CALCULATION BREAKDOWN (LEGACY):")
+		nic.Logger.Debugf("===================================================")
+		nic.Logger.Debugf("Participant 1 Salary:   $%s", robert.CurrentSalary.StringFixed(2))
+		nic.Logger.Debugf("Participant 2 Salary:   $%s", dawn.CurrentSalary.StringFixed(2))
 		nic.Logger.Debugf("Combined Gross Income:  $%s", grossIncome.StringFixed(2))
 		nic.Logger.Debugf("")
 		nic.Logger.Debugf("DEDUCTIONS:")
@@ -370,7 +375,7 @@ func (nic *NetIncomeCalculator) Calculate(robert, dawn *domain.Employee, debug b
 		nic.Logger.Debugf("  State Tax:            $%s", stateTax.StringFixed(2))
 		nic.Logger.Debugf("  Local Tax:            $%s", localTax.StringFixed(2))
 		nic.Logger.Debugf("  FICA Tax:             $%s", ficaTax.StringFixed(2))
-		nic.Logger.Debugf("  FEHB Premium (Robert): $%s", fehbPremium.StringFixed(2))
+		nic.Logger.Debugf("  FEHB Premium:         $%s", fehbPremium.StringFixed(2))
 		nic.Logger.Debugf("  TSP Contributions:    $%s", tspContributions.StringFixed(2))
 		nic.Logger.Debugf("  Total Deductions:     $%s", federalTax.Add(stateTax).Add(localTax).Add(ficaTax).Add(fehbPremium).Add(tspContributions).StringFixed(2))
 		nic.Logger.Debugf("")

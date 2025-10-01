@@ -350,9 +350,10 @@ func NewComprehensiveTaxCalculatorWithConfig(federalRules domain.FederalRules) *
 }
 
 // CalculateTotalTaxes calculates all applicable taxes with inflation-adjusted tax brackets
-func (ctc *ComprehensiveTaxCalculator) CalculateTotalTaxes(taxableIncome domain.TaxableIncome, isRetired bool, ageRobert, ageDawn int, workingIncome decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
+// ageParticipant1 and ageParticipant2 are the ages of the first and second household participants (0 if single filer)
+func (ctc *ComprehensiveTaxCalculator) CalculateTotalTaxes(taxableIncome domain.TaxableIncome, isRetired bool, ageParticipant1, ageParticipant2 int, workingIncome decimal.Decimal) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
 	// Calculate federal tax with inflation-adjusted brackets
-	federalTax := ctc.calculateFederalTaxWithInflation(taxableIncome, ageRobert, ageDawn)
+	federalTax := ctc.calculateFederalTaxWithInflation(taxableIncome, ageParticipant1, ageParticipant2)
 
 	// Calculate state tax
 	stateTax := ctc.StateTaxCalc.CalculateTax(taxableIncome, isRetired)
@@ -367,7 +368,8 @@ func (ctc *ComprehensiveTaxCalculator) CalculateTotalTaxes(taxableIncome domain.
 }
 
 // calculateFederalTaxWithInflation calculates federal tax with inflation-adjusted brackets
-func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithInflation(taxableIncome domain.TaxableIncome, ageRobert, ageDawn int) decimal.Decimal {
+// ageParticipant1 and ageParticipant2 are the ages of the first and second household participants (0 if single filer)
+func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithInflation(taxableIncome domain.TaxableIncome, ageParticipant1, ageParticipant2 int) decimal.Decimal {
 	// Calculate total taxable income
 	totalIncome := taxableIncome.Salary.Add(taxableIncome.FERSPension).Add(taxableIncome.TSPWithdrawalsTrad).Add(taxableIncome.TaxableSSBenefits).Add(taxableIncome.OtherTaxableIncome)
 
@@ -375,10 +377,10 @@ func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithInflation(taxableI
 	standardDeduction := ctc.FederalTaxCalc.StandardDeduction
 
 	// Add additional standard deduction for taxpayers 65 and older
-	if ageRobert >= 65 {
+	if ageParticipant1 >= 65 {
 		standardDeduction = standardDeduction.Add(ctc.FederalTaxCalc.AdditionalStdDed)
 	}
-	if ageDawn >= 65 {
+	if ageParticipant2 >= 65 {
 		standardDeduction = standardDeduction.Add(ctc.FederalTaxCalc.AdditionalStdDed)
 	}
 
@@ -493,8 +495,9 @@ func CalculateTaxableIncome(cashFlow domain.AnnualCashFlow, isRetired bool) doma
 }
 
 // CalculateCurrentTaxableIncome calculates taxable income for current employment
-func CalculateCurrentTaxableIncome(robertSalary, dawnSalary decimal.Decimal) domain.TaxableIncome {
-	totalSalary := robertSalary.Add(dawnSalary)
+// salaryParticipant1 and salaryParticipant2 are the salaries of the first and second household participants
+func CalculateCurrentTaxableIncome(salaryParticipant1, salaryParticipant2 decimal.Decimal) domain.TaxableIncome {
+	totalSalary := salaryParticipant1.Add(salaryParticipant2)
 
 	return domain.TaxableIncome{
 		Salary:             totalSalary,
