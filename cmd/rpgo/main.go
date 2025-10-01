@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -9,9 +10,11 @@ import (
 	"time"
 
 	"github.com/rgehrsitz/rpgo/internal/calculation"
+	"github.com/rgehrsitz/rpgo/internal/compare"
 	"github.com/rgehrsitz/rpgo/internal/config"
 	"github.com/rgehrsitz/rpgo/internal/domain"
 	"github.com/rgehrsitz/rpgo/internal/output"
+	"github.com/rgehrsitz/rpgo/internal/transform"
 	"github.com/shopspring/decimal"
 	"github.com/spf13/cobra"
 )
@@ -235,6 +238,152 @@ var breakEvenCmd = &cobra.Command{
 	},
 }
 
+var compareCmd = &cobra.Command{
+	Use:   "compare [input-file]",
+	Short: "Compare retirement scenarios using built-in strategy templates",
+	Long: `Compare a base retirement scenario against alternative strategies.
+
+Examples:
+  ./rpgo compare config.yaml --base Base --with postpone_1yr,delay_ss_70
+  ./rpgo compare config.yaml --base Base --with conservative,aggressive --format csv
+  ./rpgo compare config.yaml --list-templates  # Show all available templates
+`,
+	Args: cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		// Handle --list-templates flag
+		listTemplates, _ := cmd.Flags().GetBool("list-templates")
+		if listTemplates {
+			// Get participant name for templates (or use default)
+			participantName, _ := cmd.Flags().GetString("participant")
+			if participantName == "" {
+				participantName = "Participant" // default placeholder
+			}
+
+			registry := transform.CreateBuiltInTemplates(participantName)
+			fmt.Print(transform.GetTemplateHelp(registry))
+			return
+		}
+
+		// Require input file for actual comparison
+		if len(args) == 0 {
+			log.Fatal("input file required for comparison (use --list-templates to see available templates)")
+		}
+
+		inputFile := args[0]
+
+		// Parse input
+		parser := config.NewInputParser()
+		regulatoryFile, _ := cmd.Flags().GetString("regulatory-config")
+
+		var configData *domain.Configuration
+		var err error
+
+		// Try to load with regulatory config if specified or if regulatory.yaml exists
+		if regulatoryFile != "" || fileExists("regulatory.yaml") {
+			if regulatoryFile == "" {
+				regulatoryFile = "regulatory.yaml"
+			}
+
+			configData, err = parser.LoadFromFileWithRegulatory(inputFile, regulatoryFile)
+			if err != nil {
+				fmt.Printf("Failed to load with regulatory config: %v\n", err)
+				fmt.Printf("Falling back to standalone config loading...\n")
+				configData, err = parser.LoadFromFile(inputFile)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		} else {
+			configData, err = parser.LoadFromFile(inputFile)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
+		// Get comparison options
+		baseScenarioName, _ := cmd.Flags().GetString("base")
+		templatesStr, _ := cmd.Flags().GetString("with")
+		participantName, _ := cmd.Flags().GetString("participant")
+		outputFormat, _ := cmd.Flags().GetString("format")
+
+		if baseScenarioName == "" {
+			log.Fatal("--base flag is required to specify the base scenario name")
+		}
+
+		if templatesStr == "" {
+			log.Fatal("--with flag is required to specify templates to compare (or use --list-templates)")
+		}
+
+		// Parse template list
+		templateNames := transform.ParseTemplateList(templatesStr)
+		if len(templateNames) == 0 {
+			log.Fatal("no valid templates specified in --with flag")
+		}
+
+		// Determine participant name
+		if participantName == "" {
+			// Try to get first participant from household
+			if len(configData.Household.Participants) > 0 {
+				participantName = configData.Household.Participants[0].Name
+			} else {
+				log.Fatal("--participant flag required when household has multiple participants")
+			}
+		}
+
+		// Create calculation engine
+		engine := calculation.NewCalculationEngineWithConfig(configData.GlobalAssumptions.FederalRules)
+		debugMode, _ := cmd.Flags().GetBool("debug")
+		if debugMode {
+			engine.SetLogger(simpleCLILogger{})
+			engine.Debug = true
+		}
+
+		// Create comparison engine
+		compareEngine := compare.NewCompareEngine(engine)
+
+		// Run comparison
+		ctx := context.Background()
+		comparisonSet, err := compareEngine.Compare(ctx, configData, compare.CompareOptions{
+			BaseScenarioName: baseScenarioName,
+			Templates:        templateNames,
+			ParticipantName:  participantName,
+		})
+		if err != nil {
+			log.Fatalf("Comparison failed: %v", err)
+		}
+
+		// Set config path for display
+		comparisonSet.ConfigPath = inputFile
+
+		// Format and output results
+		switch strings.ToLower(outputFormat) {
+		case "csv":
+			formatter := &compare.CSVFormatter{}
+			output, err := formatter.Format(comparisonSet)
+			if err != nil {
+				log.Fatalf("Failed to format CSV: %v", err)
+			}
+			fmt.Print(output)
+
+		case "json":
+			formatter := &compare.JSONFormatter{Pretty: true}
+			output, err := formatter.Format(comparisonSet)
+			if err != nil {
+				log.Fatalf("Failed to format JSON: %v", err)
+			}
+			fmt.Print(output)
+
+		case "table", "console", "":
+			formatter := &compare.TableFormatter{}
+			output := formatter.Format(comparisonSet)
+			fmt.Print(output)
+
+		default:
+			log.Fatalf("Unknown output format: %s (valid: table, csv, json)", outputFormat)
+		}
+	},
+}
+
 // Monte Carlo command removed (legacy)
 
 func init() {
@@ -246,10 +395,20 @@ func init() {
 	// Break-even command flags
 	breakEvenCmd.Flags().Bool("debug", false, "Enable debug output for detailed calculations")
 
+	// Compare command flags
+	compareCmd.Flags().String("base", "", "Base scenario name to compare against (required)")
+	compareCmd.Flags().String("with", "", "Comma-separated list of templates to compare (required)")
+	compareCmd.Flags().StringP("format", "f", "table", "Output format (table, csv, json)")
+	compareCmd.Flags().String("participant", "", "Participant name for template application (auto-detected if not specified)")
+	compareCmd.Flags().Bool("list-templates", false, "List all available scenario templates")
+	compareCmd.Flags().Bool("debug", false, "Enable debug output for detailed calculations")
+	compareCmd.Flags().String("regulatory-config", "", "Path to regulatory config file (default: regulatory.yaml if it exists)")
+
 	// FERS Monte Carlo command flags
 	rootCmd.AddCommand(calculateCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(breakEvenCmd)
+	rootCmd.AddCommand(compareCmd)
 	rootCmd.AddCommand(versionCmd())
 
 	// Initialize historical command

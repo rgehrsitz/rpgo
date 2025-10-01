@@ -9,6 +9,7 @@ A comprehensive retirement planning calculator for Federal Employees Retirement 
 - **TSP Lifecycle Fund Limitation**: For Monte Carlo simulations, manual TSP allocations are recommended over lifecycle funds for proper market variability
 - **Social Security Integration**: Full benefit calculations with 2025 WEP/GPO repeal implementation (2025 wage base: $176,100)
 - **Tax Modeling**: Complete federal, state (Pennsylvania), and local tax calculations
+- **Scenario Comparison**: Compare retirement strategies side-by-side using built-in templates for retirement timing, Social Security claiming, and TSP withdrawals
 - **Multiple Scenarios**: Compare multiple retirement scenarios simultaneously
 - **Long-term Projections**: 25+ year projections with COLA adjustments
 - **Multiple Output Formats**: Console, HTML, JSON, and CSV reports
@@ -71,12 +72,34 @@ go build -o rpgo ./cmd/rpgo
 ### Core CLI commands
 
 - `./rpgo calculate [input-file]` — deterministic retirement projection using a YAML configuration.
+- `./rpgo compare [input-file]` — compare retirement strategies using built-in templates (see [Compare Command docs](docs/COMPARE_COMMAND.md)).
 - `./rpgo validate [input-file]` — schema and rules validation without running a projection.
 - `./rpgo break-even [input-file]` — computes TSP withdrawal rates needed to match current net income.
 - `./rpgo historical load [data-path]` — load and summarize historical datasets.
 - `./rpgo historical stats [data-path]` — print descriptive statistics for historical datasets.
 - `./rpgo historical query [data-path] [year] [fund]` — fetch a single data point (fund return, inflation, or COLA).
 - `./rpgo historical monte-carlo [data-path] [flags]` — run portfolio-only Monte Carlo simulations using flag-driven parameters.
+
+#### Compare Command Examples
+
+```bash
+# List all available strategy templates
+./rpgo compare --list-templates
+
+# Compare retirement timing options
+./rpgo compare my_config.yaml --base "Base Scenario" --with postpone_1yr,postpone_2yr
+
+# Compare Social Security claiming strategies
+./rpgo compare my_config.yaml --base "Base Scenario" --with delay_ss_67,delay_ss_70
+
+# Compare comprehensive strategies
+./rpgo compare my_config.yaml --base "Base Scenario" --with conservative,aggressive
+
+# Export comparison to CSV
+./rpgo compare my_config.yaml --base "Base Scenario" --with conservative,aggressive --format csv > comparison.csv
+```
+
+See [Compare Command Documentation](docs/COMPARE_COMMAND.md) for detailed usage and examples.
 
 ### Logging and Debug Mode
 
