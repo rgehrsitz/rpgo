@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rgehrsitz/rpgo/internal/breakeven"
 	"github.com/rgehrsitz/rpgo/internal/calculation"
 	"github.com/rgehrsitz/rpgo/internal/compare"
 	"github.com/rgehrsitz/rpgo/internal/config"
@@ -384,6 +385,202 @@ Examples:
 	},
 }
 
+var optimizeCmd = &cobra.Command{
+	Use:   "optimize [input-file]",
+	Short: "Find optimal retirement parameters using break-even solver",
+	Long: `Optimize retirement parameters to achieve specific goals.
+
+Examples:
+  # Find TSP rate to match target income
+  ./rpgo optimize config.yaml --scenario "Base" --target tsp_rate --goal match_income --target-income 120000
+
+  # Find optimal retirement date to maximize income
+  ./rpgo optimize config.yaml --scenario "Base" --target retirement_date --goal maximize_income
+
+  # Find optimal SS age to maximize lifetime income
+  ./rpgo optimize config.yaml --scenario "Base" --target ss_age --goal maximize_income
+
+  # Run all optimizations
+  ./rpgo optimize config.yaml --scenario "Base" --target all --goal maximize_income
+`,
+	Args: cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		inputFile := args[0]
+
+		// Parse input
+		parser := config.NewInputParser()
+		configData, err := parser.LoadFromFile(inputFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Get optimization parameters
+		scenarioName, _ := cmd.Flags().GetString("scenario")
+		targetStr, _ := cmd.Flags().GetString("target")
+		goalStr, _ := cmd.Flags().GetString("goal")
+		participant, _ := cmd.Flags().GetString("participant")
+		outputFormat, _ := cmd.Flags().GetString("format")
+
+		if scenarioName == "" {
+			log.Fatal("--scenario flag is required")
+		}
+		if targetStr == "" {
+			log.Fatal("--target flag is required (tsp_rate, retirement_date, ss_age, or all)")
+		}
+		if goalStr == "" {
+			log.Fatal("--goal flag is required (match_income, maximize_income, maximize_longevity, minimize_taxes)")
+		}
+
+		// Find scenario
+		var scenario *domain.GenericScenario
+		for i := range configData.Scenarios {
+			if configData.Scenarios[i].Name == scenarioName {
+				scenario = &configData.Scenarios[i]
+				break
+			}
+		}
+		if scenario == nil {
+			log.Fatalf("Scenario %s not found in configuration", scenarioName)
+		}
+
+		// Determine participant
+		if participant == "" {
+			if len(configData.Household.Participants) > 0 {
+				participant = configData.Household.Participants[0].Name
+			} else {
+				log.Fatal("--participant flag required when household has multiple participants")
+			}
+		}
+
+		// Parse target
+		var target breakeven.OptimizationTarget
+		switch targetStr {
+		case "tsp_rate":
+			target = breakeven.OptimizeTSPRate
+		case "retirement_date":
+			target = breakeven.OptimizeRetirementDate
+		case "ss_age":
+			target = breakeven.OptimizeSSAge
+		case "tsp_balance":
+			target = breakeven.OptimizeTSPBalance
+		case "all":
+			target = breakeven.OptimizeAll
+		default:
+			log.Fatalf("Unknown target: %s (valid: tsp_rate, retirement_date, ss_age, tsp_balance, all)", targetStr)
+		}
+
+		// Parse goal
+		var goal breakeven.OptimizationGoal
+		switch goalStr {
+		case "match_income":
+			goal = breakeven.GoalMatchIncome
+		case "maximize_income":
+			goal = breakeven.GoalMaximizeIncome
+		case "maximize_longevity":
+			goal = breakeven.GoalMaximizeLongevity
+		case "minimize_taxes":
+			goal = breakeven.GoalMinimizeTaxes
+		default:
+			log.Fatalf("Unknown goal: %s (valid: match_income, maximize_income, maximize_longevity, minimize_taxes)", goalStr)
+		}
+
+		// Build constraints
+		constraints := breakeven.DefaultConstraints(participant)
+
+		// Override with command-line flags if provided
+		if cmd.Flags().Changed("target-income") {
+			targetIncome, _ := cmd.Flags().GetFloat64("target-income")
+			targetIncomeDec := decimal.NewFromFloat(targetIncome)
+			constraints.TargetIncome = &targetIncomeDec
+		}
+		if cmd.Flags().Changed("min-rate") {
+			minRate, _ := cmd.Flags().GetFloat64("min-rate")
+			minRateDec := decimal.NewFromFloat(minRate)
+			constraints.MinTSPRate = &minRateDec
+		}
+		if cmd.Flags().Changed("max-rate") {
+			maxRate, _ := cmd.Flags().GetFloat64("max-rate")
+			maxRateDec := decimal.NewFromFloat(maxRate)
+			constraints.MaxTSPRate = &maxRateDec
+		}
+		if cmd.Flags().Changed("min-ss-age") {
+			minAge, _ := cmd.Flags().GetInt("min-ss-age")
+			constraints.MinSSAge = &minAge
+		}
+		if cmd.Flags().Changed("max-ss-age") {
+			maxAge, _ := cmd.Flags().GetInt("max-ss-age")
+			constraints.MaxSSAge = &maxAge
+		}
+
+		// Create calculation engine
+		engine := calculation.NewCalculationEngineWithConfig(configData.GlobalAssumptions.FederalRules)
+		debugMode, _ := cmd.Flags().GetBool("debug")
+		if debugMode {
+			engine.SetLogger(simpleCLILogger{})
+			engine.Debug = true
+		}
+
+		// Create solver
+		solver := breakeven.NewDefaultSolver(engine)
+		ctx := context.Background()
+
+		// Run optimization
+		if target == breakeven.OptimizeAll {
+			// Multi-dimensional optimization
+			mdResult, err := solver.OptimizeAllTargets(ctx, scenario, configData, constraints, goal)
+			if err != nil {
+				log.Fatalf("Optimization failed: %v", err)
+			}
+
+			// Format and output
+			switch strings.ToLower(outputFormat) {
+			case "json":
+				formatter := &breakeven.JSONFormatter{Pretty: true}
+				output, err := formatter.FormatMultiDimensional(mdResult)
+				if err != nil {
+					log.Fatalf("Failed to format JSON: %v", err)
+				}
+				fmt.Print(output)
+			default:
+				formatter := &breakeven.TableFormatter{}
+				output := formatter.FormatMultiDimensional(mdResult)
+				fmt.Print(output)
+			}
+		} else {
+			// Single-target optimization
+			request := breakeven.OptimizationRequest{
+				BaseScenario:  scenario,
+				Config:        configData,
+				Target:        target,
+				Goal:          goal,
+				Constraints:   constraints,
+				MaxIterations: 50,
+				Tolerance:     decimal.NewFromInt(1000),
+			}
+
+			result, err := solver.Optimize(ctx, request)
+			if err != nil {
+				log.Fatalf("Optimization failed: %v", err)
+			}
+
+			// Format and output
+			switch strings.ToLower(outputFormat) {
+			case "json":
+				formatter := &breakeven.JSONFormatter{Pretty: true}
+				output, err := formatter.Format(result)
+				if err != nil {
+					log.Fatalf("Failed to format JSON: %v", err)
+				}
+				fmt.Print(output)
+			default:
+				formatter := &breakeven.TableFormatter{}
+				output := formatter.Format(result)
+				fmt.Print(output)
+			}
+		}
+	},
+}
+
 // Monte Carlo command removed (legacy)
 
 func init() {
@@ -404,11 +601,25 @@ func init() {
 	compareCmd.Flags().Bool("debug", false, "Enable debug output for detailed calculations")
 	compareCmd.Flags().String("regulatory-config", "", "Path to regulatory config file (default: regulatory.yaml if it exists)")
 
+	// Optimize command flags
+	optimizeCmd.Flags().String("scenario", "", "Scenario name to optimize (required)")
+	optimizeCmd.Flags().String("target", "", "Optimization target: tsp_rate, retirement_date, ss_age, or all (required)")
+	optimizeCmd.Flags().String("goal", "", "Optimization goal: match_income, maximize_income, maximize_longevity, minimize_taxes (required)")
+	optimizeCmd.Flags().String("participant", "", "Participant name (auto-detected if not specified)")
+	optimizeCmd.Flags().StringP("format", "f", "table", "Output format (table, json)")
+	optimizeCmd.Flags().Float64("target-income", 0, "Target income for match_income goal")
+	optimizeCmd.Flags().Float64("min-rate", 0.02, "Minimum TSP withdrawal rate (default 2%)")
+	optimizeCmd.Flags().Float64("max-rate", 0.10, "Maximum TSP withdrawal rate (default 10%)")
+	optimizeCmd.Flags().Int("min-ss-age", 62, "Minimum Social Security age")
+	optimizeCmd.Flags().Int("max-ss-age", 70, "Maximum Social Security age")
+	optimizeCmd.Flags().Bool("debug", false, "Enable debug output for detailed calculations")
+
 	// FERS Monte Carlo command flags
 	rootCmd.AddCommand(calculateCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(breakEvenCmd)
 	rootCmd.AddCommand(compareCmd)
+	rootCmd.AddCommand(optimizeCmd)
 	rootCmd.AddCommand(versionCmd())
 
 	// Initialize historical command

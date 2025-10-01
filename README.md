@@ -9,6 +9,7 @@ A comprehensive retirement planning calculator for Federal Employees Retirement 
 - **TSP Lifecycle Fund Limitation**: For Monte Carlo simulations, manual TSP allocations are recommended over lifecycle funds for proper market variability
 - **Social Security Integration**: Full benefit calculations with 2025 WEP/GPO repeal implementation (2025 wage base: $176,100)
 - **Tax Modeling**: Complete federal, state (Pennsylvania), and local tax calculations
+- **Automated Optimization**: Multi-dimensional break-even solver finds optimal retirement parameters (TSP rate, retirement date, SS claiming age) to achieve specific goals
 - **Scenario Comparison**: Compare retirement strategies side-by-side using built-in templates for retirement timing, Social Security claiming, and TSP withdrawals
 - **Multiple Scenarios**: Compare multiple retirement scenarios simultaneously
 - **Long-term Projections**: 25+ year projections with COLA adjustments
@@ -73,6 +74,7 @@ go build -o rpgo ./cmd/rpgo
 
 - `./rpgo calculate [input-file]` — deterministic retirement projection using a YAML configuration.
 - `./rpgo compare [input-file]` — compare retirement strategies using built-in templates (see [Compare Command docs](docs/COMPARE_COMMAND.md)).
+- `./rpgo optimize [input-file]` — find optimal retirement parameters using break-even solver (see [Optimize Command docs](docs/OPTIMIZE_COMMAND.md)).
 - `./rpgo validate [input-file]` — schema and rules validation without running a projection.
 - `./rpgo break-even [input-file]` — computes TSP withdrawal rates needed to match current net income.
 - `./rpgo historical load [data-path]` — load and summarize historical datasets.
@@ -100,6 +102,24 @@ go build -o rpgo ./cmd/rpgo
 ```
 
 See [Compare Command Documentation](docs/COMPARE_COMMAND.md) for detailed usage and examples.
+
+#### Optimize Command Examples
+
+```bash
+# Find TSP withdrawal rate to match target income
+./rpgo optimize my_config.yaml --scenario "Base Scenario" --target tsp_rate --goal match_income --target-income 120000
+
+# Find optimal retirement date to maximize lifetime income
+./rpgo optimize my_config.yaml --scenario "Base Scenario" --target retirement_date --goal maximize_income
+
+# Find optimal Social Security claiming age to minimize taxes
+./rpgo optimize my_config.yaml --scenario "Base Scenario" --target ss_age --goal minimize_taxes
+
+# Run all optimizations and compare
+./rpgo optimize my_config.yaml --scenario "Base Scenario" --target all --goal maximize_income
+```
+
+See [Optimize Command Documentation](docs/OPTIMIZE_COMMAND.md) for detailed usage and examples.
 
 ### Logging and Debug Mode
 
