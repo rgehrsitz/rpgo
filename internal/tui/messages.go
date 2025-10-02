@@ -42,6 +42,8 @@ type (
 	OptimizationStartedMsg  = tuimsg.OptimizationStartedMsg
 	OptimizationProgressMsg = tuimsg.OptimizationProgressMsg
 	OptimizationCompleteMsg = tuimsg.OptimizationCompleteMsg
+	SaveScenarioMsg         = tuimsg.SaveScenarioMsg
+	SaveCompleteMsg         = tuimsg.SaveCompleteMsg
 )
 
 // KeyMsg is a wrapper for tea.KeyMsg for easier handling

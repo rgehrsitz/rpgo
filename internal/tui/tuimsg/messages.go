@@ -69,3 +69,18 @@ type OptimizationCompleteMsg struct {
 	Results interface{} // OptimizationResult or MultiDimensionalResult
 	Err     error
 }
+
+// SaveScenarioMsg signals a request to save the modified scenario
+type SaveScenarioMsg struct {
+	Scenario *GenericScenario
+	Filename string
+}
+
+// SaveCompleteMsg signals a save operation has finished
+type SaveCompleteMsg struct {
+	Filename string
+	Err      error
+}
+
+// GenericScenario is imported from domain but we need a type alias for messaging
+type GenericScenario = domain.GenericScenario

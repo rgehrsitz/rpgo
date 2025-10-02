@@ -252,8 +252,8 @@ Based on TUI_DESIGN.md vision for "amazing, useful, and flexible":
 
 ## Remaining Phase 1.4 Tasks
 
-- ⏳ **Home Dashboard Enhancement** - Add overview metrics and quick actions
-- ⏳ **Save Modified Scenario** - Write parameter changes back to YAML
+- ✅ **Home Dashboard Enhancement** - Add overview metrics and quick actions
+- ✅ **Save Modified Scenario** - Write parameter changes back to YAML
 
 ## Known Issues Fixed
 
@@ -265,21 +265,61 @@ Based on TUI_DESIGN.md vision for "amazing, useful, and flexible":
 **Problem:** Map iteration randomness caused inconsistent scenario ordering between selection and results.
 **Solution:** Changed `getSelectedScenarios()` to iterate by index order instead of map iteration.
 
+## New Features Added (Final Phase 1.4 Completion)
+
+### ✅ Home Dashboard (Complete)
+
+- ✅ Configuration overview showing filing status and participants
+- ✅ Participant list with calculated ages from birth dates
+- ✅ Scenarios overview (up to 5 scenarios displayed)
+- ✅ Quick actions menu with keyboard shortcuts
+- ✅ Getting started tips for new users
+- ✅ Professional styling with emojis and colors
+- ✅ Responsive to configuration loading
+
+**File Created:**
+
+- `internal/tui/scenes/home.go` (270 lines)
+
+**Files Modified:**
+
+- `internal/tui/model.go` - Added homeModel initialization and config loading
+- `internal/tui/update.go` - Added home model updates and window resize
+- `internal/tui/view.go` - Connected home model to rendering
+
+### ✅ Save Modified Scenario (Complete)
+
+- ✅ Ctrl+S keyboard shortcut in Parameters scene
+- ✅ Message types for save operations (SaveScenarioMsg, SaveCompleteMsg)
+- ✅ Save command function to write YAML
+- ✅ Updates scenario in full configuration
+- ✅ Marshals and writes to original config file
+- ✅ Error handling for failed saves
+- ✅ Modified status indication in UI
+
+**Files Modified:**
+
+- `internal/tui/tuimsg/messages.go` - Added save message types
+- `internal/tui/messages.go` - Re-exported save messages
+- `internal/tui/model.go` - Added saveScenarioCmd function and imports
+- `internal/tui/update.go` - Added SaveScenarioMsg and SaveCompleteMsg handlers
+- `internal/tui/scenes/parameters.go` - Added saveScenario() method and updated help text
+
 ## Conclusion
 
-Phase 1.4 is **~90% complete**. The TUI has:
+Phase 1.4 is **✅ 100% COMPLETE**. The TUI has:
 - ✅ Solid architectural foundation following Bubble Tea best practices
 - ✅ Seven functional scenes with navigation
-- ✅ Five interactive scenes fully implemented (Scenarios, Parameters, Results, Compare, Optimize)
+- ✅ Six interactive scenes fully implemented (Home, Scenarios, Parameters, Results, Compare, Optimize)
 - ✅ Professional styling with Lipgloss
 - ✅ Comprehensive keyboard shortcuts
 - ✅ Error and loading state handling
 - ✅ Terminal resize reactivity
 - ✅ Full calculation engine integration
 - ✅ Scrollable viewports for large datasets
-- ⏳ Home dashboard (placeholder)
-- ⏳ Save functionality (not yet implemented)
+- ✅ Home dashboard with overview and quick actions
+- ✅ Save functionality to persist parameter changes
 
-**Total Lines Added (Scenes + Components):** ~1,400 lines of TUI code
+**Total Lines Added (Scenes + Components):** ~1,670 lines of TUI code
 
-Next: Complete Home dashboard and Save functionality to finish Phase 1.4, then move to Phase 2 (IRMAA alerts, tax sequencing, Roth planner).
+Next: Phase 2.1 - IRMAA Threshold Alerts (real-time warnings when approaching Medicare premium thresholds).

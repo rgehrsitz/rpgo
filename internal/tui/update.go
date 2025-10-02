@@ -19,6 +19,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		// Propagate size changes to all scene models
+		if m.homeModel != nil {
+			m.homeModel.SetSize(msg.Width, msg.Height)
+		}
 		if m.scenariosModel != nil {
 			m.scenariosModel.SetSize(msg.Width, msg.Height)
 		}
@@ -56,8 +59,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Initialize calculation engine with config
 		// m.calcEngine = calculation.NewCalculationEngine(msg.Config)
 
-		// Populate scenarios model if config is loaded
+		// Populate all scene models if config is loaded
 		if msg.Config != nil {
+			if m.homeModel != nil {
+				m.homeModel.SetConfig(msg.Config)
+				m.homeModel.SetSize(m.width, m.height)
+			}
 			if m.scenariosModel != nil {
 				m.scenariosModel.SetScenarios(msg.Config.Scenarios)
 				m.scenariosModel.SetSize(m.width, m.height)
@@ -175,6 +182,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case SaveScenarioMsg:
+		// Save the modified scenario back to the config file
+		if m.config != nil && msg.Scenario != nil {
+			filename := m.configPath
+			if filename == "" {
+				filename = "config.yaml" // Fallback
+			}
+			return m, saveScenarioCmd(msg.Scenario, filename, m.config)
+		}
+		return m, nil
+
+	case SaveCompleteMsg:
+		if msg.Err != nil {
+			m.err = msg.Err
+		} else {
+			// Show success message briefly (could add a temporary status message)
+			// For now, just clear the modified flag by reloading
+			m.loading = false
+		}
+		return m, nil
+
 	case TickMsg:
 		// Handle animation ticks if needed
 		return m, nil
@@ -268,7 +296,11 @@ func (m Model) updateCurrentScene(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// For now, just return the model unchanged
 	switch m.currentScene {
 	case SceneHome:
-		// TODO: Update home model
+		if m.homeModel != nil {
+			updatedModel, cmd := m.homeModel.Update(msg)
+			m.homeModel = updatedModel
+			return m, cmd
+		}
 		return m, nil
 	case SceneScenarios:
 		if m.scenariosModel != nil {

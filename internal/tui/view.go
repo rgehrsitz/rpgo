@@ -149,20 +149,10 @@ func (m Model) renderError() string {
 
 // renderHome renders the home dashboard
 func (m Model) renderHome() string {
-	// Placeholder for home scene
-	// Will be implemented in next phase
-	if m.config == nil {
-		return BorderStyle.Render(
-			"Welcome to RPGO!\n\n" +
-			"Loading configuration...",
-		)
+	if m.homeModel != nil {
+		return m.homeModel.View()
 	}
-
-	return BorderStyle.Render(
-		"Welcome to RPGO!\n\n" +
-		"Configuration loaded successfully.\n" +
-		"Use the keyboard shortcuts below to navigate.",
-	)
+	return BorderStyle.Render("Home scene - Loading...")
 }
 
 // renderScenarios renders the scenarios list

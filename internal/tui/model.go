@@ -2,9 +2,11 @@ package tui
 
 import (
 	"fmt"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shopspring/decimal"
+	"gopkg.in/yaml.v3"
 
 	"github.com/rgehrsitz/rpgo/internal/calculation"
 	"github.com/rgehrsitz/rpgo/internal/config"
@@ -45,7 +47,7 @@ type Model struct {
 	optimizationResults    interface{}
 
 	// Scene-specific models (will be added as we build each scene)
-	homeModel       interface{} // HomeModel (to be created)
+	homeModel       *scenes.HomeModel
 	scenariosModel  *scenes.ScenariosModel
 	parametersModel *scenes.ParametersModel
 	compareModel    *scenes.CompareModel
@@ -67,6 +69,7 @@ func NewModel(configPath string) Model {
 		currentScene:        SceneHome,
 		configPath:          configPath,
 		comparisonResults:   make(map[string]*domain.ScenarioSummary),
+		homeModel:           scenes.NewHomeModel(),
 		scenariosModel:      scenes.NewScenariosModel(),
 		parametersModel:     scenes.NewParametersModel(),
 		compareModel:        scenes.NewCompareModel(),
@@ -238,6 +241,52 @@ func optimizeBreakEvenCmd(scenarioName string, targetIncome interface{}, cfg *do
 		return OptimizationCompleteMsg{
 			Results: result,
 			Err:     nil,
+		}
+	}
+}
+
+// saveScenarioCmd returns a command that saves a scenario to YAML
+func saveScenarioCmd(scenario *domain.GenericScenario, filename string, fullConfig *domain.Configuration) tea.Cmd {
+	return func() tea.Msg {
+		// For simplicity, we'll save the entire configuration with the modified scenario
+		// In a production app, you might want to update just the one scenario in the file
+
+		// Find and update the scenario in the config
+		updated := false
+		for i := range fullConfig.Scenarios {
+			if fullConfig.Scenarios[i].Name == scenario.Name {
+				fullConfig.Scenarios[i] = *scenario
+				updated = true
+				break
+			}
+		}
+
+		if !updated {
+			// If not found, append as new scenario
+			fullConfig.Scenarios = append(fullConfig.Scenarios, *scenario)
+		}
+
+		// Marshal to YAML
+		data, err := yaml.Marshal(fullConfig)
+		if err != nil {
+			return SaveCompleteMsg{
+				Filename: filename,
+				Err:      fmt.Errorf("failed to marshal YAML: %w", err),
+			}
+		}
+
+		// Write to file
+		err = os.WriteFile(filename, data, 0644)
+		if err != nil {
+			return SaveCompleteMsg{
+				Filename: filename,
+				Err:      fmt.Errorf("failed to write file: %w", err),
+			}
+		}
+
+		return SaveCompleteMsg{
+			Filename: filename,
+			Err:      nil,
 		}
 	}
 }

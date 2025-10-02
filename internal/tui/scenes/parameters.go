@@ -160,6 +160,13 @@ func (m *ParametersModel) handleKeyPress(msg tea.KeyMsg) (*ParametersModel, tea.
 		m.buildSliders()
 		m.modified = false
 		return m, nil
+
+	case key.Matches(msg, key.NewBinding(key.WithKeys("ctrl+s"))):
+		// Save modified scenario
+		if m.modified && m.scenario != nil {
+			return m, m.saveScenario()
+		}
+		return m, nil
 	}
 
 	return m, nil
@@ -252,6 +259,20 @@ func (m *ParametersModel) calculateScenario() tea.Cmd {
 	return func() tea.Msg {
 		return tuimsg.CalculationStartedMsg{
 			ScenarioName: m.scenario.Name,
+		}
+	}
+}
+
+// saveScenario triggers a save operation for the modified scenario
+func (m *ParametersModel) saveScenario() tea.Cmd {
+	if m.scenario == nil {
+		return nil
+	}
+
+	return func() tea.Msg {
+		return tuimsg.SaveScenarioMsg{
+			Scenario: m.scenario,
+			Filename: "", // Will be filled in by main model with config path
 		}
 	}
 }
@@ -381,5 +402,5 @@ func renderParameterHelp() string {
 	helpStyle := lipgloss.NewStyle().
 		Foreground(tuistyles.ColorMuted)
 
-	return helpStyle.Render("↑/↓ navigate • ←/→ adjust • Enter calculate • r reset • Tab switch participant • ESC back")
+	return helpStyle.Render("↑/↓ navigate • ←/→ adjust • Enter calculate • r reset • Ctrl+S save • Tab switch participant • ESC back")
 }
