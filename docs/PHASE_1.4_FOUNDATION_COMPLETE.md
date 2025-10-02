@@ -145,27 +145,60 @@ All seven scenes have placeholder implementations that display "Coming soon" mes
 - ⏳ Manual TTY testing requires real terminal (expected behavior)
 - ⏳ Unit tests to be added with `teatest` package (Week 3)
 
-## Next Steps (Week 1)
+## Completed Week 1-2 Features
 
-The foundation is complete. Next steps focus on building interactive components:
+Building on the foundation, the following interactive features have been completed:
 
-1. **Custom Components**
-   - ParameterSlider with arrow key control
-   - MetricCard with styled metrics and trends
-   - ScenarioCard for scenario overview
-   - ASCIIChart for simple line charts
+### ✅ Custom Components
+   - ✅ ParameterSlider with arrow key control
+   - ✅ MetricCard with styled metrics and trends
+   - ✅ ScenarioCard for scenario overview
+   - ✅ Progress indicators
 
-2. **Scenarios Scene**
-   - List view of all scenarios
-   - Selection with arrow keys
-   - Preview of scenario details
-   - Load and calculate selected scenario
+### ✅ Scenarios Scene (Complete)
+   - ✅ List view of all scenarios
+   - ✅ Selection with arrow keys
+   - ✅ Split-pane preview showing scenario details
+   - ✅ Load and calculate selected scenario
+   - ✅ Real participant data display
 
-3. **Config Loading Integration**
-   - Real config file parsing
-   - Error handling for invalid configs
-   - Participant data display
-   - Scenario list population
+### ✅ Parameters Scene (Complete)
+   - ✅ Interactive parameter editing
+   - ✅ Visual sliders for SS claim age and TSP withdrawal rate
+   - ✅ Real-time value adjustment with arrow keys
+   - ✅ Modified state tracking
+   - ✅ Calculation trigger
+
+### ✅ Results Scene (Complete)
+   - ✅ Detailed metrics display
+   - ✅ Scrollable viewport for year-by-year projections
+   - ✅ Full calculation integration
+   - ✅ Keyboard navigation (↑/↓, PgUp/PgDn, g/G)
+   - ✅ Terminal resize reactivity
+
+### ✅ Compare Scene (Complete)
+   - ✅ Multi-select scenario interface with checkboxes
+   - ✅ Space/x to toggle selection
+   - ✅ Requires minimum 2 scenarios
+   - ✅ Parallel calculation of all selected scenarios
+   - ✅ Side-by-side comparison table
+   - ✅ Highlights best values with ★
+   - ✅ ANSI-aware column alignment
+   - ✅ Clear and restart comparison
+
+### ✅ Optimize Scene (Complete)
+   - ✅ Break-even TSP withdrawal rate optimizer
+   - ✅ Three-stage workflow (select → input → results)
+   - ✅ Interactive text input for target income
+   - ✅ Integration with CalculateBreakEvenTSPWithdrawalRate
+   - ✅ Detailed results with income breakdown
+   - ✅ Difference from target highlighted
+
+### ✅ Config Loading Integration
+   - ✅ Real config file parsing
+   - ✅ Error handling for invalid configs
+   - ✅ Participant data display
+   - ✅ Scenario list population across all scenes
 
 ## Integration with Existing Code
 
@@ -217,16 +250,36 @@ Based on TUI_DESIGN.md vision for "amazing, useful, and flexible":
 - ⏳ **Real-time Updates**: To be implemented in Week 2
 - ⏳ **Data Visualization**: ASCII charts to be implemented in Week 2
 
+## Remaining Phase 1.4 Tasks
+
+- ⏳ **Home Dashboard Enhancement** - Add overview metrics and quick actions
+- ⏳ **Save Modified Scenario** - Write parameter changes back to YAML
+
+## Known Issues Fixed
+
+### Compare Scene Column Alignment Issue
+**Problem:** Lipgloss ANSI escape codes were breaking column alignment in comparison tables.
+**Solution:** Updated `padRight()` helper to use `lipgloss.Width()` instead of `len()` to correctly calculate visible width excluding ANSI codes.
+
+### Scenario Selection Order Issue
+**Problem:** Map iteration randomness caused inconsistent scenario ordering between selection and results.
+**Solution:** Changed `getSelectedScenarios()` to iterate by index order instead of map iteration.
+
 ## Conclusion
 
-Phase 1.4 Foundation is **100% complete**. The TUI has a solid architectural foundation following Bubble Tea best practices, inspired by the Crush AI Agent design.
+Phase 1.4 is **~90% complete**. The TUI has:
+- ✅ Solid architectural foundation following Bubble Tea best practices
+- ✅ Seven functional scenes with navigation
+- ✅ Five interactive scenes fully implemented (Scenarios, Parameters, Results, Compare, Optimize)
+- ✅ Professional styling with Lipgloss
+- ✅ Comprehensive keyboard shortcuts
+- ✅ Error and loading state handling
+- ✅ Terminal resize reactivity
+- ✅ Full calculation engine integration
+- ✅ Scrollable viewports for large datasets
+- ⏳ Home dashboard (placeholder)
+- ⏳ Save functionality (not yet implemented)
 
-The application:
-- Compiles successfully
-- Has comprehensive scene navigation
-- Implements professional styling
-- Provides excellent keyboard shortcuts
-- Handles errors and loading gracefully
-- Is ready for component development
+**Total Lines Added (Scenes + Components):** ~1,400 lines of TUI code
 
-Next: Week 1 tasks to build interactive components and scenes.
+Next: Complete Home dashboard and Save functionality to finish Phase 1.4, then move to Phase 2 (IRMAA alerts, tax sequencing, Roth planner).

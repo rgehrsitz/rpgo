@@ -2,6 +2,8 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/rgehrsitz/rpgo/internal/tui/scenes"
 )
 
 // Update handles all messages and updates the model state
@@ -15,6 +17,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+
+		// Propagate size changes to all scene models
+		if m.scenariosModel != nil {
+			m.scenariosModel.SetSize(msg.Width, msg.Height)
+		}
+		if m.parametersModel != nil {
+			m.parametersModel.SetSize(msg.Width, msg.Height)
+		}
+		if m.compareModel != nil {
+			m.compareModel.SetSize(msg.Width, msg.Height)
+		}
+		if m.optimizeModel != nil {
+			m.optimizeModel.SetSize(msg.Width, msg.Height)
+		}
+		if m.resultsModel != nil {
+			m.resultsModel.SetSize(msg.Width, msg.Height)
+		}
+
 		return m, nil
 
 	// Custom messages
@@ -37,9 +57,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// m.calcEngine = calculation.NewCalculationEngine(msg.Config)
 
 		// Populate scenarios model if config is loaded
-		if msg.Config != nil && m.scenariosModel != nil {
-			m.scenariosModel.SetScenarios(msg.Config.Scenarios)
-			m.scenariosModel.SetSize(m.width, m.height)
+		if msg.Config != nil {
+			if m.scenariosModel != nil {
+				m.scenariosModel.SetScenarios(msg.Config.Scenarios)
+				m.scenariosModel.SetSize(m.width, m.height)
+			}
+			if m.compareModel != nil {
+				m.compareModel.SetScenarios(msg.Config.Scenarios)
+				m.compareModel.SetSize(m.width, m.height)
+			}
+			if m.optimizeModel != nil {
+				m.optimizeModel.SetScenarios(msg.Config.Scenarios)
+				m.optimizeModel.SetSize(m.width, m.height)
+			}
 		}
 		return m, nil
 
@@ -97,24 +127,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case ComparisonStartedMsg:
-		m.loading = true
-		m.loadingMessage = "Comparing scenarios..."
 		m.comparisonScenarios = msg.ScenarioNames
+		// Start calculating multiple scenarios
+		if m.config != nil {
+			return m, calculateMultipleScenariosCmd(msg.ScenarioNames, m.config)
+		}
 		return m, nil
 
 	case ComparisonCompleteMsg:
-		m.loading = false
 		if msg.Err != nil {
 			m.err = msg.Err
 		} else {
 			m.comparisonResults = msg.Comparisons
+			// Update compare model with results
+			if m.compareModel != nil {
+				m.compareModel.SetResults(msg.Comparisons)
+			}
 		}
 		return m, nil
 
 	case OptimizationStartedMsg:
 		m.optimizationInProgress = true
-		m.optimizationProgress = 0
-		m.optimizationTotal = 100 // Default, will be updated by progress messages
+		// Start the break-even optimization
+		if m.config != nil {
+			return m, optimizeBreakEvenCmd(msg.ScenarioName, msg.TargetIncome, m.config)
+		}
 		return m, nil
 
 	case OptimizationProgressMsg:
@@ -129,6 +166,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.Err
 		} else {
 			m.optimizationResults = msg.Results
+			// Update optimize model with results
+			if m.optimizeModel != nil {
+				if result, ok := msg.Results.(*scenes.OptimizeResult); ok {
+					m.optimizeModel.SetResult(result)
+				}
+			}
 		}
 		return m, nil
 
@@ -242,10 +285,18 @@ func (m Model) updateCurrentScene(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case SceneCompare:
-		// TODO: Update compare model
+		if m.compareModel != nil {
+			updatedModel, cmd := m.compareModel.Update(msg)
+			m.compareModel = updatedModel
+			return m, cmd
+		}
 		return m, nil
 	case SceneOptimize:
-		// TODO: Update optimize model
+		if m.optimizeModel != nil {
+			updatedModel, cmd := m.optimizeModel.Update(msg)
+			m.optimizeModel = updatedModel
+			return m, cmd
+		}
 		return m, nil
 	case SceneResults:
 		if m.resultsModel != nil {

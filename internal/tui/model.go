@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/shopspring/decimal"
 
 	"github.com/rgehrsitz/rpgo/internal/calculation"
 	"github.com/rgehrsitz/rpgo/internal/config"
@@ -47,8 +48,8 @@ type Model struct {
 	homeModel       interface{} // HomeModel (to be created)
 	scenariosModel  *scenes.ScenariosModel
 	parametersModel *scenes.ParametersModel
-	compareModel    interface{} // CompareModel (to be created)
-	optimizeModel   interface{} // OptimizeModel (to be created)
+	compareModel    *scenes.CompareModel
+	optimizeModel   *scenes.OptimizeModel
 	resultsModel    *scenes.ResultsModel
 	helpModel       interface{} // HelpModel (to be created)
 
@@ -68,6 +69,8 @@ func NewModel(configPath string) Model {
 		comparisonResults:   make(map[string]*domain.ScenarioSummary),
 		scenariosModel:      scenes.NewScenariosModel(),
 		parametersModel:     scenes.NewParametersModel(),
+		compareModel:        scenes.NewCompareModel(),
+		optimizeModel:       scenes.NewOptimizeModel(),
 		resultsModel:        scenes.NewResultsModel(),
 		width:               80,
 		height:              24,
@@ -132,6 +135,109 @@ func calculateScenarioCmd(scenario *domain.GenericScenario, cfg *domain.Configur
 			ScenarioName: scenario.Name,
 			Results:      nil,
 			Err:          fmt.Errorf("no results returned from calculation"),
+		}
+	}
+}
+
+// calculateMultipleScenariosCmd returns a command that calculates multiple scenarios
+func calculateMultipleScenariosCmd(scenarioNames []string, cfg *domain.Configuration) tea.Cmd {
+	return func() tea.Msg {
+		results := make(map[string]*domain.ScenarioSummary)
+
+		// Find and calculate each scenario
+		for _, name := range scenarioNames {
+			// Find scenario by name
+			var scenario *domain.GenericScenario
+			for i := range cfg.Scenarios {
+				if cfg.Scenarios[i].Name == name {
+					scenario = &cfg.Scenarios[i]
+					break
+				}
+			}
+
+			if scenario == nil {
+				continue
+			}
+
+			// Create temporary config with just this scenario
+			tempConfig := &domain.Configuration{
+				GlobalAssumptions: cfg.GlobalAssumptions,
+				Household:         cfg.Household,
+				Scenarios:         []domain.GenericScenario{*scenario},
+			}
+
+			// Create calculation engine
+			engine := calculation.NewCalculationEngineWithConfig(cfg.GlobalAssumptions.FederalRules)
+
+			// Run calculation
+			projResults, err := engine.RunScenarios(tempConfig)
+			if err == nil && len(projResults.Scenarios) > 0 {
+				results[name] = &projResults.Scenarios[0]
+			}
+		}
+
+		return ComparisonCompleteMsg{
+			Comparisons: results,
+			Err:         nil,
+		}
+	}
+}
+
+// optimizeBreakEvenCmd returns a command that runs break-even optimization
+func optimizeBreakEvenCmd(scenarioName string, targetIncome interface{}, cfg *domain.Configuration) tea.Cmd {
+	return func() tea.Msg {
+		// Find scenario by name
+		var scenario *domain.GenericScenario
+		for i := range cfg.Scenarios {
+			if cfg.Scenarios[i].Name == scenarioName {
+				scenario = &cfg.Scenarios[i]
+				break
+			}
+		}
+
+		if scenario == nil {
+			return OptimizationCompleteMsg{
+				Results: nil,
+				Err:     fmt.Errorf("scenario not found: %s", scenarioName),
+			}
+		}
+
+		// Create calculation engine
+		engine := calculation.NewCalculationEngineWithConfig(cfg.GlobalAssumptions.FederalRules)
+
+		// Convert target income to decimal
+		target, ok := targetIncome.(decimal.Decimal)
+		if !ok {
+			return OptimizationCompleteMsg{
+				Results: nil,
+				Err:     fmt.Errorf("invalid target income type"),
+			}
+		}
+
+		// Run break-even optimization
+		optimalRate, cashFlow, err := engine.CalculateBreakEvenTSPWithdrawalRate(cfg, scenario, target)
+		if err != nil {
+			return OptimizationCompleteMsg{
+				Results: nil,
+				Err:     err,
+			}
+		}
+
+		// Create result
+		result := &scenes.OptimizeResult{
+			OptimalRate:  optimalRate,
+			TargetIncome: target,
+			CashFlow:     cashFlow,
+			ScenarioName: scenarioName,
+		}
+
+		if cashFlow != nil {
+			result.ActualIncome = cashFlow.NetIncome
+		}
+
+		return OptimizationCompleteMsg{
+			Results: result,
+			Err:     nil,
 		}
 	}
 }

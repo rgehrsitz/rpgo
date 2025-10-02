@@ -51,8 +51,8 @@ type ComparisonCompleteMsg struct {
 
 // OptimizationStartedMsg signals an optimization has begun
 type OptimizationStartedMsg struct {
-	Target string
-	Goal   string
+	ScenarioName string
+	TargetIncome interface{} // decimal.Decimal
 }
 
 // OptimizationProgressMsg provides progress updates during optimization

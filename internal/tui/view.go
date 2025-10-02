@@ -183,22 +183,17 @@ func (m Model) renderParameters() string {
 
 // renderCompare renders the comparison view
 func (m Model) renderCompare() string {
+	if m.compareModel != nil {
+		return m.compareModel.View()
+	}
 	return BorderStyle.Render("Compare scene - Coming soon")
 }
 
 // renderOptimize renders the optimization interface
 func (m Model) renderOptimize() string {
-	if m.optimizationInProgress {
-		progress := fmt.Sprintf("Progress: %d/%d - %s",
-			m.optimizationProgress,
-			m.optimizationTotal,
-			m.optimizationStatus,
-		)
-		return BorderStyle.Render(
-			"Optimization in progress...\n\n" + progress,
-		)
+	if m.optimizeModel != nil {
+		return m.optimizeModel.View()
 	}
-
 	return BorderStyle.Render("Optimize scene - Coming soon")
 }
 
