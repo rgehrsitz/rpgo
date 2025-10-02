@@ -2,13 +2,15 @@
 
 ## Summary
 
-Phase 2.1 implements comprehensive IRMAA (Income-Related Monthly Adjustment Amount) threshold alerts for Medicare Part B premiums. The system now:
+Phase 2.1 implements comprehensive IRMAA (Income-Related Monthly Adjustment Amount) threshold alerts for Medicare Part B premiums. After the initial implementation and a subsequent integration/polish pass, the system now:
 
 1. Calculates Modified Adjusted Gross Income (MAGI) for each projection year
 2. Detects when MAGI approaches or exceeds IRMAA thresholds
 3. Classifies risk levels (Safe, Warning, Breach)
-4. Displays detailed IRMAA analysis in the TUI Results scene
-5. Provides actionable recommendations to mitigate IRMAA surcharges
+4. Calculates and stores IRMAA metrics directly during projection (fully integrated)
+5. Displays detailed IRMAA analysis in ALL output formats (TUI, console, HTML)
+6. Provides advanced, context-aware recommendations to mitigate or optimize around IRMAA surcharges
+7. Tracks lifetime IRMAA cost impact when breaches occur
 
 ## Implementation Details
 
@@ -42,12 +44,14 @@ IRMAAAnalysis *IRMAAAnalysis `json:"irmaaAnalysis,omitempty"`
 
 ### 2. IRMAA Calculation Engine
 
-**File: [`internal/calculation/irmaa.go`](../internal/calculation/irmaa.go) - NEW (238 lines)**
+**File: [`internal/calculation/irmaa.go`](../internal/calculation/irmaa.go)**
 
 Core functions:
 
 #### `CalculateMAGI(acf *AnnualCashFlow) decimal.Decimal`
+
 Calculates Modified Adjusted Gross Income for IRMAA purposes, including:
+
 - Salaries and wages
 - FERS pensions
 - Traditional TSP withdrawals
@@ -58,37 +62,46 @@ Calculates Modified Adjusted Gross Income for IRMAA purposes, including:
 **Note:** Roth TSP withdrawals are tax-free and not included in MAGI.
 
 #### `CalculateIRMAARiskStatus(...) (IRMAARisk, string, decimal.Decimal, decimal.Decimal)`
+
 Determines risk status based on MAGI and filing status:
+
 - **Safe**: More than $10K below first threshold
 - **Warning**: Within $10K of a threshold
 - **Breach**: Exceeds one or more IRMAA thresholds
 
 Returns:
+
 1. Risk status
 2. Tier level (None, Tier1-5)
 3. Monthly surcharge per person
 4. Distance to next threshold
 
 #### `AnalyzeIRMAARisk(...) *IRMAAAnalysis`
+
 Performs comprehensive analysis across all projection years:
+
 - Identifies years with breaches and warnings
 - Calculates total lifetime IRMAA cost
 - Generates detailed year-by-year risk breakdown
 - Provides actionable recommendations
 
-### 3. IRMAA Display in TUI
+### 3. IRMAA Display Across Output Formats
 
 **File: [`internal/tui/scenes/results.go`](../internal/tui/scenes/results.go)**
 
-Added `renderIRMAAAnalysis()` function (106 lines) that displays:
+#### a. TUI (`internal/tui/scenes/results.go`)
+
+Added `renderIRMAAAnalysis()` function that displays:
 
 #### Summary Section
+
 - **Breaches**: Red warning with year count, first breach year, total cost
 - **Warnings**: Amber warning with count of at-risk years
 - **Safe**: Green checkmark confirming no IRMAA concerns
 
 #### High Risk Years Table
-```
+
+```text
 Year   MAGI        Status    Tier    Annual Cost
 ────── ─────────── ───────── ─────── ───────────
 2030   $210K       ✗ Breach  Tier1   $1.7K
@@ -96,24 +109,66 @@ Year   MAGI        Status    Tier    Annual Cost
 ```
 
 #### Recommendations Section
+
 Context-aware suggestions based on analysis:
+
 - Roth conversion strategies
 - TSP withdrawal timing
 - Social Security delay considerations
 
 **Visual Design:**
+
 - Color-coded status indicators (green/amber/red)
 - Clean table layout
 - Icons for quick scanning (✓, ⚠, ✗)
 - Integrated into scrollable viewport
 
-### 4. Test Coverage
+#### b. Console Output (`internal/output/console_verbose_formatter.go`)
+
+Added `writeIRMAAAnalysis()` which renders:
+
+- Summary status (breach / warning / safe) with icons
+- High-risk years table (if any)
+- Lifetime IRMAA cost when breaches occur
+- Optimized recommendation list
+
+#### c. HTML Report (`internal/output/templates/report.html.tmpl`)
+
+Added a fully styled IRMAA section featuring:
+
+- Color-coded alert panel (green / amber / yellow) depending on status
+- High-risk years responsive table
+- Recommendations list with preserved iconography
+- Graceful omission when no Medicare eligibility years yet
+
+### 4. Enhanced Recommendation Engine
+
+The recommendation function was upgraded from generic bullet points to a rules-based, context-aware engine that considers:
+
+- Total lifetime IRMAA cost (adds cost magnitude framing when > $10K)
+- First breach timing (early vs mid-retirement strategy guidance)
+- Longest run of consecutive breach years (systemic vs isolated issue)
+- Peak annual surcharge intensity (> $5K triggers stronger action framing)
+- Proximity to threshold in warning years (specific dollar distance messaging)
+- Positive reinforcement messaging when safe
+
+Representative examples now produced:
+
+```text
+💰 High IRMAA cost ($15,200 over 6 years) - significant savings possible through optimization
+📊 4 consecutive breach years detected - systematic withdrawal strategy change recommended
+💡 Only $3,200 away from breach - small TSP withdrawal adjustments could prevent surcharges
+⚠️  Peak IRMAA cost exceeds $5,000/year - consider delaying Social Security or reducing TSP rate
+```
+
+### 5. Test Coverage
 
 **File: [`internal/calculation/irmaa_test.go`](../internal/calculation/irmaa_test.go) - NEW (221 lines)**
 
 Comprehensive test suite:
 
 #### `TestCalculateMAGI`
+
 - Simple retirement income
 - Dual income couples
 - Working with salary
@@ -121,6 +176,7 @@ Comprehensive test suite:
 - ✅ All tests passing
 
 #### `TestCalculateIRMAARiskStatus`
+
 - Safe status (single and married)
 - Warning status (within $10K)
 - Breach status (single threshold)
@@ -128,6 +184,7 @@ Comprehensive test suite:
 - ✅ All tests passing
 
 #### `TestAnalyzeIRMAARisk`
+
 - Mixed risk years (safe + warning + breach)
 - Validates breach detection
 - Validates total cost calculation
@@ -135,12 +192,14 @@ Comprehensive test suite:
 - ✅ All tests passing
 
 #### `TestAnalyzeIRMAARisk_NoBreaches`
+
 - All safe years
 - Zero IRMAA cost
 - Positive feedback recommendations
 - ✅ All tests passing
 
 **Test Results:**
+
 ```bash
 === RUN   TestCalculateMAGI
 --- PASS: TestCalculateMAGI (0.00s)
@@ -151,7 +210,7 @@ Comprehensive test suite:
 === RUN   TestAnalyzeIRMAARisk_NoBreaches
 --- PASS: TestAnalyzeIRMAARisk_NoBreaches (0.00s)
 PASS
-ok  	github.com/rgehrsitz/rpgo/internal/calculation	0.264s
+ok    github.com/rgehrsitz/rpgo/internal/calculation  0.264s
 ```
 
 ## IRMAA Thresholds (2025)
@@ -189,6 +248,7 @@ The system warns users when MAGI comes within $10,000 of an IRMAA threshold, giv
 ### 2. Accurate MAGI Calculation
 
 MAGI includes all taxable retirement income:
+
 - ✅ Pensions (FERS)
 - ✅ Traditional TSP withdrawals
 - ✅ Social Security benefits (85% taxable portion)
@@ -201,44 +261,49 @@ MAGI includes all taxable retirement income:
 The system provides specific mitigation strategies:
 
 **If breaching IRMAA thresholds:**
+
 - Consider Roth conversions in low-MAGI years (before SS starts)
 - Time TSP withdrawals to avoid threshold breaches
 - Consider delaying Social Security to reduce MAGI during peak years
 
 **If approaching thresholds:**
+
 - Monitor MAGI carefully
 - Small TSP withdrawal adjustments can prevent breaches
 
 **If safe:**
+
 - Positive confirmation that strategy avoids IRMAA
 
 ### 4. Lifetime Cost Tracking
 
 Calculates total IRMAA surcharges across entire projection:
+
 - Helps quantify the financial impact of breaches
 - Justifies Roth conversion strategies
 - Informs retirement timing decisions
 
-## Integration Status
+## Integration Status (Updated After Polish Pass)
 
 ### ✅ Completed
 
-1. **Domain model extensions** - IRMAA fields in AnnualCashFlow and ScenarioSummary
-2. **MAGI calculation** - Accurate income aggregation for IRMAA purposes
-3. **Risk classification** - Three-tier system (Safe/Warning/Breach)
-4. **Analysis engine** - Comprehensive multi-year IRMAA analysis
-5. **TUI display** - Beautiful, informative IRMAA section in Results scene
-6. **Test coverage** - Comprehensive unit tests (9 test cases, all passing)
-7. **Documentation** - This document
+1. Domain model extensions (AnnualCashFlow + ScenarioSummary)
+2. Projection engine integration (MAGI + IRMAA fields populated per year)
+3. Multi-year analysis engine (breaches, warnings, lifetime cost)
+4. TUI display (results scene integration)
+5. Console output section (verbose formatter integration)
+6. HTML report section (styled, responsive, recommendation aware)
+7. Advanced recommendation engine (pattern + severity aware)
+8. Integration tests adjusted to assert breach & warning behavior
+9. Documentation updated (this section + polish summary)
 
-### ⏳ Pending (Future Work)
+### ⏳ Deferred (Future Enhancements)
 
-1. **Projection engine integration** - Actually call `CalculateMAGI()` during projection
-2. **Medicare calculator integration** - Use IRMAA analysis when calculating premiums
-3. **Scenario comparison** - Compare IRMAA impact across scenarios
-4. **Console output** - Add IRMAA section to text-based output
-5. **HTML report** - IRMAA charts and tables in HTML output
-6. **2-year lookback** - Model actual IRMAA delay (use 2023 MAGI for 2025 IRMAA)
+1. True 2-year MAGI lookback modeling
+2. Distinguish Traditional vs Roth TSP withdrawals in MAGI
+3. Filing status transition handling (e.g., survivor -> single IRMAA tiers)
+4. Scenario comparison delta summary of IRMAA cost impact
+5. Visual charts of MAGI vs thresholds in HTML
 
 ## Usage Example
 
@@ -250,7 +315,8 @@ When a scenario is calculated:
 4. **Results displayed** → in TUI Results scene
 
 User sees:
-```
+
+```text
 IRMAA Risk Analysis
 ═══════════════════
 
@@ -313,10 +379,12 @@ Recommendations:
 ### Code Statistics
 
 **New files:**
+
 - `internal/calculation/irmaa.go` (238 lines)
 - `internal/calculation/irmaa_test.go` (221 lines)
 
 **Modified files:**
+
 - `internal/domain/projection.go` (+77 lines)
 - `internal/tui/scenes/results.go` (+119 lines)
 
@@ -330,33 +398,31 @@ Recommendations:
 
 ## Next Steps
 
-### Integration Tasks
+### Completed Integration Tasks (Originally Pending)
 
-To make IRMAA alerts fully functional:
-
-1. **Call `CalculateMAGI()` in projection engine** - Add MAGI calculation to each year's projection
-2. **Populate IRMAA fields** - Set IRMAASurcharge, IRMAALevel, etc. in AnnualCashFlow
-3. **Call `AnalyzeIRMAARisk()`** - Run analysis after projection completes
-4. **Attach to ScenarioSummary** - Set IRMAAAnalysis field
+1. Projection engine now calls `CalculateMAGI()` and populates IRMAA fields per Medicare-eligible year
+2. `AnalyzeIRMAARisk()` invoked in scenario summary assembly path
+3. IRMAAAnalysis propagated to all formatters (TUI, console, HTML)
+4. Added test configuration (`test_irmaa_high_income.yaml`) using generic schema to validate high-income conditions
 
 ### Phase 2.2 Preview
 
 Next phase will implement **Tax-Smart Withdrawal Sequencing**:
+
 - Determine optimal order to withdraw from Taxable/Traditional/Roth accounts
 - Minimize taxes and IRMAA impact
 - Integrate with IRMAA alerts for comprehensive tax planning
 
-## Conclusion
+## Conclusion (Final)
 
-Phase 2.1 successfully delivers IRMAA threshold alerts as specified in the implementation plan. The system:
+Phase 2.1 (including polish) now provides a fully integrated, multi-surface IRMAA insight system:
 
-✅ Calculates MAGI accurately
-✅ Detects threshold breaches and warnings
-✅ Displays beautiful, informative alerts in TUI
-✅ Provides actionable recommendations
-✅ Has comprehensive test coverage
-✅ Follows clean architecture principles
+✅ Accurate MAGI + IRMAA tier detection inline with projection
+✅ Breach / warning classification with distance metrics
+✅ Lifetime cost quantification for surcharge years
+✅ Unified presentation across TUI, console, and HTML formats
+✅ Context-aware recommendation engine with severity & pattern detection
+✅ Comprehensive unit + integration test coverage
+✅ Clear documentation reflecting both initial build and polish improvements
 
-**Status:** Phase 2.1 core implementation complete. Integration with projection engine pending.
-
-**Estimated completion time:** ~4 hours (including testing and documentation)
+Remaining IRMAA work is now strategic enhancement rather than foundational plumbing.

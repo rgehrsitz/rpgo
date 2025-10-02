@@ -149,6 +149,12 @@ func (c ConsoleVerboseFormatter) Format(results *domain.ScenarioComparison) ([]b
 		fmt.Fprintf(&buf, "  TSP Longevity:           %d years\n", scenario.TSPLongevity)
 		fmt.Fprintf(&buf, "  Total Lifetime Income:   %s\n", FormatCurrency(scenario.TotalLifetimeIncome))
 		fmt.Fprintln(&buf)
+
+		// IRMAA Risk Analysis
+		if scenario.IRMAAAnalysis != nil {
+			writeIRMAAAnalysis(&buf, scenario.IRMAAAnalysis)
+		}
+
 		fmt.Fprintln(&buf)
 	}
 
@@ -257,4 +263,63 @@ func writeDetailedComparison(buf *bytes.Buffer, results *domain.ScenarioComparis
 func cmpLine(buf *bytes.Buffer, label string, working, retirement decimal.Decimal) {
 	diff := retirement.Sub(working)
 	fmt.Fprintf(buf, "%-35s %15s %15s %15s\n", label, FormatCurrency(working), FormatCurrency(retirement), FormatCurrency(diff))
+}
+
+// writeIRMAAAnalysis formats IRMAA risk analysis for console output
+func writeIRMAAAnalysis(buf *bytes.Buffer, analysis *domain.IRMAAAnalysis) {
+	fmt.Fprintln(buf, "IRMAA RISK ANALYSIS (Medicare Premium Surcharges):")
+	fmt.Fprintln(buf, "---------------------------------------------------")
+
+	// Summary status
+	if len(analysis.YearsWithBreaches) > 0 {
+		fmt.Fprintln(buf, "⚠️  IRMAA BREACHES DETECTED")
+		fmt.Fprintf(buf, "  Years with breaches:    %d\n", len(analysis.YearsWithBreaches))
+		if analysis.FirstBreachYear > 0 {
+			fmt.Fprintf(buf, "  First breach year:      %d\n", analysis.FirstBreachYear)
+		}
+		fmt.Fprintf(buf, "  Total IRMAA cost:       %s\n", FormatCurrency(analysis.TotalIRMAACost))
+	} else if len(analysis.YearsWithWarnings) > 0 {
+		fmt.Fprintln(buf, "⚠️  IRMAA WARNINGS (Close to Thresholds)")
+		fmt.Fprintf(buf, "  Years within $10K:      %d\n", len(analysis.YearsWithWarnings))
+	} else {
+		fmt.Fprintln(buf, "✓ NO IRMAA CONCERNS")
+		fmt.Fprintln(buf, "  MAGI remains comfortably below Medicare premium thresholds")
+	}
+
+	// Detailed high-risk years
+	if len(analysis.HighRiskYears) > 0 {
+		fmt.Fprintln(buf)
+		fmt.Fprintln(buf, "High Risk Years:")
+		fmt.Fprintf(buf, "%-6s  %-12s  %-10s  %-8s  %s\n", "Year", "MAGI", "Status", "Tier", "Annual Cost")
+		fmt.Fprintln(buf, strings.Repeat("-", 65))
+
+		for _, yr := range analysis.HighRiskYears {
+			statusIcon := "✓"
+			if yr.RiskStatus == domain.IRMAARiskBreach {
+				statusIcon = "✗"
+			} else if yr.RiskStatus == domain.IRMAARiskWarning {
+				statusIcon = "⚠"
+			}
+
+			fmt.Fprintf(buf, "%-6d  %-12s  %s %-8s  %-8s  %s\n",
+				yr.Year,
+				FormatCurrency(yr.MAGI),
+				statusIcon,
+				string(yr.RiskStatus),
+				yr.TierLevel,
+				FormatCurrency(yr.AnnualCost),
+			)
+		}
+	}
+
+	// Recommendations
+	if len(analysis.Recommendations) > 0 {
+		fmt.Fprintln(buf)
+		fmt.Fprintln(buf, "Recommendations:")
+		for _, rec := range analysis.Recommendations {
+			fmt.Fprintf(buf, "  %s\n", rec)
+		}
+	}
+
+	fmt.Fprintln(buf)
 }

@@ -37,7 +37,7 @@ func TestIRMAAIntegration(t *testing.T) {
 		t.Logf("  Recommendations: %d", len(analysis.Recommendations))
 	})
 
-	// Scenario 2: Moderate income - approaching threshold
+	// Scenario 2: Moderate income - approaching threshold (within $10K should be warning)
 	t.Run("Moderate income scenario - IRMAA warnings", func(t *testing.T) {
 		projection := createModerateIncomeProjection()
 		analysis := AnalyzeIRMAARisk(projection, true, mc)
@@ -86,9 +86,9 @@ func createHighIncomeProjection() []domain.AnnualCashFlow {
 			Year:               year,
 			Date:               baseDate.AddDate(i, 0, 0),
 			IsMedicareEligible: i >= 2, // Medicare eligible starting year 3
-			Pensions:           map[string]decimal.Decimal{"Retiree": decimal.NewFromInt(70000)},
-			TSPWithdrawals:     map[string]decimal.Decimal{"Retiree": decimal.NewFromInt(80000)}, // High withdrawal
-			SSBenefits:         map[string]decimal.Decimal{"Retiree": decimal.NewFromInt(45000)},
+			Pensions:           map[string]decimal.Decimal{"Retiree": decimal.NewFromInt(90000)},
+			TSPWithdrawals:     map[string]decimal.Decimal{"Retiree": decimal.NewFromInt(110000)}, // Higher withdrawal to ensure breach
+			SSBenefits:         map[string]decimal.Decimal{"Retiree": decimal.NewFromInt(50000)},
 		}
 
 		// Calculate MAGI
@@ -110,12 +110,12 @@ func createModerateIncomeProjection() []domain.AnnualCashFlow {
 			Year:               year,
 			Date:               baseDate.AddDate(i, 0, 0),
 			IsMedicareEligible: i >= 2,
-			Pensions:           map[string]decimal.Decimal{"Retiree": decimal.NewFromInt(60000)},
-			TSPWithdrawals:     map[string]decimal.Decimal{"Retiree": decimal.NewFromInt(70000)},
-			SSBenefits:         map[string]decimal.Decimal{"Retiree": decimal.NewFromInt(35000)},
+			Pensions:           map[string]decimal.Decimal{"Retiree": decimal.NewFromInt(80000)},
+			TSPWithdrawals:     map[string]decimal.Decimal{"Retiree": decimal.NewFromInt(90000)},
+			SSBenefits:         map[string]decimal.Decimal{"Retiree": decimal.NewFromInt(42000)},
 		}
 
-		// Calculate MAGI - will be around $195K (close to $206K threshold)
+		// Calculate MAGI - designed to be within $10K of 206K married threshold to trigger warnings
 		acf.MAGI = CalculateMAGI(&acf)
 		projection[i] = acf
 	}

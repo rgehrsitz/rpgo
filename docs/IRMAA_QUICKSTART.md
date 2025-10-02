@@ -1,8 +1,8 @@
 # IRMAA Alerts - Quick Start Guide
 
-## Proof That IRMAA Code Works
+## Fast Proof That IRMAA Detection Works
 
-The IRMAA threshold detection is **fully functional**. Run this test to see it in action:
+The IRMAA threshold detection is fully integrated into projections (TUI, console, HTML). You can still run a focused unit test to see tier transitions:
 
 ```bash
 go test -v ./internal/calculation -run "TestIRMAAThresholdExamples"
@@ -21,9 +21,9 @@ Tier: Tier1
 Surcharge: $69.90/month            ← Surcharge calculated!
 ```
 
-## Why You're Not Seeing IRMAA Alerts in Your Scenarios
+## Why You Might See “No IRMAA Concerns”
 
-Your retirement scenarios likely have **MAGI below the IRMAA thresholds**:
+That usually means your plan's MAGI is below the first threshold (this is good). To confirm the system works, use the provided high‑income test file or temporarily raise taxable withdrawals.
 
 ### 2025 IRMAA Thresholds (Married Filing Jointly)
 
@@ -33,50 +33,42 @@ Your retirement scenarios likely have **MAGI below the IRMAA thresholds**:
 | $258,000 | Second tier (+$174.70/month) |
 | $322,000 | Third tier (+$279.50/month) |
 
-### Typical FERS Retirement Income
+### Typical FERS Retirement Income (Example)
 
-A typical FERS retiree might have:
-- FERS Pension: $60,000/year
-- Social Security: $35,000/year (85% taxable = $29,750)
-- TSP Withdrawal: $40,000/year
-- **Total MAGI: ~$129,750** ← Well below $206K threshold! ✓
-
-**Result:** No IRMAA alerts because income is below thresholds (which is good!)
+Pension $60K + SS taxable portion ~$29.8K + TSP $40K = MAGI ≈ $130K → Safe (far below $206K).
 
 ## How to Test IRMAA Alerts
 
-### Option 1: Create a High-Income Test Scenario
+### Option 1: Use Included High-Income Config
 
-Create a scenario with income over $206K:
+File: `test_irmaa_high_income.yaml` (generic schema) — designed to push MAGI into warning/breach territory once both participants retire and Social Security + high variable percentage withdrawals overlap.
 
-**Example:** Married couple with high TSP withdrawals
+Run:
 
-- FERS Pension: $80,000
-- Social Security: $42,000 (85% = $35,700)
-- TSP Withdrawal: $95,000
-- **MAGI: $210,700** → **IRMAA Breach!** 🚨
+```bash
+./rpgo calculate test_irmaa_high_income.yaml -f console | grep -A6 "IRMAA RISK" -i || true
+./rpgo calculate test_irmaa_high_income.yaml -f html > report.html
+open report.html  # (macOS)
+```
 
-### Option 2: Modify Existing Scenario
+### Option 2: Boost Taxable Withdrawals Temporarily
 
-Temporarily increase TSP withdrawal rate in Parameters scene:
-1. Load a scenario
-2. Press `p` for Parameters
-3. Increase TSP withdrawal to 8% or 10%
-4. Press Enter to calculate
-5. View Results - you should see IRMAA warnings if MAGI > $196K
+In your scenario (TUI):
 
-### Option 3: Test with Single Filer
+1. Open scenario
+2. Press `p` (Parameters)
+3. Switch withdrawal strategy to variable percentage if needed
+4. Set rate to 0.09–0.10
+5. Recalculate and view results; if MAGI approaches within $10K → Warning; exceeds threshold → Breach
 
-Single filers have **lower thresholds** ($103K vs $206K):
+### Option 3: Single Filer Sensitivity
 
-- FERS Pension: $70,000
-- Social Security: $35,000 (85% = $29,750)
-- TSP Withdrawal: $15,000
-- **MAGI: $114,750** → **IRMAA Breach for single filer!** 🚨
+Lower first threshold ($103K) means moderate pensions + SS can already create warnings/breaches. Use a trimmed config with one participant and raise TSP rate to demonstrate.
 
-## What MAGI Includes
+## What MAGI Includes (Implemented Simplification)
 
 **Counted in MAGI (increases IRMAA risk):**
+
 - ✓ Salaries and wages
 - ✓ FERS pension
 - ✓ **Traditional TSP withdrawals** ← This is the big one
@@ -85,115 +77,74 @@ Single filers have **lower thresholds** ($103K vs $206K):
 - ✓ Interest, dividends, capital gains
 
 **NOT counted in MAGI:**
+
 - ✗ Roth TSP withdrawals (tax-free!)
 - ✗ Return of basis from taxable accounts
 - ✗ Life insurance proceeds
 
-## IRMAA Mitigation Strategies
+## IRMAA Mitigation / Optimization Strategies
 
 If you see IRMAA warnings in results:
 
 ### 1. Roth Conversions (Before Medicare)
+
 Convert Traditional TSP → Roth TSP **before age 65**:
+
 - Pay tax now at lower rates
 - Future Roth withdrawals don't count toward MAGI
 - Avoids IRMAA surcharges later
 
 ### 2. Time TSP Withdrawals
+
 - Withdraw more in years before Social Security starts
 - Withdraw less in high-income years
 - Smooth income across retirement
 
 ### 3. Delay Social Security
+
 - If TSP withdrawals are high, delay SS to 67 or 70
 - Reduces simultaneous income sources
 - Gives time for Roth conversions
 
 ### 4. Use Roth TSP First
+
 - Withdraw from Roth TSP during Medicare years
 - Keep Traditional TSP withdrawals minimal
 - Reduces MAGI
 
-## Current Status
+## Current Status (Post-Polish)
 
-### ✅ What's Working
+Fully integrated pipeline:
 
-The IRMAA detection system is **complete and tested**:
-- ✅ MAGI calculation is accurate
-- ✅ Risk classification works (Safe/Warning/Breach)
-- ✅ Threshold detection is precise
-- ✅ Surcharge calculation is correct
-- ✅ TUI display is beautiful and informative
-- ✅ All unit tests pass
+- Projection engine computes MAGI annually (only once per year record)
+- IRMAA risk + surcharge stored on each Medicare-eligible year
+- Multi-year analysis attaches `IRMAAAnalysis` to scenario summaries
+- Output surfaces: TUI, console (`-f console`), HTML (`-f html`)
+- Enhanced recommendation engine provides pattern + severity-aware guidance
 
-### ⏳ What's Not Yet Integrated
-
-The IRMAA code exists but is **not yet called** during projection:
-
-1. **Projection engine** doesn't call `CalculateMAGI()`
-2. **Scenario results** don't populate IRMAA fields
-3. **Summary** doesn't run `AnalyzeIRMAARisk()`
-
-This is why you don't see IRMAA alerts yet - the code works, but it's not hooked up to the calculation flow.
-
-## Integration Checklist
-
-To activate IRMAA alerts in actual scenarios:
-
-### Phase 1: Add MAGI to Projections
-In `internal/calculation/projection.go`, after creating each year's cash flow:
-
-```go
-// Calculate MAGI for IRMAA
-acf.MAGI = CalculateMAGI(&acf)
-
-// Calculate IRMAA risk if Medicare eligible
-if acf.IsMedicareEligible {
-    isMarried := household.FilingStatus == "married_filing_jointly"
-    mc := NewMedicareCalculator()
-
-    risk, tier, surcharge, distance := CalculateIRMAARiskStatus(
-        acf.MAGI,
-        isMarried,
-        mc,
-    )
-
-    acf.IRMAARiskStatus = string(risk)
-    acf.IRMAALevel = tier
-    acf.IRMAASurcharge = surcharge
-    acf.IRMAADistanceToNext = distance
-}
-```
-
-### Phase 2: Add Analysis to Summary
-After projection completes, analyze IRMAA:
-
-```go
-// In CalculateScenarioSummary or similar function
-isMarried := config.Household.FilingStatus == "married_filing_jointly"
-mc := NewMedicareCalculator()
-summary.IRMAAAnalysis = AnalyzeIRMAARisk(projection, isMarried, mc)
-```
-
-### Phase 3: Test
-Run a high-income scenario and verify:
-1. Results scene shows IRMAA section
-2. Warnings appear for MAGI near $206K
-3. Breaches show for MAGI over $206K
-4. Recommendations are displayed
-
-## Quick Verification
-
-Run this to prove IRMAA detection works:
+## Verifying Output Modes Quickly
 
 ```bash
-# Run threshold examples
-go test -v ./internal/calculation -run TestIRMAAThresholdExamples
+# Console detailed output
+./rpgo calculate test_irmaa_high_income.yaml -f console | grep -A4 "IRMAA RISK" -i
 
-# Should show:
-# - Safe: $159K MAGI ✓
-# - Warning: $199K MAGI ⚠️
-# - Breach: $210K MAGI 🚨
+# HTML report (open in browser)
+./rpgo calculate test_irmaa_high_income.yaml -f html > report.html
+open report.html
+
+# TUI (interactive)
+./rpgo-tui test_irmaa_high_income.yaml
 ```
 
-The code is ready - it just needs to be called during projection!
+## Deep-Dive Validation (Optional)
+
+```bash
+go test -v ./internal/calculation -run TestIRMAAThresholdExamples
+go test -v ./internal/calculation -run TestIRMAAIntegration
+```
+
+These confirm threshold edges and multi-year breach/warning aggregation logic.
+
+---
+
+Need a breach but still showing Safe? Increase Traditional withdrawal rate OR add a one-time large withdrawal year (e.g., simulate Roth conversion before 65 then large Traditional draw at 67). Small adjustments near the $206K (MFJ) or $103K (Single) lines can flip classifications.

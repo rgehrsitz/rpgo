@@ -141,6 +141,87 @@ h1 { margin:0 0 4px 0; font-weight:400; }
   {{end}}
 </section>
 
+{{range .Scenarios}}
+  {{if .IRMAAAnalysis}}
+  <section>
+    <h2>IRMAA Risk Analysis - {{.Name}}</h2>
+    <p style="font-size: 0.9em; color: #666;">
+      IRMAA (Income-Related Monthly Adjustment Amount) surcharges apply to Medicare Part B premiums when Modified Adjusted Gross Income (MAGI) exceeds certain thresholds.
+    </p>
+
+    {{with .IRMAAAnalysis}}
+      {{if gt (len .YearsWithBreaches) 0}}
+        <div style="background: #fff3cd; border-left: 4px solid #856404; padding: 12px; margin: 16px 0;">
+          <strong>⚠️ IRMAA BREACHES DETECTED</strong>
+          <ul style="margin: 8px 0 0 0;">
+            <li>Years with breaches: <strong>{{len .YearsWithBreaches}}</strong></li>
+            {{if gt .FirstBreachYear 0}}
+              <li>First breach year: <strong>{{.FirstBreachYear}}</strong></li>
+            {{end}}
+            <li>Total IRMAA cost: <strong>{{curr .TotalIRMAACost}}</strong></li>
+          </ul>
+        </div>
+      {{else if gt (len .YearsWithWarnings) 0}}
+        <div style="background: #fff3cd; border-left: 4px solid #856404; padding: 12px; margin: 16px 0;">
+          <strong>⚠️ IRMAA WARNINGS (Close to Thresholds)</strong>
+          <ul style="margin: 8px 0 0 0;">
+            <li>Years within $10K of threshold: <strong>{{len .YearsWithWarnings}}</strong></li>
+          </ul>
+        </div>
+      {{else}}
+        <div style="background: #d4edda; border-left: 4px solid #155724; padding: 12px; margin: 16px 0;">
+          <strong>✓ NO IRMAA CONCERNS</strong>
+          <p style="margin: 4px 0 0 0;">MAGI remains comfortably below Medicare premium thresholds</p>
+        </div>
+      {{end}}
+
+      {{if gt (len .HighRiskYears) 0}}
+        <h3>High Risk Years</h3>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>MAGI</th>
+              <th>Status</th>
+              <th>Tier</th>
+              <th>Annual Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .HighRiskYears}}
+            <tr>
+              <td>{{.Year}}</td>
+              <td>{{curr .MAGI}}</td>
+              <td>
+                {{if eq .RiskStatus "Breach"}}
+                  <span style="color: #d9534f;">✗ Breach</span>
+                {{else if eq .RiskStatus "Warning"}}
+                  <span style="color: #f0ad4e;">⚠ Warning</span>
+                {{else}}
+                  <span style="color: #5cb85c;">✓ Safe</span>
+                {{end}}
+              </td>
+              <td>{{.TierLevel}}</td>
+              <td>{{curr .AnnualCost}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      {{end}}
+
+      {{if gt (len .Recommendations) 0}}
+        <h3>Recommendations</h3>
+        <ul>
+          {{range .Recommendations}}
+            <li>{{.}}</li>
+          {{end}}
+        </ul>
+      {{end}}
+    {{end}}
+  </section>
+  {{end}}
+{{end}}
+
 <script>
 // Chart data extracted from scenarios
 const scenarioData = [

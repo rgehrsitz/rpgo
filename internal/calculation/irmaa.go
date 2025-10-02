@@ -1,6 +1,8 @@
 package calculation
 
 import (
+	"fmt"
+
 	"github.com/rgehrsitz/rpgo/internal/domain"
 	"github.com/shopspring/decimal"
 )
@@ -238,27 +240,120 @@ func generateIRMAARecommendations(analysis *domain.IRMAAAnalysis, threshold deci
 	recommendations := []string{}
 
 	if len(analysis.YearsWithBreaches) > 0 {
+		// Calculate total cost (average per breach year can be derived if needed)
 		recommendations = append(recommendations,
 			"⚠️  IRMAA breaches detected - consider strategies to reduce MAGI")
 
+		// Specific cost-based recommendations
+		if analysis.TotalIRMAACost.GreaterThan(decimal.NewFromInt(10000)) {
+			recommendations = append(recommendations,
+				fmt.Sprintf("💰 High IRMAA cost ($%.0f over %d years) - significant savings possible through optimization",
+					analysis.TotalIRMAACost.InexactFloat64(), len(analysis.YearsWithBreaches)))
+		}
+
+		// Check if breaches are early or late in retirement
+		if analysis.FirstBreachYear <= 5 {
+			recommendations = append(recommendations,
+				"💡 Breaches occur early - consider Roth conversions BEFORE retirement to reduce future MAGI")
+		} else {
+			recommendations = append(recommendations,
+				"💡 Breaches occur mid-retirement - review Social Security timing and TSP withdrawal strategy")
+		}
+
+		// Check for consecutive breaches
+		consecutiveYears := countConsecutiveYears(analysis.YearsWithBreaches)
+		if consecutiveYears >= 3 {
+			recommendations = append(recommendations,
+				fmt.Sprintf("📊 %d consecutive breach years detected - systematic withdrawal strategy change recommended", consecutiveYears))
+		}
+
+		// General strategies
 		recommendations = append(recommendations,
-			"💡 Consider Roth conversions in low-MAGI years (before Social Security starts)")
+			"💡 Withdraw from Roth TSP instead of Traditional TSP in breach years (Roth doesn't count toward MAGI)")
 
 		recommendations = append(recommendations,
-			"💡 Time TSP withdrawals to avoid threshold breaches")
+			"💡 Time large Traditional TSP withdrawals for low-income years (before SS starts or after RMDs begin)")
 
-		recommendations = append(recommendations,
-			"💡 Consider delaying Social Security to reduce MAGI during peak years")
+		// Check severity of breaches
+		maxCost := decimal.Zero
+		for _, yr := range analysis.HighRiskYears {
+			if yr.AnnualCost.GreaterThan(maxCost) {
+				maxCost = yr.AnnualCost
+			}
+		}
+		if maxCost.GreaterThan(decimal.NewFromInt(5000)) {
+			recommendations = append(recommendations,
+				"⚠️  Peak IRMAA cost exceeds $5,000/year - consider delaying Social Security or reducing TSP withdrawal rate")
+		}
+
 	} else if len(analysis.YearsWithWarnings) > 0 {
+		// Find how close to threshold
+		minDistance := decimal.NewFromInt(10000)
+		for _, yr := range analysis.HighRiskYears {
+			if yr.RiskStatus == domain.IRMAARiskWarning && yr.DistanceToThreshold.LessThan(minDistance) {
+				minDistance = yr.DistanceToThreshold
+			}
+		}
+
 		recommendations = append(recommendations,
 			"⚠️  Close to IRMAA thresholds - monitor MAGI carefully")
 
+		if minDistance.LessThan(decimal.NewFromInt(5000)) {
+			recommendations = append(recommendations,
+				fmt.Sprintf("💡 Only $%.0f away from breach - small TSP withdrawal adjustments could prevent surcharges",
+					minDistance.InexactFloat64()))
+		} else {
+			recommendations = append(recommendations,
+				"💡 Moderate buffer to thresholds - maintain current withdrawal strategy but monitor annually")
+		}
+
 		recommendations = append(recommendations,
-			"💡 Small adjustments to TSP withdrawals could prevent future breaches")
+			"💡 Consider maintaining emergency Roth TSP reserve for years approaching thresholds")
+
 	} else {
 		recommendations = append(recommendations,
 			"✓ No IRMAA concerns - MAGI remains comfortably below thresholds")
+
+		recommendations = append(recommendations,
+			"💡 Current income strategy avoids Medicare premium surcharges - no changes needed for IRMAA")
+
+		recommendations = append(recommendations,
+			"📈 You have flexibility to increase withdrawals if needed without triggering IRMAA")
 	}
 
 	return recommendations
+}
+
+// countConsecutiveYears finds the longest sequence of consecutive years
+func countConsecutiveYears(years []int) int {
+	if len(years) == 0 {
+		return 0
+	}
+
+	// Sort years first
+	sortedYears := make([]int, len(years))
+	copy(sortedYears, years)
+	for i := 0; i < len(sortedYears)-1; i++ {
+		for j := i + 1; j < len(sortedYears); j++ {
+			if sortedYears[i] > sortedYears[j] {
+				sortedYears[i], sortedYears[j] = sortedYears[j], sortedYears[i]
+			}
+		}
+	}
+
+	maxConsecutive := 1
+	currentConsecutive := 1
+
+	for i := 1; i < len(sortedYears); i++ {
+		if sortedYears[i] == sortedYears[i-1]+1 {
+			currentConsecutive++
+			if currentConsecutive > maxConsecutive {
+				maxConsecutive = currentConsecutive
+			}
+		} else {
+			currentConsecutive = 1
+		}
+	}
+
+	return maxConsecutive
 }
