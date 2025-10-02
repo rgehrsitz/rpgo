@@ -156,6 +156,11 @@ func (ce *CalculationEngine) RunGenericScenario(ctx context.Context, config *dom
 		summary.SuccessRate = ce.calculateDeterministicSuccessRate(projection, summary.TSPLongevity)
 	}
 
+	// Perform IRMAA risk analysis
+	isMarried := config.Household.FilingStatus == "married_filing_jointly"
+	mc := NewMedicareCalculator()
+	summary.IRMAAAnalysis = AnalyzeIRMAARisk(projection, isMarried, mc)
+
 	return summary, nil
 }
 

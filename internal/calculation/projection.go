@@ -675,6 +675,26 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 		cf.TotalGrossIncome = cf.CalculateTotalIncome()
 		cf.CalculateNetIncome()
 
+		// Calculate MAGI for IRMAA determination
+		cf.MAGI = CalculateMAGI(cf)
+
+		// Calculate IRMAA risk if Medicare eligible
+		if cf.IsMedicareEligible {
+			isMarried := household.FilingStatus == "married_filing_jointly"
+			mc := NewMedicareCalculator()
+
+			risk, tier, surcharge, distance := CalculateIRMAARiskStatus(
+				cf.MAGI,
+				isMarried,
+				mc,
+			)
+
+			cf.IRMAARiskStatus = string(risk)
+			cf.IRMAALevel = tier
+			cf.IRMAASurcharge = surcharge
+			cf.IRMAADistanceToNext = distance
+		}
+
 		projection[yr] = *cf
 	}
 
