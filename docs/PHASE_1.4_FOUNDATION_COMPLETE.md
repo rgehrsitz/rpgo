@@ -9,6 +9,7 @@ The foundational architecture for the RPGO TUI (Terminal User Interface) is now 
 ### ✅ Core Architecture
 
 **Files Created:**
+
 - `cmd/rpgo-tui/main.go` - TUI application entry point (47 lines)
 - `internal/tui/model.go` - Application state model (100 lines)
 - `internal/tui/update.go` - Message handling and state updates (201 lines)
@@ -21,13 +22,17 @@ The foundational architecture for the RPGO TUI (Terminal User Interface) is now 
 ### ✅ Key Features Implemented
 
 #### 1. **Model-Update-View Architecture**
+
 Following The Elm Architecture pattern:
+
 - **Model**: Centralized application state with scene management
 - **Update**: Message-driven state transitions with async command support
 - **View**: Declarative UI rendering with scene delegation
 
 #### 2. **Scene Navigation System**
+
 Seven main scenes defined and ready for implementation:
+
 - **Home**: Dashboard with quick overview
 - **Scenarios**: Browse and select scenarios
 - **Parameters**: Edit participant parameters
@@ -37,6 +42,7 @@ Seven main scenes defined and ready for implementation:
 - **Help**: Keyboard shortcuts and documentation
 
 Global keyboard shortcuts implemented:
+
 - `h` - Home
 - `s` - Scenarios
 - `p` - Parameters
@@ -48,7 +54,9 @@ Global keyboard shortcuts implemented:
 - `q` / `Ctrl+C` - Quit
 
 #### 3. **Message-Driven Architecture**
+
 Comprehensive message types for:
+
 - Navigation (scene switching)
 - Configuration loading
 - Scenario selection and calculation
@@ -58,14 +66,18 @@ Comprehensive message types for:
 - Error handling
 
 #### 4. **Styling System**
+
 Professional color palette and styles using Lipgloss:
+
 - **Color Palette**: Teal primary, purple secondary, amber accents
 - **Component Styles**: Borders, titles, status bars, metrics, tables
 - **Dynamic Styling**: Metric trends, error states, highlights
 - **Responsive Layout**: Terminal size awareness
 
 #### 5. **Application Shell**
+
 Complete application chrome:
+
 - Title bar with breadcrumb navigation
 - Status bar with keyboard shortcuts
 - Loading states with messages
@@ -75,6 +87,7 @@ Complete application chrome:
 ## Technical Highlights
 
 ### Bubble Tea Integration
+
 ```go
 // Main model implements tea.Model interface
 type Model struct {
@@ -90,6 +103,7 @@ func (m Model) View() string
 ```
 
 ### Scene Management
+
 ```go
 type Scene int
 const (
@@ -101,6 +115,7 @@ const (
 ```
 
 Scenes can be navigated with keyboard shortcuts or programmatic messages:
+
 ```go
 return m, func() tea.Msg {
     return NavigateMsg{Scene: SceneHome}
@@ -108,7 +123,9 @@ return m, func() tea.Msg {
 ```
 
 ### Async Operations
+
 Commands for non-blocking operations:
+
 ```go
 func loadConfigCmd(path string) tea.Cmd {
     return func() tea.Msg {
@@ -119,6 +136,7 @@ func loadConfigCmd(path string) tea.Cmd {
 ```
 
 ### Styling with Lipgloss
+
 ```go
 TitleStyle = lipgloss.NewStyle().
     Bold(true).
@@ -129,6 +147,7 @@ TitleStyle = lipgloss.NewStyle().
 ## Current State
 
 ### Working Features
+
 - ✅ TUI application compiles successfully
 - ✅ Scene navigation framework in place
 - ✅ Keyboard shortcuts working
@@ -138,9 +157,11 @@ TitleStyle = lipgloss.NewStyle().
 - ✅ Help screen with documentation
 
 ### Placeholder Scenes
+
 All seven scenes have placeholder implementations that display "Coming soon" messages. These will be built out in subsequent weeks.
 
 ### Testing Status
+
 - ✅ Compilation test passed
 - ⏳ Manual TTY testing requires real terminal (expected behavior)
 - ⏳ Unit tests to be added with `teatest` package (Week 3)
@@ -150,55 +171,62 @@ All seven scenes have placeholder implementations that display "Coming soon" mes
 Building on the foundation, the following interactive features have been completed:
 
 ### ✅ Custom Components
-   - ✅ ParameterSlider with arrow key control
-   - ✅ MetricCard with styled metrics and trends
-   - ✅ ScenarioCard for scenario overview
-   - ✅ Progress indicators
+
+- ✅ ParameterSlider with arrow key control
+- ✅ MetricCard with styled metrics and trends
+- ✅ ScenarioCard for scenario overview
+- ✅ Progress indicators
 
 ### ✅ Scenarios Scene (Complete)
-   - ✅ List view of all scenarios
-   - ✅ Selection with arrow keys
-   - ✅ Split-pane preview showing scenario details
-   - ✅ Load and calculate selected scenario
-   - ✅ Real participant data display
+
+- ✅ List view of all scenarios
+- ✅ Selection with arrow keys
+- ✅ Split-pane preview showing scenario details
+- ✅ Load and calculate selected scenario
+- ✅ Real participant data display
 
 ### ✅ Parameters Scene (Complete)
-   - ✅ Interactive parameter editing
-   - ✅ Visual sliders for SS claim age and TSP withdrawal rate
-   - ✅ Real-time value adjustment with arrow keys
-   - ✅ Modified state tracking
-   - ✅ Calculation trigger
+
+- ✅ Interactive parameter editing
+- ✅ Visual sliders for SS claim age and TSP withdrawal rate
+- ✅ Real-time value adjustment with arrow keys
+- ✅ Modified state tracking
+- ✅ Calculation trigger
 
 ### ✅ Results Scene (Complete)
-   - ✅ Detailed metrics display
-   - ✅ Scrollable viewport for year-by-year projections
-   - ✅ Full calculation integration
-   - ✅ Keyboard navigation (↑/↓, PgUp/PgDn, g/G)
-   - ✅ Terminal resize reactivity
+
+- ✅ Detailed metrics display
+- ✅ Scrollable viewport for year-by-year projections
+- ✅ Full calculation integration
+- ✅ Keyboard navigation (↑/↓, PgUp/PgDn, g/G)
+- ✅ Terminal resize reactivity
 
 ### ✅ Compare Scene (Complete)
-   - ✅ Multi-select scenario interface with checkboxes
-   - ✅ Space/x to toggle selection
-   - ✅ Requires minimum 2 scenarios
-   - ✅ Parallel calculation of all selected scenarios
-   - ✅ Side-by-side comparison table
-   - ✅ Highlights best values with ★
-   - ✅ ANSI-aware column alignment
-   - ✅ Clear and restart comparison
+
+- ✅ Multi-select scenario interface with checkboxes
+- ✅ Space/x to toggle selection
+- ✅ Requires minimum 2 scenarios
+- ✅ Parallel calculation of all selected scenarios
+- ✅ Side-by-side comparison table
+- ✅ Highlights best values with ★
+- ✅ ANSI-aware column alignment
+- ✅ Clear and restart comparison
 
 ### ✅ Optimize Scene (Complete)
-   - ✅ Break-even TSP withdrawal rate optimizer
-   - ✅ Three-stage workflow (select → input → results)
-   - ✅ Interactive text input for target income
-   - ✅ Integration with CalculateBreakEvenTSPWithdrawalRate
-   - ✅ Detailed results with income breakdown
-   - ✅ Difference from target highlighted
+
+- ✅ Break-even TSP withdrawal rate optimizer
+- ✅ Three-stage workflow (select → input → results)
+- ✅ Interactive text input for target income
+- ✅ Integration with CalculateBreakEvenTSPWithdrawalRate
+- ✅ Detailed results with income breakdown
+- ✅ Difference from target highlighted
 
 ### ✅ Config Loading Integration
-   - ✅ Real config file parsing
-   - ✅ Error handling for invalid configs
-   - ✅ Participant data display
-   - ✅ Scenario list population across all scenes
+
+- ✅ Real config file parsing
+- ✅ Error handling for invalid configs
+- ✅ Participant data display
+- ✅ Scenario list population across all scenes
 
 ## Integration with Existing Code
 
@@ -213,6 +241,7 @@ The TUI integrates seamlessly with existing rpgo components:
 ## Architecture Decisions
 
 ### Why Bubble Tea?
+
 - **Mature Framework**: Battle-tested in production applications
 - **Clean Architecture**: Elm Architecture pattern promotes maintainability
 - **Rich Ecosystem**: Bubbles components and Lipgloss styling
@@ -220,12 +249,14 @@ The TUI integrates seamlessly with existing rpgo components:
 - **Testing**: teatest package for UI testing without real TTY
 
 ### Why Scene-Based Navigation?
+
 - **Progressive Disclosure**: Start simple, reveal complexity as needed
 - **Clear Mental Model**: Users understand their location
 - **Keyboard-First**: Fast navigation without mouse
 - **Modular**: Each scene can be developed independently
 
 ### Why Message-Driven?
+
 - **Testability**: Messages can be tested in isolation
 - **Predictability**: Clear cause and effect
 - **Async-Friendly**: Commands naturally handle async operations
@@ -258,10 +289,12 @@ Based on TUI_DESIGN.md vision for "amazing, useful, and flexible":
 ## Known Issues Fixed
 
 ### Compare Scene Column Alignment Issue
+
 **Problem:** Lipgloss ANSI escape codes were breaking column alignment in comparison tables.
 **Solution:** Updated `padRight()` helper to use `lipgloss.Width()` instead of `len()` to correctly calculate visible width excluding ANSI codes.
 
 ### Scenario Selection Order Issue
+
 **Problem:** Map iteration randomness caused inconsistent scenario ordering between selection and results.
 **Solution:** Changed `getSelectedScenarios()` to iterate by index order instead of map iteration.
 
@@ -308,6 +341,7 @@ Based on TUI_DESIGN.md vision for "amazing, useful, and flexible":
 ## Conclusion
 
 Phase 1.4 is **✅ 100% COMPLETE**. The TUI has:
+
 - ✅ Solid architectural foundation following Bubble Tea best practices
 - ✅ Seven functional scenes with navigation
 - ✅ Six interactive scenes fully implemented (Home, Scenarios, Parameters, Results, Compare, Optimize)

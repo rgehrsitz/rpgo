@@ -195,13 +195,14 @@ func (m *CompareModel) renderSelection() string {
 	content.WriteString("\n")
 	warningStyle := lipgloss.NewStyle().Foreground(tuistyles.ColorAccent)
 	successStyle := lipgloss.NewStyle().Foreground(tuistyles.ColorSuccess)
-	if selectedCount == 0 {
+	switch selectedCount {
+	case 0:
 		content.WriteString(subtleStyle.Render("Select at least 2 scenarios to compare"))
-	} else if selectedCount == 1 {
+	case 1:
 		content.WriteString(warningStyle.Render(
 			fmt.Sprintf("Selected: %d scenario (need at least 2)", selectedCount),
 		))
-	} else {
+	default:
 		content.WriteString(successStyle.Render(
 			fmt.Sprintf("Selected: %d scenarios • Press Enter to compare", selectedCount),
 		))

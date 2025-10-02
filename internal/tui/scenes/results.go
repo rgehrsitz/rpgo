@@ -97,15 +97,20 @@ func (m *ResultsModel) View() string {
 	// Build header (shown above viewport)
 	header := renderResultsHeader(m.scenarioName)
 
-	// Build scrollable content (metrics + all years)
+	// Build scrollable content (metrics + IRMAA + all years)
 	metrics := renderKeyMetrics(m.summary)
+	irmaaSection := renderIRMAAAnalysis(m.summary)
 	yearSummary := renderYearSummaryFull(m.summary) // Show ALL years
+
+	sections := []string{metrics}
+	if irmaaSection != "" {
+		sections = append(sections, "", irmaaSection)
+	}
+	sections = append(sections, "", yearSummary)
 
 	scrollableContent := lipgloss.JoinVertical(
 		lipgloss.Left,
-		metrics,
-		"",
-		yearSummary,
+		sections...,
 	)
 
 	// Set viewport content if ready
@@ -238,73 +243,6 @@ func renderYearSummaryFull(summary *domain.ScenarioSummary) string {
 	return content.String()
 }
 
-// renderYearSummary renders a summary of the first few years (old non-scrollable version)
-func renderYearSummary(summary *domain.ScenarioSummary) string {
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(tuistyles.ColorPrimary).
-		MarginBottom(1)
-
-	tableStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(tuistyles.ColorBorder).
-		Padding(1, 2)
-
-	var content strings.Builder
-	content.WriteString(titleStyle.Render("Year-by-Year Summary"))
-	content.WriteString("\n\n")
-
-	// Table header
-	headerStyle := lipgloss.NewStyle().
-		Foreground(tuistyles.ColorPrimary).
-		Bold(true)
-
-	header := fmt.Sprintf("%-6s  %-20s  %-20s  %-20s",
-		"Year", "Gross Income", "Federal Tax", "Net Income")
-	content.WriteString(headerStyle.Render(header))
-	content.WriteString("\n")
-	content.WriteString(strings.Repeat("─", 70))
-	content.WriteString("\n")
-
-	// Show first 10 years (or fewer if not available)
-	maxYears := 10
-	if summary.Projection != nil && len(summary.Projection) < maxYears {
-		maxYears = len(summary.Projection)
-	}
-
-	if summary.Projection != nil {
-		for i := 0; i < maxYears && i < len(summary.Projection); i++ {
-			year := summary.Projection[i]
-
-			grossIncome := formatCurrencyShort(year.TotalGrossIncome.InexactFloat64())
-			fedTax := formatCurrencyShort(year.FederalTax.InexactFloat64())
-			netIncome := formatCurrencyShort(year.NetIncome.InexactFloat64())
-
-			row := fmt.Sprintf("%-6d  %-20s  %-20s  %-20s",
-				year.Year, grossIncome, fedTax, netIncome)
-			content.WriteString(row)
-			content.WriteString("\n")
-		}
-	}
-
-	if summary.Projection != nil && len(summary.Projection) > maxYears {
-		moreStyle := lipgloss.NewStyle().
-			Foreground(tuistyles.ColorMuted).
-			Italic(true)
-		content.WriteString("\n")
-		content.WriteString(moreStyle.Render(fmt.Sprintf("... and %d more years", len(summary.Projection)-maxYears)))
-	}
-
-	return tableStyle.Render(content.String())
-}
-
-// renderResultsHelp renders keyboard shortcuts
-func renderResultsHelp() string {
-	helpStyle := lipgloss.NewStyle().
-		Foreground(tuistyles.ColorMuted)
-
-	return helpStyle.Render("ESC back to parameters • s scenarios • h home • p parameters again")
-}
 
 // renderResultsHelpScrollable renders keyboard shortcuts with scroll instructions
 func renderResultsHelpScrollable() string {
@@ -330,4 +268,117 @@ func formatCurrencyShort(value float64) string {
 		return fmt.Sprintf("$%.0fK", value/1000)
 	}
 	return fmt.Sprintf("$%.0f", value)
+}
+
+// renderIRMAAAnalysis renders IRMAA risk analysis if available
+func renderIRMAAAnalysis(summary *domain.ScenarioSummary) string {
+	if summary.IRMAAAnalysis == nil {
+		return ""
+	}
+
+	analysis := summary.IRMAAAnalysis
+
+	var content strings.Builder
+
+	// Title
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(tuistyles.ColorPrimary).
+		Underline(true)
+
+	content.WriteString(titleStyle.Render("IRMAA Risk Analysis"))
+	content.WriteString("\n\n")
+
+	// Summary metrics
+	if len(analysis.YearsWithBreaches) > 0 {
+		warningStyle := lipgloss.NewStyle().
+			Foreground(tuistyles.ColorDanger).
+			Bold(true)
+
+		content.WriteString(warningStyle.Render("⚠️  IRMAA Breaches Detected"))
+		content.WriteString("\n\n")
+
+		content.WriteString(fmt.Sprintf("Years with breaches: %d\n", len(analysis.YearsWithBreaches)))
+		if analysis.FirstBreachYear > 0 {
+			content.WriteString(fmt.Sprintf("First breach: Year %d\n", analysis.FirstBreachYear))
+		}
+		content.WriteString(fmt.Sprintf("Total IRMAA cost: %s\n", formatCurrency(analysis.TotalIRMAACost.InexactFloat64())))
+	} else if len(analysis.YearsWithWarnings) > 0 {
+		warningStyle := lipgloss.NewStyle().
+			Foreground(tuistyles.ColorAccent).
+			Bold(true)
+
+		content.WriteString(warningStyle.Render("⚠️  IRMAA Warnings"))
+		content.WriteString("\n\n")
+
+		content.WriteString(fmt.Sprintf("Years within $10K of threshold: %d\n", len(analysis.YearsWithWarnings)))
+	} else {
+		safeStyle := lipgloss.NewStyle().
+			Foreground(tuistyles.ColorSuccess).
+			Bold(true)
+
+		content.WriteString(safeStyle.Render("✓ No IRMAA Concerns"))
+		content.WriteString("\n\n")
+		content.WriteString("MAGI remains comfortably below IRMAA thresholds\n")
+	}
+
+	// High risk years detail
+	if len(analysis.HighRiskYears) > 0 {
+		content.WriteString("\n")
+		headerStyle := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(tuistyles.ColorSecondary)
+
+		content.WriteString(headerStyle.Render("High Risk Years:"))
+		content.WriteString("\n\n")
+
+		// Table header
+		content.WriteString("Year   MAGI        Status    Tier    Annual Cost\n")
+		content.WriteString("────── ─────────── ───────── ─────── ───────────\n")
+
+		for _, yr := range analysis.HighRiskYears {
+			var statusColor lipgloss.Color
+			var statusIcon string
+
+			switch yr.RiskStatus {
+			case domain.IRMAARiskBreach:
+				statusColor = tuistyles.ColorDanger
+				statusIcon = "✗"
+			case domain.IRMAARiskWarning:
+				statusColor = tuistyles.ColorAccent
+				statusIcon = "⚠"
+			default:
+				statusColor = tuistyles.ColorSuccess
+				statusIcon = "✓"
+			}
+
+			statusStyle := lipgloss.NewStyle().Foreground(statusColor)
+
+			content.WriteString(fmt.Sprintf("%-6d %-11s %s %-8s %-7s %s\n",
+				yr.Year,
+				formatCurrencyShort(yr.MAGI.InexactFloat64()),
+				statusStyle.Render(statusIcon),
+				string(yr.RiskStatus),
+				yr.TierLevel,
+				formatCurrencyShort(yr.AnnualCost.InexactFloat64()),
+			))
+		}
+	}
+
+	// Recommendations
+	if len(analysis.Recommendations) > 0 {
+		content.WriteString("\n")
+		headerStyle := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(tuistyles.ColorInfo)
+
+		content.WriteString(headerStyle.Render("Recommendations:"))
+		content.WriteString("\n\n")
+
+		for _, rec := range analysis.Recommendations {
+			content.WriteString("  " + rec + "\n")
+		}
+	}
+
+	return content.String()
 }

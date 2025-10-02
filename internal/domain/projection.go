@@ -38,6 +38,13 @@ type AnnualCashFlow struct {
 	MedicarePremium          decimal.Decimal `json:"medicarePremium"`
 	NetIncome                decimal.Decimal `json:"netIncome"`
 
+	// IRMAA-related fields
+	MAGI                decimal.Decimal `json:"magi"`                // Modified Adjusted Gross Income for IRMAA
+	IRMAASurcharge      decimal.Decimal `json:"irmaaSurcharge"`      // Monthly IRMAA surcharge per person
+	IRMAALevel          string          `json:"irmaaLevel"`          // "None", "Tier1", "Tier2", etc.
+	IRMAARiskStatus     string          `json:"irmaaRiskStatus"`     // "Safe", "Warning", "Breach"
+	IRMAADistanceToNext decimal.Decimal `json:"irmaaDistanceToNext"` // Distance to next IRMAA threshold
+
 	// Additional Information
 	IsRetired          bool            `json:"isRetired"`
 	IsMedicareEligible bool            `json:"isMedicareEligible"`
@@ -66,6 +73,9 @@ type ScenarioSummary struct {
 	PreRetirementNet2030 decimal.Decimal `json:"preRetirementNet2030"` // What current net would be with COLA growth
 	PreRetirementNet2035 decimal.Decimal `json:"preRetirementNet2035"`
 	PreRetirementNet2040 decimal.Decimal `json:"preRetirementNet2040"`
+
+	// IRMAA Risk Analysis
+	IRMAAAnalysis *IRMAAAnalysis `json:"irmaaAnalysis,omitempty"` // IRMAA risk analysis for this scenario
 }
 
 // ScenarioComparison provides a comparison of all scenarios
@@ -156,6 +166,37 @@ type TaxableIncome struct {
 	OtherTaxableIncome decimal.Decimal `json:"otherTaxableIncome"`
 	WageIncome         decimal.Decimal `json:"wageIncome"`
 	InterestIncome     decimal.Decimal `json:"interestIncome"`
+}
+
+// IRMAARisk represents the IRMAA risk status for a given year
+type IRMAARisk string
+
+const (
+	IRMAARiskSafe    IRMAARisk = "Safe"    // More than $10K below first threshold
+	IRMAARiskWarning IRMAARisk = "Warning" // Within $10K of a threshold
+	IRMAARiskBreach  IRMAARisk = "Breach"  // Exceeds one or more thresholds
+)
+
+// IRMAAAnalysis provides detailed IRMAA analysis across projection years
+type IRMAAAnalysis struct {
+	YearsWithBreaches []int              `json:"yearsWithBreaches"` // Years where MAGI exceeds IRMAA thresholds
+	YearsWithWarnings []int              `json:"yearsWithWarnings"` // Years within $10K of threshold
+	TotalIRMAACost    decimal.Decimal    `json:"totalIrmaa Cost"`   // Total IRMAA surcharges across all years
+	FirstBreachYear   int                `json:"firstBreachYear"`   // First year with IRMAA breach (0 if none)
+	HighRiskYears     []IRMAAYearRisk    `json:"highRiskYears"`     // Detailed risk analysis per year
+	Recommendations   []string           `json:"recommendations"`   // Suggested mitigation strategies
+}
+
+// IRMAAYearRisk provides detailed IRMAA risk information for a single year
+type IRMAAYearRisk struct {
+	Year                int             `json:"year"`
+	MAGI                decimal.Decimal `json:"magi"`
+	Threshold           decimal.Decimal `json:"threshold"`
+	DistanceToThreshold decimal.Decimal `json:"distanceToThreshold"` // Negative if over, positive if under
+	RiskStatus          IRMAARisk       `json:"riskStatus"`
+	TierLevel           string          `json:"tierLevel"`
+	MonthlySurcharge    decimal.Decimal `json:"monthlySurcharge"`
+	AnnualCost          decimal.Decimal `json:"annualCost"`
 }
 
 // NewAnnualCashFlow creates a new AnnualCashFlow with initialized participant maps
