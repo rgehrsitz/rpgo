@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/rgehrsitz/rpgo/internal/calculation"
@@ -44,10 +46,10 @@ type Model struct {
 	// Scene-specific models (will be added as we build each scene)
 	homeModel       interface{} // HomeModel (to be created)
 	scenariosModel  *scenes.ScenariosModel
-	parametersModel interface{} // ParametersModel (to be created)
+	parametersModel *scenes.ParametersModel
 	compareModel    interface{} // CompareModel (to be created)
 	optimizeModel   interface{} // OptimizeModel (to be created)
-	resultsModel    interface{} // ResultsModel (to be created)
+	resultsModel    *scenes.ResultsModel
 	helpModel       interface{} // HelpModel (to be created)
 
 	// Error state
@@ -65,6 +67,8 @@ func NewModel(configPath string) Model {
 		configPath:          configPath,
 		comparisonResults:   make(map[string]*domain.ScenarioSummary),
 		scenariosModel:      scenes.NewScenariosModel(),
+		parametersModel:     scenes.NewParametersModel(),
+		resultsModel:        scenes.NewResultsModel(),
 		width:               80,
 		height:              24,
 	}
@@ -88,6 +92,46 @@ func loadConfigCmd(path string) tea.Cmd {
 
 		return ConfigLoadedMsg{
 			Config: cfg,
+		}
+	}
+}
+
+// calculateScenarioCmd returns a command that calculates a scenario
+func calculateScenarioCmd(scenario *domain.GenericScenario, cfg *domain.Configuration) tea.Cmd {
+	return func() tea.Msg {
+		// Create a temporary config with just this scenario
+		tempConfig := &domain.Configuration{
+			GlobalAssumptions: cfg.GlobalAssumptions,
+			Household:         cfg.Household,
+			Scenarios:         []domain.GenericScenario{*scenario},
+		}
+
+		// Create calculation engine
+		engine := calculation.NewCalculationEngineWithConfig(cfg.GlobalAssumptions.FederalRules)
+
+		// Run calculation
+		results, err := engine.RunScenarios(tempConfig)
+		if err != nil {
+			return CalculationCompleteMsg{
+				ScenarioName: scenario.Name,
+				Results:      nil,
+				Err:          err,
+			}
+		}
+
+		// Extract the single scenario result
+		if len(results.Scenarios) > 0 {
+			return CalculationCompleteMsg{
+				ScenarioName: scenario.Name,
+				Results:      &results.Scenarios[0],
+				Err:          nil,
+			}
+		}
+
+		return CalculationCompleteMsg{
+			ScenarioName: scenario.Name,
+			Results:      nil,
+			Err:          fmt.Errorf("no results returned from calculation"),
 		}
 	}
 }

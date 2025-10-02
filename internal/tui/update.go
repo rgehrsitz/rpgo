@@ -45,7 +45,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ScenarioSelectedMsg:
 		m.selectedScenario = msg.ScenarioName
-		return m, nil
+
+		// Find and load the selected scenario into parameters model
+		if m.config != nil && m.parametersModel != nil {
+			for _, scenario := range m.config.Scenarios {
+				if scenario.Name == msg.ScenarioName {
+					// Make a copy to avoid modifying the original
+					scenarioCopy := scenario.DeepCopy()
+					m.parametersModel.SetScenario(scenarioCopy)
+					m.parametersModel.SetSize(m.width, m.height)
+					break
+				}
+			}
+		}
+
+		// Navigate to parameters scene
+		return m, func() tea.Msg {
+			return NavigateMsg{Scene: SceneParameters}
+		}
 
 	case ParameterChangedMsg:
 		// Handle parameter changes
@@ -55,6 +72,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case CalculationStartedMsg:
 		m.loading = true
 		m.loadingMessage = "Calculating scenario..."
+
+		// Get the scenario from parameters model
+		if m.parametersModel != nil && m.parametersModel.GetScenario() != nil && m.config != nil {
+			return m, calculateScenarioCmd(m.parametersModel.GetScenario(), m.config)
+		}
 		return m, nil
 
 	case CalculationCompleteMsg:
@@ -63,6 +85,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.Err
 		} else {
 			m.selectedResults = msg.Results
+			// Update results model and navigate to results scene
+			if m.resultsModel != nil {
+				m.resultsModel.SetResults(msg.ScenarioName, msg.Results)
+				m.resultsModel.SetSize(m.width, m.height)
+			}
+			return m, func() tea.Msg {
+				return NavigateMsg{Scene: SceneResults}
+			}
 		}
 		return m, nil
 
@@ -205,7 +235,11 @@ func (m Model) updateCurrentScene(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case SceneParameters:
-		// TODO: Update parameters model
+		if m.parametersModel != nil {
+			updatedModel, cmd := m.parametersModel.Update(msg)
+			m.parametersModel = updatedModel
+			return m, cmd
+		}
 		return m, nil
 	case SceneCompare:
 		// TODO: Update compare model
@@ -214,7 +248,11 @@ func (m Model) updateCurrentScene(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// TODO: Update optimize model
 		return m, nil
 	case SceneResults:
-		// TODO: Update results model
+		if m.resultsModel != nil {
+			updatedModel, cmd := m.resultsModel.Update(msg)
+			m.resultsModel = updatedModel
+			return m, cmd
+		}
 		return m, nil
 	case SceneHelp:
 		// TODO: Update help model

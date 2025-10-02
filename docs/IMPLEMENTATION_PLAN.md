@@ -204,7 +204,7 @@ RECOMMENDED: Postpone 2 Years
   --max-date 2035-12-31
 ```
 
-2. **Solve for TSP Balance:**
+1. **Solve for TSP Balance:**
 
 ```bash
 ./rpgo break-even config.yaml \
@@ -214,7 +214,7 @@ RECOMMENDED: Postpone 2 Years
   --retirement-date 2027-06-30
 ```
 
-3. **Solve for TSP Withdrawal Rate:**
+1. **Solve for TSP Withdrawal Rate:**
 
 ```bash
 ./rpgo break-even config.yaml \
@@ -222,7 +222,7 @@ RECOMMENDED: Postpone 2 Years
   --target-net-income 175000
 ```
 
-4. **Solve for SS Start Age:**
+1. **Solve for SS Start Age:**
 
 ```bash
 ./rpgo break-even config.yaml \
@@ -1462,4 +1462,4 @@ RECOMMENDATION: Plan conservatively. TSP longevity highly sensitive to inflation
 
 ---
 
-**END OF IMPLEMENTATION PLAN**
+## End of implementation plan

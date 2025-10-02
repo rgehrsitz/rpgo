@@ -75,13 +75,13 @@ const (
     SceneResults
     SceneHelp
 )
-```
+```go
 
 ## UI Layout
 
 ### Main Screen Layout
 
-```
+```text
 ┌─ FERS Retirement Planner ─────────────────────────────────────────────────────┐
 │ Home | Scenarios | Parameters | Compare | Optimize | Help              [?][X] │
 ├───────────────────────────────────────────────────────────────────────────────┤
@@ -114,7 +114,7 @@ const (
 ├───────────────────────────────────────────────────────────────────────────────┤
 │ ↑/↓: Navigate | ←/→: Adjust | ⏎: Edit | Tab: Next Panel | ?: Help | Q: Quit │
 └───────────────────────────────────────────────────────────────────────────────┘
-```
+```text
 
 ## Scenes/Views
 
@@ -143,7 +143,7 @@ const (
 
 **Layout**:
 
-```
+```text
 ┌─ Scenarios ─────────────────────────────────────────────────────────┐
 │                                                                     │
 │  ┌─ Scenario List ──────┐  ┌─ Preview ─────────────────────────┐  │
@@ -161,7 +161,7 @@ const (
 │  Quick Actions:                                                    │
 │  [C]ompare Selected  [O]ptimize  [E]dit  [R]ename  [D]uplicate    │
 └─────────────────────────────────────────────────────────────────────┘
-```
+```text
 
 **Components**:
 
@@ -185,7 +185,7 @@ const (
 
 **Layout**:
 
-```
+```text
 ┌─ Parameters: Early Retirement 2026 ─────────────────────────────────┐
 │                                                                     │
 │  Participant: [John Smith ▼]                                       │
@@ -212,7 +212,7 @@ const (
 │                                                                     │
 │  [Apply] [Reset] [Preview Impact]                                  │
 └─────────────────────────────────────────────────────────────────────┘
-```
+```text
 
 **Components**:
 
@@ -235,8 +235,8 @@ const (
 **Purpose**: Side-by-side comparison of scenarios
 
 **Layout**:
-
-```
+ 
+```text
 ┌─ Compare Scenarios ─────────────────────────────────────────────────┐
 │                                                                     │
 │  Select scenarios to compare:                                      │
@@ -265,7 +265,7 @@ const (
 │                                                                     │
 │  [Export CSV] [Save Report] [Add Template]                         │
 └─────────────────────────────────────────────────────────────────────┘
-```
+```text
 
 **Components**:
 
@@ -287,7 +287,7 @@ const (
 
 **Layout**:
 
-```
+```text
 ┌─ Optimize Parameters ───────────────────────────────────────────────┐
 │                                                                     │
 │  Scenario: [Early Retirement 2026 ▼]                               │
@@ -319,11 +319,11 @@ const (
 │          Testing TSP rate 4.5%...                                  │
 │          [████████░░░░░░░░░░░░] 24%                               │
 └─────────────────────────────────────────────────────────────────────┘
-```
+```text
 
 **During optimization**:
 
-```
+```text
 ┌─ Optimization Results ──────────────────────────────────────────────┐
 │                                                                     │
 │  ✓ Optimization Complete (47 iterations, 42 seconds)               │
@@ -347,7 +347,7 @@ const (
 │                                                                     │
 │  [Apply to Scenario] [Compare All] [Export Results]                │
 └─────────────────────────────────────────────────────────────────────┘
-```
+```text
 
 **Components**:
 
@@ -373,7 +373,7 @@ const (
 
 **Layout**:
 
-```
+```text
 ┌─ Results: Early Retirement 2026 ────────────────────────────────────┐
 │                                                                     │
 │  View: [Summary] [Income] [TSP Balance] [Taxes] [Cash Flow]        │
@@ -400,7 +400,7 @@ const (
 │                                                                     │
 │  [Export Data] [Print] [Share] [Year Details]                      │
 └─────────────────────────────────────────────────────────────────────┘
-```
+```text
 
 **Components**:
 
@@ -423,7 +423,7 @@ const (
 
 **Layout**:
 
-```
+```text
 ┌─ Help ──────────────────────────────────────────────────────────────┐
 │                                                                     │
 │  ┌─ Keyboard Shortcuts ─────────────────────────────────────────┐  │
@@ -458,7 +458,7 @@ const (
 │                                                                     │
 │  [Close Help]                                                       │
 └─────────────────────────────────────────────────────────────────────┘
-```
+```text
 
 **Components**:
 
@@ -483,7 +483,7 @@ type ParameterSlider struct {
     Width       int
     OnChange    func(decimal.Decimal)
 }
-```
+```go
 
 **Features**:
 

@@ -175,6 +175,9 @@ func (m Model) renderScenarios() string {
 
 // renderParameters renders the parameter editing screen
 func (m Model) renderParameters() string {
+	if m.parametersModel != nil {
+		return m.parametersModel.View()
+	}
 	return BorderStyle.Render("Parameters scene - Coming soon")
 }
 
@@ -201,6 +204,9 @@ func (m Model) renderOptimize() string {
 
 // renderResults renders detailed results
 func (m Model) renderResults() string {
+	if m.resultsModel != nil {
+		return m.resultsModel.View()
+	}
 	return BorderStyle.Render("Results scene - Coming soon")
 }
 
