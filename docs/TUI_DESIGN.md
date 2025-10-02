@@ -7,22 +7,26 @@ Create an **amazing, flexible, and useful** Terminal User Interface (TUI) for re
 ## Design Principles
 
 ### 1. **Immediate Feedback**
+
 - Real-time recalculation as parameters change
 - Live preview of scenario impacts
 - Instant validation and error messages
 
 ### 2. **Progressive Disclosure**
+
 - Start simple, reveal complexity on demand
 - Contextual help always available
 - Multi-level detail views (summary → details → deep dive)
 
 ### 3. **Elegant & Functional**
+
 - Beautiful styling with Lipgloss
 - Smooth animations and transitions
 - Keyboard-first design with mouse support
 - Responsive layout adapting to terminal size
 
 ### 4. **Power User Friendly**
+
 - Keyboard shortcuts for everything
 - Command palette for quick actions
 - Configurable keybindings
@@ -31,6 +35,7 @@ Create an **amazing, flexible, and useful** Terminal User Interface (TUI) for re
 ## Core Architecture
 
 ### Tech Stack
+
 - **Bubble Tea**: Main TUI framework (Elm Architecture)
 - **Bubbles**: Pre-built UI components (lists, tables, inputs, spinners)
 - **Lipgloss**: Styling and layout
@@ -114,9 +119,11 @@ const (
 ## Scenes/Views
 
 ### 1. Home Scene
+
 **Purpose**: Dashboard overview of current scenario
 
 **Components**:
+
 - Scenario summary card
 - Key metrics display (styled with Lipgloss boxes)
 - Quick adjustment sliders (using custom Bubble component)
@@ -124,15 +131,18 @@ const (
 - Action buttons
 
 **Interactions**:
+
 - Arrow keys to adjust sliders
 - Enter to drill into specific parameter
 - Tab to cycle through adjustable fields
 - Number keys for quick scenario selection
 
 ### 2. Scenarios Scene
+
 **Purpose**: Browse, select, and manage scenarios
 
 **Layout**:
+
 ```
 ┌─ Scenarios ─────────────────────────────────────────────────────────┐
 │                                                                     │
@@ -154,12 +164,14 @@ const (
 ```
 
 **Components**:
+
 - List component (from Bubbles) for scenarios
 - Preview panel with scenario details
 - Action buttons
 - Search/filter input
 
 **Interactions**:
+
 - j/k or ↑/↓ to navigate list
 - Enter to select and edit
 - c to compare
@@ -168,9 +180,11 @@ const (
 - n to create new
 
 ### 3. Parameters Scene
+
 **Purpose**: Deep-dive parameter editing for selected scenario
 
 **Layout**:
+
 ```
 ┌─ Parameters: Early Retirement 2026 ─────────────────────────────────┐
 │                                                                     │
@@ -201,6 +215,7 @@ const (
 ```
 
 **Components**:
+
 - Dropdown for participant selection (custom Bubble)
 - Date picker (custom component)
 - Sliders with live feedback
@@ -208,6 +223,7 @@ const (
 - Dropdown for strategy selection
 
 **Interactions**:
+
 - Tab to move between fields
 - Arrow keys for sliders
 - Type to edit values directly
@@ -215,9 +231,11 @@ const (
 - Live preview of impacts
 
 ### 4. Compare Scene
+
 **Purpose**: Side-by-side comparison of scenarios
 
 **Layout**:
+
 ```
 ┌─ Compare Scenarios ─────────────────────────────────────────────────┐
 │                                                                     │
@@ -250,21 +268,25 @@ const (
 ```
 
 **Components**:
+
 - Checkbox list for scenario selection
 - Table component (from Bubbles) for metrics
 - Chart comparison view
 - Insight/recommendation panel
 
 **Interactions**:
+
 - Space to toggle scenario selection
 - Tab through comparison table
 - Export to CSV/JSON
 - Apply template variations
 
 ### 5. Optimize Scene
+
 **Purpose**: Run break-even solver with interactive configuration
 
 **Layout**:
+
 ```
 ┌─ Optimize Parameters ───────────────────────────────────────────────┐
 │                                                                     │
@@ -300,6 +322,7 @@ const (
 ```
 
 **During optimization**:
+
 ```
 ┌─ Optimization Results ──────────────────────────────────────────────┐
 │                                                                     │
@@ -327,6 +350,7 @@ const (
 ```
 
 **Components**:
+
 - Radio buttons for target selection
 - Radio buttons for goal selection
 - Input fields with validation
@@ -336,6 +360,7 @@ const (
 - Recommendation panel
 
 **Interactions**:
+
 - j/k to navigate options
 - Space to select radio
 - Enter to start optimization
@@ -343,9 +368,11 @@ const (
 - Apply results directly to scenario
 
 ### 6. Results/Charts Scene
+
 **Purpose**: Detailed visualization and analysis
 
 **Layout**:
+
 ```
 ┌─ Results: Early Retirement 2026 ────────────────────────────────────┐
 │                                                                     │
@@ -376,6 +403,7 @@ const (
 ```
 
 **Components**:
+
 - Tab bar for view selection
 - ASCII chart rendering (using custom chart library or manual drawing)
 - Table for detailed year-by-year data
@@ -383,15 +411,18 @@ const (
 - Color-coded metrics
 
 **Interactions**:
+
 - Tab to switch views
 - Arrow keys to scrub through years
 - Enter to see detailed breakdown
 - Export to CSV/JSON
 
 ### 7. Help Scene
+
 **Purpose**: Interactive help and keyboard shortcuts
 
 **Layout**:
+
 ```
 ┌─ Help ──────────────────────────────────────────────────────────────┐
 │                                                                     │
@@ -430,6 +461,7 @@ const (
 ```
 
 **Components**:
+
 - Help component from Bubbles
 - Categorized keyboard shortcuts
 - Searchable help content
@@ -439,6 +471,7 @@ const (
 ### Custom Components to Build
 
 #### 1. ParameterSlider
+
 ```go
 type ParameterSlider struct {
     Label       string
@@ -453,6 +486,7 @@ type ParameterSlider struct {
 ```
 
 **Features**:
+
 - Visual slider bar with filled/unfilled sections
 - Current value display
 - Arrow key adjustment
@@ -461,6 +495,7 @@ type ParameterSlider struct {
 - Live validation
 
 #### 2. MetricCard
+
 ```go
 type MetricCard struct {
     Title       string
@@ -473,6 +508,7 @@ type MetricCard struct {
 ```
 
 **Features**:
+
 - Styled box with Lipgloss
 - Large value display
 - Trend indicator
@@ -480,6 +516,7 @@ type MetricCard struct {
 - Sparkline mini-chart
 
 #### 3. ASCIIChart
+
 ```go
 type ASCIIChart struct {
     Data        []ChartSeries
@@ -499,6 +536,7 @@ type ChartSeries struct {
 ```
 
 **Features**:
+
 - Multi-line charts
 - Auto-scaling Y-axis
 - Axis labels
@@ -507,6 +545,7 @@ type ChartSeries struct {
 - Grid lines (optional)
 
 #### 4. ScenarioCard
+
 ```go
 type ScenarioCard struct {
     Scenario    *domain.GenericScenario
@@ -518,12 +557,14 @@ type ScenarioCard struct {
 ```
 
 **Features**:
+
 - Compact scenario overview
 - Key metrics preview
 - Selection indicator
 - Focus highlight
 
 #### 5. ProgressPanel
+
 ```go
 type ProgressPanel struct {
     Title       string
@@ -535,6 +576,7 @@ type ProgressPanel struct {
 ```
 
 **Features**:
+
 - Progress bar
 - Status message
 - Spinner for indeterminate operations
@@ -543,6 +585,7 @@ type ProgressPanel struct {
 ## State Management
 
 ### Application State
+
 ```go
 type AppState struct {
     // Core data
@@ -575,6 +618,7 @@ type AppState struct {
 ```
 
 ### Message Types
+
 ```go
 // Navigation messages
 type SceneChangeMsg Scene
@@ -688,6 +732,7 @@ var (
 ## Performance Optimizations
 
 ### 1. Async Calculations
+
 ```go
 func (m Model) calculateScenarioAsync(scenarioName string) tea.Cmd {
     return func() tea.Msg {
@@ -699,7 +744,9 @@ func (m Model) calculateScenarioAsync(scenarioName string) tea.Cmd {
 ```
 
 ### 2. Debounced Updates
+
 For slider adjustments, debounce recalculations:
+
 ```go
 type DebouncedParameter struct {
     value    decimal.Decimal
@@ -709,7 +756,9 @@ type DebouncedParameter struct {
 ```
 
 ### 3. Result Caching
+
 Cache scenario summaries to avoid recalculation:
+
 ```go
 type ResultCache struct {
     summaries map[string]*CachedResult
@@ -724,7 +773,9 @@ type CachedResult struct {
 ```
 
 ### 4. Viewport Rendering
+
 Only render visible portions of large lists/tables:
+
 ```go
 type VirtualList struct {
     items       []Item
@@ -737,12 +788,14 @@ type VirtualList struct {
 ## Testing Strategy
 
 ### 1. Unit Tests
+
 - Test each custom component independently
 - Mock tea.Model interface
 - Test Update() logic with various messages
 - Test View() rendering
 
 ### 2. Integration Tests with teatest
+
 ```go
 func TestScenarioSelection(t *testing.T) {
     tm := teatest.NewTestModel(t, initialModel)
@@ -758,7 +811,9 @@ func TestScenarioSelection(t *testing.T) {
 ```
 
 ### 3. Visual Regression Testing with VHS
+
 Record terminal sessions for:
+
 - Onboarding flow
 - Parameter adjustment
 - Optimization workflow
@@ -767,12 +822,14 @@ Record terminal sessions for:
 ## Development Workflow
 
 ### 1. Live Reload Setup
+
 ```bash
 # Watch for changes and rebuild
 watchexec -e go -r -- go run ./cmd/rpgo-tui
 ```
 
 ### 2. Debug Logging
+
 ```go
 import "github.com/charmbracelet/log"
 
@@ -786,6 +843,7 @@ log.Debug("Received message", "type", msg)
 ```
 
 ### 3. Message Dumping
+
 ```go
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     // Dump all messages for debugging
@@ -799,6 +857,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 ## Progressive Implementation Plan
 
 ### Phase 1: Foundation (Week 1)
+
 1. Set up Bubble Tea project structure
 2. Implement basic Model-Update-View
 3. Create Home scene with static data
@@ -806,6 +865,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 5. Implement basic styling
 
 ### Phase 2: Core Components (Week 1-2)
+
 1. Build ParameterSlider component
 2. Build MetricCard component
 3. Build ScenarioCard component
@@ -813,6 +873,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 5. Add config loading
 
 ### Phase 3: Interactivity (Week 2)
+
 1. Make parameters adjustable
 2. Add async calculation
 3. Implement real-time preview
@@ -820,6 +881,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 5. Implement result caching
 
 ### Phase 4: Advanced Features (Week 2-3)
+
 1. Build Compare scene
 2. Build Optimize scene with progress
 3. Implement ASCIIChart component
@@ -827,6 +889,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 5. Add data export
 
 ### Phase 5: Polish (Week 3)
+
 1. Implement Help scene
 2. Add keyboard shortcuts
 3. Improve responsive layout
@@ -834,6 +897,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 5. Performance tuning
 
 ### Phase 6: Testing & Docs (Week 3)
+
 1. Write unit tests
 2. Add integration tests
 3. Create VHS demos
@@ -843,6 +907,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 ## Future Enhancements
 
 ### Phase 2+ Features
+
 - **Themes**: Multiple color schemes (dark, light, high-contrast)
 - **Plugins**: Extensible component system
 - **Templates**: Save and share parameter presets
@@ -857,6 +922,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 ## Success Metrics
 
 ### User Experience
+
 - ✅ Can adjust parameters and see results in <1 second
 - ✅ Can complete comparison workflow in <30 seconds
 - ✅ Can run optimization without reading docs
@@ -864,6 +930,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 - ✅ Works in terminals of varying sizes (80x24 minimum)
 
 ### Technical
+
 - ✅ No blocking operations in Update() or View()
 - ✅ <100ms render time for any view
 - ✅ Memory usage <50MB for typical configs
@@ -871,6 +938,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 - ✅ Works on Linux, macOS, Windows
 
 ### Delight Factors
+
 - ✅ Smooth animations and transitions
 - ✅ Helpful inline tips and recommendations
 - ✅ Beautiful, polished visual design

@@ -3,7 +3,7 @@ package tui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/rgehrsitz/rpgo/internal/domain"
+	"github.com/rgehrsitz/rpgo/internal/tui/tuimsg"
 )
 
 // Scene represents different screens in the TUI
@@ -29,71 +29,20 @@ type NavigateMsg struct {
 // QuitMsg signals the application should exit
 type QuitMsg struct{}
 
-// ErrorMsg displays an error to the user
-type ErrorMsg struct {
-	Err error
-}
-
-// ConfigLoadedMsg signals configuration has been loaded
-type ConfigLoadedMsg struct {
-	Config *domain.Configuration
-}
-
-// ScenarioSelectedMsg signals a scenario has been selected
-type ScenarioSelectedMsg struct {
-	ScenarioName string
-}
-
-// ParameterChangedMsg signals a parameter value has changed
-type ParameterChangedMsg struct {
-	Participant string
-	Parameter   string
-	Value       interface{}
-}
-
-// CalculationStartedMsg signals a calculation has begun
-type CalculationStartedMsg struct {
-	ScenarioName string
-}
-
-// CalculationCompleteMsg signals a calculation has finished
-type CalculationCompleteMsg struct {
-	ScenarioName string
-	Results      *domain.ScenarioSummary
-	Err          error
-}
-
-// ComparisonStartedMsg signals a comparison calculation has begun
-type ComparisonStartedMsg struct {
-	ScenarioNames []string
-}
-
-// ComparisonCompleteMsg signals a comparison has finished
-type ComparisonCompleteMsg struct {
-	Comparisons map[string]*domain.ScenarioSummary
-	Err         error
-}
-
-// OptimizationStartedMsg signals an optimization has begun
-type OptimizationStartedMsg struct {
-	Target string
-	Goal   string
-}
-
-// OptimizationProgressMsg provides progress updates during optimization
-type OptimizationProgressMsg struct {
-	Iteration int
-	Total     int
-	Status    string
-}
-
-// OptimizationCompleteMsg signals an optimization has finished
-type OptimizationCompleteMsg struct {
-	Target  string
-	Goal    string
-	Results interface{} // OptimizationResult or MultiDimensionalResult
-	Err     error
-}
+// Re-export messages from tuimsg to avoid import cycles
+type (
+	ErrorMsg                = tuimsg.ErrorMsg
+	ConfigLoadedMsg         = tuimsg.ConfigLoadedMsg
+	ScenarioSelectedMsg     = tuimsg.ScenarioSelectedMsg
+	ParameterChangedMsg     = tuimsg.ParameterChangedMsg
+	CalculationStartedMsg   = tuimsg.CalculationStartedMsg
+	CalculationCompleteMsg  = tuimsg.CalculationCompleteMsg
+	ComparisonStartedMsg    = tuimsg.ComparisonStartedMsg
+	ComparisonCompleteMsg   = tuimsg.ComparisonCompleteMsg
+	OptimizationStartedMsg  = tuimsg.OptimizationStartedMsg
+	OptimizationProgressMsg = tuimsg.OptimizationProgressMsg
+	OptimizationCompleteMsg = tuimsg.OptimizationCompleteMsg
+)
 
 // KeyMsg is a wrapper for tea.KeyMsg for easier handling
 type KeyMsg tea.KeyMsg

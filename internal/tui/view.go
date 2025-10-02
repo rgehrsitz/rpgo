@@ -167,6 +167,9 @@ func (m Model) renderHome() string {
 
 // renderScenarios renders the scenarios list
 func (m Model) renderScenarios() string {
+	if m.scenariosModel != nil {
+		return m.scenariosModel.View()
+	}
 	return BorderStyle.Render("Scenarios scene - Coming soon")
 }
 

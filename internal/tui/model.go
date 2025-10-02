@@ -4,7 +4,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/rgehrsitz/rpgo/internal/calculation"
+	"github.com/rgehrsitz/rpgo/internal/config"
 	"github.com/rgehrsitz/rpgo/internal/domain"
+	"github.com/rgehrsitz/rpgo/internal/tui/scenes"
 )
 
 // Model represents the entire application state
@@ -41,7 +43,7 @@ type Model struct {
 
 	// Scene-specific models (will be added as we build each scene)
 	homeModel       interface{} // HomeModel (to be created)
-	scenariosModel  interface{} // ScenariosModel (to be created)
+	scenariosModel  *scenes.ScenariosModel
 	parametersModel interface{} // ParametersModel (to be created)
 	compareModel    interface{} // CompareModel (to be created)
 	optimizeModel   interface{} // OptimizeModel (to be created)
@@ -62,6 +64,7 @@ func NewModel(configPath string) Model {
 		currentScene:        SceneHome,
 		configPath:          configPath,
 		comparisonResults:   make(map[string]*domain.ScenarioSummary),
+		scenariosModel:      scenes.NewScenariosModel(),
 		width:               80,
 		height:              24,
 	}
@@ -76,10 +79,15 @@ func (m Model) Init() tea.Cmd {
 // loadConfigCmd returns a command that loads the configuration file
 func loadConfigCmd(path string) tea.Cmd {
 	return func() tea.Msg {
-		// TODO: Implement actual config loading
-		// For now, return a placeholder
+		// Load configuration from YAML file
+		parser := config.NewInputParser()
+		cfg, err := parser.LoadFromFile(path)
+		if err != nil {
+			return ErrorMsg{Err: err}
+		}
+
 		return ConfigLoadedMsg{
-			Config: nil,
+			Config: cfg,
 		}
 	}
 }

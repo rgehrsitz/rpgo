@@ -35,6 +35,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		// Initialize calculation engine with config
 		// m.calcEngine = calculation.NewCalculationEngine(msg.Config)
+
+		// Populate scenarios model if config is loaded
+		if msg.Config != nil && m.scenariosModel != nil {
+			m.scenariosModel.SetScenarios(msg.Config.Scenarios)
+			m.scenariosModel.SetSize(m.width, m.height)
+		}
 		return m, nil
 
 	case ScenarioSelectedMsg:
@@ -192,7 +198,11 @@ func (m Model) updateCurrentScene(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// TODO: Update home model
 		return m, nil
 	case SceneScenarios:
-		// TODO: Update scenarios model
+		if m.scenariosModel != nil {
+			updatedModel, cmd := m.scenariosModel.Update(msg)
+			m.scenariosModel = updatedModel
+			return m, cmd
+		}
 		return m, nil
 	case SceneParameters:
 		// TODO: Update parameters model
