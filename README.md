@@ -14,6 +14,7 @@ A comprehensive retirement planning calculator for Federal Employees Retirement 
 - **Multiple Scenarios**: Compare multiple retirement scenarios simultaneously
 - **Long-term Projections**: 25+ year projections with COLA adjustments
 - **Multiple Output Formats**: Console, HTML, JSON, and CSV reports
+- **Interactive TUI**: Terminal user interface with real-time parameter adjustment and visualization (in development)
 - **Monte Carlo Simulations**: Probabilistic analysis using historical market data for portfolio sustainability
 - **Historical Data Integration**: Real TSP fund returns, inflation, and COLA data from 1990-2023
 
@@ -38,6 +39,7 @@ git clone https://github.com/rgehrsitz/rpgo.git
 cd rpgo
 go mod tidy
 go build -o rpgo ./cmd/rpgo
+go build -o rpgo-tui ./cmd/rpgo-tui  # Optional: Build TUI interface
 ```
 
 ## Usage
@@ -81,6 +83,25 @@ go build -o rpgo ./cmd/rpgo
 - `./rpgo historical stats [data-path]` — print descriptive statistics for historical datasets.
 - `./rpgo historical query [data-path] [year] [fund]` — fetch a single data point (fund return, inflation, or COLA).
 - `./rpgo historical monte-carlo [data-path] [flags]` — run portfolio-only Monte Carlo simulations using flag-driven parameters.
+
+### Interactive TUI (Terminal User Interface)
+
+**Status**: Foundation complete, components in development
+
+```bash
+./rpgo-tui my_config.yaml
+```
+
+The TUI provides an interactive interface for retirement planning with:
+
+- **Real-time Parameter Adjustment**: Modify retirement dates, TSP rates, and SS claiming ages with immediate recalculation
+- **Visual Dashboards**: Overview of key metrics with trend indicators
+- **Scenario Browsing**: Navigate and compare multiple scenarios interactively
+- **Optimization Interface**: Run break-even solver with live progress updates
+- **ASCII Charts**: Visual representation of projections over time
+- **Keyboard-First Design**: Efficient navigation without mouse (h=home, s=scenarios, p=parameters, c=compare, o=optimize, r=results, ?=help)
+
+See [TUI Design Documentation](docs/TUI_DESIGN.md) for detailed architecture and features.
 
 #### Compare Command Examples
 

@@ -6,6 +6,7 @@
 *.dylib
 fers-calc
 /rpgo
+/rpgo-tui
 
 # Test binary, built with `go test -c`
 *.test
