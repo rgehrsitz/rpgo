@@ -546,6 +546,16 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 			// Calculate withdrawal using sequencing strategy
 			if st.retired && (st.tspBalance.GreaterThan(decimalZero) || (p.TaxableAccountBalance != nil && p.TaxableAccountBalance.GreaterThan(decimalZero))) {
 				withdrawal := decimalZero
+
+				// Check for RMD requirement first
+				isRMDYear := age >= 73 // RMD age is 73 for 2025+
+				rmdAmount := decimalZero
+				if isRMDYear && st.tspBalanceTraditional.GreaterThan(decimalZero) {
+					// Use proper RMD calculation
+					rmdCalc := NewRMDCalculator(p.BirthDate.Year())
+					rmdAmount = rmdCalc.CalculateRMD(st.tspBalanceTraditional, age)
+				}
+
 				if ps, ok := psMap[p.Name]; ok {
 					switch ps.TSPWithdrawalStrategy {
 					case "4_percent_rule":
@@ -563,6 +573,11 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 						if ps.TSPWithdrawalRate != nil {
 							withdrawal = st.tspBalance.Mul(*ps.TSPWithdrawalRate)
 						}
+					}
+
+					// Ensure RMD is met if required
+					if isRMDYear && rmdAmount.GreaterThan(withdrawal) {
+						withdrawal = rmdAmount
 					}
 				}
 				if retiredThisYear && withdrawal.GreaterThan(decimalZero) {
@@ -683,27 +698,31 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 					cf.WithdrawalTraditional = cf.WithdrawalTraditional.Add(tradPortion)
 					cf.WithdrawalRoth = cf.WithdrawalRoth.Add(rothPortion)
 				}
-				tradPortion := decimal.Zero
-				rothPortion := decimal.Zero
-				totalBefore := st.tspBalance
-				if totalBefore.GreaterThan(decimalZero) {
-					tradRatio := decimal.Zero
-					if st.tspBalanceTraditional.GreaterThan(decimalZero) {
-						tradRatio = st.tspBalanceTraditional.Div(totalBefore)
+			}
+
+			// Apply Roth conversions for this year
+			if ps, exists := scenario.ParticipantScenarios[p.Name]; exists && ps.RothConversions != nil {
+				currentYear := startYear + yr
+				for _, conversion := range ps.RothConversions.Conversions {
+					if conversion.Year == currentYear {
+						// Convert from Traditional to Roth
+						conversionAmount := conversion.Amount
+						if conversionAmount.GreaterThan(st.tspBalanceTraditional) {
+							conversionAmount = st.tspBalanceTraditional
+						}
+
+						// Move from Traditional to Roth
+						st.tspBalanceTraditional = st.tspBalanceTraditional.Sub(conversionAmount)
+						st.tspBalanceRoth = st.tspBalanceRoth.Add(conversionAmount)
+
+						// Update total TSP balance
+						st.tspBalance = st.tspBalanceTraditional.Add(st.tspBalanceRoth)
+
+						// Add conversion amount to taxable income for this year
+						// This will be picked up in the tax calculation
+						cf.TSPWithdrawals[p.Name] = cf.TSPWithdrawals[p.Name].Add(conversionAmount)
 					}
-					tradPortion = withdrawal.Mul(tradRatio)
-					rothPortion = withdrawal.Sub(tradPortion)
 				}
-				st.tspBalanceTraditional = st.tspBalanceTraditional.Sub(tradPortion)
-				if st.tspBalanceTraditional.LessThan(decimalZero) {
-					st.tspBalanceTraditional = decimalZero
-				}
-				st.tspBalanceRoth = st.tspBalanceRoth.Sub(rothPortion)
-				if st.tspBalanceRoth.LessThan(decimalZero) {
-					st.tspBalanceRoth = decimalZero
-				}
-				st.tspBalance = st.tspBalance.Sub(withdrawal)
-				cf.TSPWithdrawals[p.Name] = withdrawal
 			}
 
 			growthRate := preRetReturn
@@ -714,6 +733,32 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 				st.tspBalance = st.tspBalance.Mul(onePlus(growthRate))
 			}
 			cf.TSPBalances[p.Name] = st.tspBalance
+		}
+
+		// Check if any participant is in an RMD year (household-level)
+		cf.IsRMDYear = false
+		cf.RMDAmount = decimalZero
+		for _, name := range participantNames {
+			if !cf.IsDeceased[name] {
+				age := cf.Ages[name]
+				if age >= 73 {
+					cf.IsRMDYear = true
+					// Calculate RMD for the participant with Traditional TSP balance
+					if st, ok := states[name]; ok && st.tspBalanceTraditional.GreaterThan(decimalZero) {
+						// Find the participant in household.Participants
+						for _, p := range household.Participants {
+							if p.Name == name {
+								rmdCalc := NewRMDCalculator(p.BirthDate.Year())
+								rmdAmount := rmdCalc.CalculateRMD(st.tspBalanceTraditional, age)
+								if rmdAmount.GreaterThan(cf.RMDAmount) {
+									cf.RMDAmount = rmdAmount
+								}
+								break
+							}
+						}
+					}
+				}
+			}
 		}
 
 		livingNames := make([]string, 0, len(participantNames))
@@ -731,6 +776,7 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 			}
 		}
 
+		// Legacy FEHB calculation for backward compatibility
 		fehbTotal := decimalZero
 		tspContributionTotal := decimalZero
 		for _, name := range participantNames {
@@ -755,6 +801,29 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 			cf.FilingStatusSingle = filingStatus == "single"
 		}
 		cf.FederalFilingStatus = filingStatus
+
+		// Calculate comprehensive healthcare costs
+		healthcareCalc := NewHealthcareCostCalculator()
+
+		// Get living participants for healthcare calculation
+		livingParticipants := make([]domain.Participant, 0, len(livingNames))
+		for _, name := range livingNames {
+			for _, p := range household.Participants {
+				if p.Name == name {
+					livingParticipants = append(livingParticipants, p)
+					break
+				}
+			}
+		}
+
+		// Calculate household healthcare costs
+		cf.HealthcareCosts = healthcareCalc.CalculateHouseholdHealthcareCosts(
+			livingParticipants,
+			cf.Ages,
+			startYear+yr,
+			cf.MAGI,
+			filingStatus,
+		)
 
 		seniors := 0
 		for name, age := range cf.Ages {

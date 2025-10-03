@@ -69,6 +69,9 @@ type GlobalAssumptions struct {
 	// Monte Carlo Configuration
 	MonteCarloSettings MonteCarloSettings `yaml:"monte_carlo_settings" json:"monte_carlo_settings"`
 
+	// Healthcare inflation rates
+	HealthcareInflation HealthcareInflationRates `yaml:"healthcare_inflation" json:"healthcare_inflation"`
+
 	// Federal Rules and Limits (updated annually)
 	FederalRules FederalRules `yaml:"federal_rules" json:"federal_rules"`
 
@@ -449,6 +452,9 @@ type Participant struct {
 	// Employment end date (for scenarios where someone stops working but hasn't retired)
 	EmploymentEndDate *time.Time `yaml:"employment_end_date,omitempty" json:"employment_end_date,omitempty"`
 
+	// Healthcare configuration (optional)
+	Healthcare *HealthcareConfig `yaml:"healthcare,omitempty" json:"healthcare,omitempty"`
+
 	// Optional fields for additional context
 	PayPlanGrade string `yaml:"pay_plan_grade,omitempty" json:"pay_plan_grade,omitempty"`
 	SSNLast4     string `yaml:"ssn_last4,omitempty" json:"ssn_last4,omitempty"`
@@ -476,6 +482,9 @@ type ParticipantScenario struct {
 	TSPWithdrawalStrategy      string           `yaml:"tsp_withdrawal_strategy,omitempty" json:"tsp_withdrawal_strategy,omitempty"`
 	TSPWithdrawalTargetMonthly *decimal.Decimal `yaml:"tsp_withdrawal_target_monthly,omitempty" json:"tsp_withdrawal_target_monthly,omitempty"`
 	TSPWithdrawalRate          *decimal.Decimal `yaml:"tsp_withdrawal_rate,omitempty" json:"tsp_withdrawal_rate,omitempty"`
+
+	// Roth conversion schedule (optional)
+	RothConversions *RothConversionSchedule `yaml:"roth_conversions,omitempty" json:"roth_conversions,omitempty"`
 
 	// Optional: per-participant override of sequencing (future use)
 	// (Typically sequencing is household-level; keeping placeholder for extensibility)
@@ -535,6 +544,13 @@ func (gs *GenericScenario) DeepCopy() *GenericScenario {
 		if ps.TSPWithdrawalRate != nil {
 			valCopy := *ps.TSPWithdrawalRate
 			psCopy.TSPWithdrawalRate = &valCopy
+		}
+		if ps.RothConversions != nil {
+			rcCopy := &RothConversionSchedule{
+				Conversions: make([]RothConversion, len(ps.RothConversions.Conversions)),
+			}
+			copy(rcCopy.Conversions, ps.RothConversions.Conversions)
+			psCopy.RothConversions = rcCopy
 		}
 
 		gc.ParticipantScenarios[name] = psCopy

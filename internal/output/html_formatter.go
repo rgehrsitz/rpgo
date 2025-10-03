@@ -22,6 +22,7 @@ var htmlTemplate = template.Must(template.New("report").Funcs(template.FuncMap{
 	"pct":    FormatPercentage,
 	"minus1": func(i int) int { return i - 1 },
 	"add":    func(a, b decimal.Decimal) decimal.Decimal { return a.Add(b) },
+	"addInt": func(a, b int) int { return a + b },
 	"slice": func(items []domain.ScenarioSummary, start int) []domain.ScenarioSummary {
 		if start >= len(items) {
 			return []domain.ScenarioSummary{}

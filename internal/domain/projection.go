@@ -36,7 +36,11 @@ type AnnualCashFlow struct {
 	TotalTSPContributions    decimal.Decimal `json:"totalTspContributions"` // Sum of all participant TSP contributions
 	FEHBPremium              decimal.Decimal `json:"fehbPremium"`
 	MedicarePremium          decimal.Decimal `json:"medicarePremium"`
-	NetIncome                decimal.Decimal `json:"netIncome"`
+
+	// Healthcare cost breakdown
+	HealthcareCosts HealthcareCostBreakdown `json:"healthcareCosts"`
+
+	NetIncome decimal.Decimal `json:"netIncome"`
 
 	// IRMAA-related fields
 	MAGI                decimal.Decimal `json:"magi"`                // Modified Adjusted Gross Income for IRMAA
@@ -222,6 +226,7 @@ func NewAnnualCashFlow(year int, date time.Time, participantNames []string) *Ann
 		WithdrawalTaxable:           decimal.Zero,
 		WithdrawalTraditional:       decimal.Zero,
 		WithdrawalRoth:              decimal.Zero,
+		HealthcareCosts:             HealthcareCostBreakdown{},
 	}
 
 	// Initialize all participants with zero values
@@ -352,7 +357,8 @@ func (acf *AnnualCashFlow) CalculateTotalIncome() decimal.Decimal {
 // CalculateTotalDeductions calculates the total deductions for the year
 func (acf *AnnualCashFlow) CalculateTotalDeductions() decimal.Decimal {
 	return acf.FederalTax.Add(acf.StateTax).Add(acf.LocalTax).Add(acf.FICATax).
-		Add(acf.TotalTSPContributions).Add(acf.FEHBPremium).Add(acf.MedicarePremium)
+		Add(acf.TotalTSPContributions).Add(acf.FEHBPremium).Add(acf.MedicarePremium).
+		Add(acf.HealthcareCosts.Total)
 }
 
 // CalculateNetIncome calculates the net income for the year

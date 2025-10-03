@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rgehrsitz/rpgo/internal/domain"
 	"github.com/shopspring/decimal"
 )
 
@@ -34,6 +35,11 @@ func NewTransformRegistry() *TransformRegistry {
 	registry.Register("set_mortality", createSetMortalityDate)
 	registry.Register("set_survivor_spending", createSetSurvivorSpendingFactor)
 	registry.Register("set_tsp_transfer", createSetTSPTransferMode)
+
+	// Roth conversion transforms
+	registry.Register("enable_roth_conversion", createEnableRothConversion)
+	registry.Register("modify_roth_conversion", createModifyRothConversion)
+	registry.Register("remove_roth_conversion", createRemoveRothConversion)
 
 	return registry
 }
@@ -270,5 +276,107 @@ func createSetTSPTransferMode(params map[string]string) (ScenarioTransform, erro
 
 	return &SetTSPTransferMode{
 		Mode: mode,
+	}, nil
+}
+
+// Roth conversion transform factories
+
+func createEnableRothConversion(params map[string]string) (ScenarioTransform, error) {
+	participant, ok := params["participant"]
+	if !ok {
+		return nil, fmt.Errorf("enable_roth_conversion requires 'participant' parameter")
+	}
+
+	// Parse conversions from parameters
+	// Format: "year1:amount1,year2:amount2"
+	conversionsStr, ok := params["conversions"]
+	if !ok {
+		return nil, fmt.Errorf("enable_roth_conversion requires 'conversions' parameter")
+	}
+
+	var conversions []domain.RothConversion
+	if conversionsStr != "" {
+		for _, conversionPair := range strings.Split(conversionsStr, ",") {
+			parts := strings.SplitN(conversionPair, ":", 2)
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("invalid conversion format, expected 'year:amount', got: %s", conversionPair)
+			}
+
+			year, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+			if err != nil {
+				return nil, fmt.Errorf("invalid year value: %w", err)
+			}
+
+			amount, err := decimal.NewFromString(strings.TrimSpace(parts[1]))
+			if err != nil {
+				return nil, fmt.Errorf("invalid amount value: %w", err)
+			}
+
+			conversions = append(conversions, domain.RothConversion{
+				Year:   year,
+				Amount: amount,
+				Source: "traditional_tsp",
+			})
+		}
+	}
+
+	return &EnableRothConversion{
+		Participant: participant,
+		Conversions: conversions,
+	}, nil
+}
+
+func createModifyRothConversion(params map[string]string) (ScenarioTransform, error) {
+	participant, ok := params["participant"]
+	if !ok {
+		return nil, fmt.Errorf("modify_roth_conversion requires 'participant' parameter")
+	}
+
+	yearStr, ok := params["year"]
+	if !ok {
+		return nil, fmt.Errorf("modify_roth_conversion requires 'year' parameter")
+	}
+
+	year, err := strconv.Atoi(yearStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid year value: %w", err)
+	}
+
+	amountStr, ok := params["amount"]
+	if !ok {
+		return nil, fmt.Errorf("modify_roth_conversion requires 'amount' parameter")
+	}
+
+	amount, err := decimal.NewFromString(amountStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid amount value: %w", err)
+	}
+
+	return &ModifyRothConversion{
+		Participant: participant,
+		Year:        year,
+		NewAmount:   amount,
+	}, nil
+}
+
+func createRemoveRothConversion(params map[string]string) (ScenarioTransform, error) {
+	participant, ok := params["participant"]
+	if !ok {
+		return nil, fmt.Errorf("remove_roth_conversion requires 'participant' parameter")
+	}
+
+	yearStr, ok := params["year"]
+	if !ok {
+		return nil, fmt.Errorf("remove_roth_conversion requires 'year' parameter")
+	}
+
+	year, err := strconv.Atoi(yearStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid year value: %w", err)
+	}
+
+	return &RemoveRothConversion{
+		Participant: participant,
+		Year:        year,
 	}, nil
 }

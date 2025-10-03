@@ -141,6 +141,28 @@ func (c ConsoleVerboseFormatter) Format(results *domain.ScenarioComparison) ([]b
 			fmt.Fprintf(&buf, "  TSP Contributions:      %s\n", FormatCurrency(firstRetirementYear.TotalTSPContributions))
 			fmt.Fprintf(&buf, "  FEHB Premium:           %s\n", FormatCurrency(firstRetirementYear.FEHBPremium))
 			fmt.Fprintf(&buf, "  Medicare Premium:       %s\n", FormatCurrency(firstRetirementYear.MedicarePremium))
+
+			// Healthcare cost breakdown
+			if firstRetirementYear.HealthcareCosts.Total.GreaterThan(decimal.Zero) {
+				fmt.Fprintf(&buf, "  Healthcare Costs:\n")
+				if firstRetirementYear.HealthcareCosts.FEHBPremium.GreaterThan(decimal.Zero) {
+					fmt.Fprintf(&buf, "    FEHB Premium:         %s\n", FormatCurrency(firstRetirementYear.HealthcareCosts.FEHBPremium))
+				}
+				if firstRetirementYear.HealthcareCosts.MarketplacePremium.GreaterThan(decimal.Zero) {
+					fmt.Fprintf(&buf, "    Marketplace Premium:  %s\n", FormatCurrency(firstRetirementYear.HealthcareCosts.MarketplacePremium))
+				}
+				if firstRetirementYear.HealthcareCosts.MedicarePartB.GreaterThan(decimal.Zero) {
+					fmt.Fprintf(&buf, "    Medicare Part B:      %s\n", FormatCurrency(firstRetirementYear.HealthcareCosts.MedicarePartB))
+				}
+				if firstRetirementYear.HealthcareCosts.MedicarePartD.GreaterThan(decimal.Zero) {
+					fmt.Fprintf(&buf, "    Medicare Part D:      %s\n", FormatCurrency(firstRetirementYear.HealthcareCosts.MedicarePartD))
+				}
+				if firstRetirementYear.HealthcareCosts.Medigap.GreaterThan(decimal.Zero) {
+					fmt.Fprintf(&buf, "    Medigap:              %s\n", FormatCurrency(firstRetirementYear.HealthcareCosts.Medigap))
+				}
+				fmt.Fprintf(&buf, "    Total Healthcare:    %s\n", FormatCurrency(firstRetirementYear.HealthcareCosts.Total))
+			}
+
 			fmt.Fprintf(&buf, "  TOTAL DEDUCTIONS:       %s\n", FormatCurrency(firstRetirementYear.CalculateTotalDeductions()))
 			fmt.Fprintln(&buf)
 			fmt.Fprintln(&buf, "NET INCOME COMPARISON:")

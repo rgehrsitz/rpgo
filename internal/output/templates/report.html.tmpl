@@ -121,9 +121,9 @@ h1 { margin:0 0 4px 0; font-weight:400; }
   <div class="chart-grid">
     {{range $index, $scenario := slice .Scenarios 2}}
     <div>
-      <h3>Income Sources Over Time - Scenario {{add $index 3}}</h3>
+      <h3>Income Sources Over Time - Scenario {{addInt $index 3}}</h3>
       <div class="chart-container">
-        <canvas id="incomeSourcesChart{{add $index 3}}"></canvas>
+        <canvas id="incomeSourcesChart{{addInt $index 3}}"></canvas>
       </div>
     </div>
     {{end}}
