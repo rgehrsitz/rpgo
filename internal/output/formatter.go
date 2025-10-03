@@ -18,6 +18,12 @@ type Formatter interface {
 	Name() string
 }
 
+// SurvivorViabilityFormatter defines a formatter for survivor viability analysis
+type SurvivorViabilityFormatter interface {
+	FormatSurvivorViabilityAnalysis(analysis *domain.SurvivorViabilityAnalysis) (string, error)
+	Name() string
+}
+
 // FormatterFunc adapter to allow ordinary functions to act as a Formatter.
 type FormatterFunc struct {
 	ID string
@@ -84,6 +90,18 @@ func NormalizeFormatName(name string) string {
 		return mapped
 	}
 	return n
+}
+
+// NewSurvivorViabilityFormatter creates a survivor viability formatter based on the format name
+func NewSurvivorViabilityFormatter(format string) SurvivorViabilityFormatter {
+	switch NormalizeFormatName(format) {
+	case "console", "verbose":
+		return SurvivorViabilityConsoleFormatter{}
+	case "json":
+		return SurvivorViabilityConsoleFormatter{} // Would implement JSON formatting
+	default:
+		return SurvivorViabilityConsoleFormatter{} // Default to console
+	}
 }
 
 // AvailableFormatterNames returns the canonical formatter names.

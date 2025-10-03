@@ -2,23 +2,59 @@
 
 A comprehensive retirement planning calculator for Federal Employees Retirement System (FERS) participants, built in Go. This tool provides accurate "apples-to-apples" comparisons between current net income and multiple retirement scenarios, incorporating all recent regulatory changes, tax implications, and federal-specific benefits.
 
-## Features
+**Status:** Phase 3.1 Complete - Advanced Features In Progress (December 2024)  
+**Progress:** 75% Complete
 
+## 🚀 **Key Features**
+
+### **Core Retirement Planning**
 - **Comprehensive FERS Calculations**: Accurate pension calculations with proper multiplier rules (1.0% standard, 1.1% enhanced for age 62+ with 20+ years)
 - **TSP Modeling**: Support for both Traditional and Roth TSP accounts with multiple withdrawal strategies and manual allocations
-- **TSP Lifecycle Fund Limitation**: For Monte Carlo simulations, manual TSP allocations are recommended over lifecycle funds for proper market variability
 - **Social Security Integration**: Full benefit calculations with 2025 WEP/GPO repeal implementation (2025 wage base: $176,100)
 - **Tax Modeling**: Complete federal, state (Pennsylvania), and local tax calculations
-- **Automated Optimization**: Multi-dimensional break-even solver finds optimal retirement parameters (TSP rate, retirement date, SS claiming age) to achieve specific goals
-- **Scenario Comparison**: Compare retirement strategies side-by-side using built-in templates for retirement timing, Social Security claiming, and TSP withdrawals
-- **Multiple Scenarios**: Compare multiple retirement scenarios simultaneously
 - **Long-term Projections**: 25+ year projections with COLA adjustments
-- **Multiple Output Formats**: Console, HTML, JSON, and CSV reports
-- **Interactive TUI**: Terminal user interface with real-time parameter adjustment and visualization (in development)
-- **Monte Carlo Simulations**: Probabilistic analysis using historical market data for portfolio sustainability
-- **Historical Data Integration**: Real TSP fund returns, inflation, and COLA data from 1990-2023
 
-## Recent Regulatory Compliance
+### **Advanced Analysis** ✅ COMPLETE
+- **IRMAA Analysis**: Medicare premium surcharge calculations with breach detection and optimization recommendations
+- **Tax-Smart Withdrawal Sequencing**: Optimization of withdrawal order for tax efficiency with bracket-fill strategies
+- **Roth Conversion Planner**: Multi-year optimization with multiple objectives (minimize taxes, IRMAA, maximize estate)
+- **Healthcare Cost Modeling**: Pre-65 coverage, Medicare Part B/D, Medigap with age-based transitions
+- **Survivor Viability Analysis**: Financial impact modeling when spouse dies with life insurance needs calculation
+
+### **User Experience**
+- **Interactive TUI**: Terminal user interface with real-time parameter adjustment and visualization
+- **Multiple Output Formats**: Console, HTML, JSON, and CSV reports
+- **Scenario Comparison**: Compare retirement strategies side-by-side using built-in templates
+- **Automated Optimization**: Multi-dimensional break-even solver finds optimal retirement parameters
+
+## 🚀 **Quick Start Commands**
+
+```bash
+# Run retirement projections
+./rpgo calculate config.yaml --format console
+
+# Compare multiple scenarios
+./rpgo compare config.yaml --scenarios "Scenario 1,Scenario 2"
+
+# Find optimal retirement parameters
+./rpgo optimize config.yaml --objective minimize_lifetime_tax
+
+# Plan Roth conversions
+./rpgo plan-roth config.yaml --participant "Alice Johnson" --window 2028-2032
+
+# Analyze survivor viability
+./rpgo analyze-survivor config.yaml --deceased "Alice Johnson" --survivor-spending-factor 0.75
+
+# Launch interactive TUI
+./rpgo-tui config.yaml
+```
+
+## 📚 **Documentation**
+
+- **Quick Reference**: [docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md)
+- **Project Status**: [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)
+- **Implementation Plan**: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)
+- **CLI Reference**: [docs/cli_reference.md](docs/cli_reference.md)
 
 - **Social Security Fairness Act (2025)**: WEP/GPO repeal implementation
 - **SECURE 2.0 Act**: Updated RMD ages (73 for 1951-1959, 75 for 1960+)
