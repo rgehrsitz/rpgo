@@ -6,8 +6,9 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/charmbracelet/lipgloss"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/shopspring/decimal"
 
 	"github.com/rgehrsitz/rpgo/internal/domain"
 	"github.com/rgehrsitz/rpgo/internal/tui/components"
@@ -97,14 +98,18 @@ func (m *ResultsModel) View() string {
 	// Build header (shown above viewport)
 	header := renderResultsHeader(m.scenarioName)
 
-	// Build scrollable content (metrics + IRMAA + all years)
+	// Build scrollable content (metrics + IRMAA + withdrawal sequencing + all years)
 	metrics := renderKeyMetrics(m.summary)
 	irmaaSection := renderIRMAAAnalysis(m.summary)
+	withdrawalSection := renderWithdrawalSequencing(m.summary)
 	yearSummary := renderYearSummaryFull(m.summary) // Show ALL years
 
 	sections := []string{metrics}
 	if irmaaSection != "" {
 		sections = append(sections, "", irmaaSection)
+	}
+	if withdrawalSection != "" {
+		sections = append(sections, "", withdrawalSection)
 	}
 	sections = append(sections, "", yearSummary)
 
@@ -243,7 +248,6 @@ func renderYearSummaryFull(summary *domain.ScenarioSummary) string {
 	return content.String()
 }
 
-
 // renderResultsHelpScrollable renders keyboard shortcuts with scroll instructions
 func renderResultsHelpScrollable() string {
 	helpStyle := lipgloss.NewStyle().
@@ -375,9 +379,103 @@ func renderIRMAAAnalysis(summary *domain.ScenarioSummary) string {
 		content.WriteString(headerStyle.Render("Recommendations:"))
 		content.WriteString("\n\n")
 
-		for _, rec := range analysis.Recommendations {
-			content.WriteString("  " + rec + "\n")
+	}
+
+	return content.String()
+}
+
+// renderWithdrawalSequencing renders withdrawal sequencing information if available
+func renderWithdrawalSequencing(summary *domain.ScenarioSummary) string {
+	if summary.Projection == nil {
+		return ""
+	}
+
+	// Find years with withdrawal breakdown
+	var withdrawalYears []domain.AnnualCashFlow
+	for _, year := range summary.Projection {
+		if year.WithdrawalTaxable.GreaterThan(decimal.Zero) ||
+			year.WithdrawalTraditional.GreaterThan(decimal.Zero) ||
+			year.WithdrawalRoth.GreaterThan(decimal.Zero) {
+			withdrawalYears = append(withdrawalYears, year)
 		}
+	}
+
+	if len(withdrawalYears) == 0 {
+		return ""
+	}
+
+	var content strings.Builder
+
+	// Title
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(tuistyles.ColorPrimary).
+		Underline(true)
+
+	content.WriteString(titleStyle.Render("Withdrawal Sequencing Analysis"))
+	content.WriteString("\n\n")
+
+	// Show first few years with withdrawal breakdown
+	maxYears := 5
+	if len(withdrawalYears) < maxYears {
+		maxYears = len(withdrawalYears)
+	}
+
+	// Table header
+	headerStyle := lipgloss.NewStyle().
+		Foreground(tuistyles.ColorPrimary).
+		Bold(true)
+
+	header := fmt.Sprintf("%-6s  %-15s  %-15s  %-15s  %-15s",
+		"Year", "Taxable", "Traditional", "Roth", "Total")
+	content.WriteString(headerStyle.Render(header))
+	content.WriteString("\n")
+	content.WriteString(strings.Repeat("─", 70))
+	content.WriteString("\n")
+
+	// Show withdrawal breakdown for each year
+	for i := 0; i < maxYears; i++ {
+		year := withdrawalYears[i]
+		taxable := formatCurrencyShort(year.WithdrawalTaxable.InexactFloat64())
+		traditional := formatCurrencyShort(year.WithdrawalTraditional.InexactFloat64())
+		roth := formatCurrencyShort(year.WithdrawalRoth.InexactFloat64())
+		total := formatCurrencyShort(year.WithdrawalTaxable.Add(year.WithdrawalTraditional).Add(year.WithdrawalRoth).InexactFloat64())
+
+		row := fmt.Sprintf("%-6d  %-15s  %-15s  %-15s  %-15s",
+			year.Year, taxable, traditional, roth, total)
+		content.WriteString(row)
+		content.WriteString("\n")
+	}
+
+	if len(withdrawalYears) > maxYears {
+		content.WriteString(fmt.Sprintf("\n... and %d more years with withdrawal sequencing\n", len(withdrawalYears)-maxYears))
+	}
+
+	// Add strategy insights
+	content.WriteString("\n")
+	insightStyle := lipgloss.NewStyle().
+		Foreground(tuistyles.ColorAccent).
+		Italic(true)
+
+	// Analyze the pattern
+	taxableTotal := decimal.Zero
+	traditionalTotal := decimal.Zero
+	rothTotal := decimal.Zero
+
+	for _, year := range withdrawalYears {
+		taxableTotal = taxableTotal.Add(year.WithdrawalTaxable)
+		traditionalTotal = traditionalTotal.Add(year.WithdrawalTraditional)
+		rothTotal = rothTotal.Add(year.WithdrawalRoth)
+	}
+
+	if taxableTotal.GreaterThan(decimal.Zero) && traditionalTotal.IsZero() && rothTotal.IsZero() {
+		content.WriteString(insightStyle.Render("Strategy: Taxable-first (Standard)"))
+	} else if rothTotal.GreaterThan(decimal.Zero) && traditionalTotal.IsZero() && taxableTotal.IsZero() {
+		content.WriteString(insightStyle.Render("Strategy: Roth-first (Tax Efficient)"))
+	} else if traditionalTotal.GreaterThan(decimal.Zero) && rothTotal.IsZero() && taxableTotal.IsZero() {
+		content.WriteString(insightStyle.Render("Strategy: Traditional-first"))
+	} else {
+		content.WriteString(insightStyle.Render("Strategy: Mixed withdrawal sources"))
 	}
 
 	return content.String()

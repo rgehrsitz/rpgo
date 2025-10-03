@@ -220,6 +220,64 @@ h1 { margin:0 0 4px 0; font-weight:400; }
     {{end}}
   </section>
   {{end}}
+
+  {{if hasWithdrawalSequencing .}}
+  <section>
+    <h2>Withdrawal Sequencing Analysis - {{.Name}}</h2>
+    <p style="font-size: 0.9em; color: #666;">
+      This analysis shows how withdrawals are sequenced across different account types (Taxable, Traditional TSP, Roth TSP) to optimize for taxes and IRMAA.
+    </p>
+
+    {{$withdrawalYears := getWithdrawalYears .}}
+    {{if gt (len $withdrawalYears) 0}}
+      <h3>Withdrawal Source Breakdown</h3>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Year</th>
+            <th>Taxable Account</th>
+            <th>Traditional TSP</th>
+            <th>Roth TSP</th>
+            <th>Total Withdrawals</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range $withdrawalYears}}
+            <tr>
+              <td>{{.Year}}</td>
+              <td>{{curr .WithdrawalTaxable}}</td>
+              <td>{{curr .WithdrawalTraditional}}</td>
+              <td>{{curr .WithdrawalRoth}}</td>
+              <td>{{curr (add (add .WithdrawalTaxable .WithdrawalTraditional) .WithdrawalRoth)}}</td>
+            </tr>
+          {{end}}
+        </tbody>
+      </table>
+
+      <h3>Strategy Analysis</h3>
+      {{$strategy := analyzeWithdrawalStrategy $withdrawalYears}}
+      <div style="background: #e8f4fd; border-left: 4px solid #3498db; padding: 12px; margin: 16px 0;">
+        <strong>Detected Strategy: {{$strategy}}</strong>
+        <p style="margin: 4px 0 0 0;">
+          {{if eq $strategy "Taxable-first (Standard)"}}
+            Withdrawals prioritize taxable accounts first, preserving tax-advantaged accounts for later years. This strategy minimizes early tax burden but may increase taxes in later years.
+          {{else if eq $strategy "Roth-first (Tax Efficient)"}}
+            Withdrawals prioritize Roth accounts first to minimize taxable income and reduce IRMAA exposure. This strategy optimizes for current tax efficiency.
+          {{else if eq $strategy "Traditional-first"}}
+            Withdrawals prioritize Traditional TSP accounts first. This strategy may be used to fill lower tax brackets or manage RMD requirements.
+          {{else}}
+            Mixed withdrawal strategy using multiple account types based on tax optimization and account availability.
+          {{end}}
+        </p>
+      </div>
+    {{else}}
+      <div style="background: #f8f9fa; border-left: 4px solid #6c757d; padding: 12px; margin: 16px 0;">
+        <strong>No Withdrawal Sequencing Data</strong>
+        <p style="margin: 4px 0 0 0;">This scenario does not use withdrawal sequencing strategies.</p>
+      </div>
+    {{end}}
+  </section>
+  {{end}}
 {{end}}
 
 <script>

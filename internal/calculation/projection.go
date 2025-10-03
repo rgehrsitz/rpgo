@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/rgehrsitz/rpgo/internal/domain"
+	"github.com/rgehrsitz/rpgo/internal/sequencing"
 	"github.com/shopspring/decimal"
 )
 
@@ -542,8 +543,9 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 				cf.SSBenefits[p.Name] = ssBenefit
 			}
 
-			withdrawal := decimalZero
-			if st.retired && st.tspBalance.GreaterThan(decimalZero) {
+			// Calculate withdrawal using sequencing strategy
+			if st.retired && (st.tspBalance.GreaterThan(decimalZero) || (p.TaxableAccountBalance != nil && p.TaxableAccountBalance.GreaterThan(decimalZero))) {
+				withdrawal := decimalZero
 				if ps, ok := psMap[p.Name]; ok {
 					switch ps.TSPWithdrawalStrategy {
 					case "4_percent_rule":
@@ -571,10 +573,116 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 						withdrawal = withdrawal.Mul(survivorSpendingFactor)
 					}
 				}
-				if withdrawal.GreaterThan(st.tspBalance) {
-					withdrawal = st.tspBalance
+				// Use sequencing strategy if withdrawal sequencing is configured
+				if scenario.WithdrawalSequencing != nil && withdrawal.GreaterThan(decimalZero) {
+					// Determine if this is an RMD year
+					isRMDYear := age >= 73 // RMD age is 73 for 2025+
+					rmdAmount := decimalZero
+					if isRMDYear && st.tspBalanceTraditional.GreaterThan(decimalZero) {
+						// Simple RMD calculation: balance / (life expectancy)
+						// Using 27.4 as divisor for age 73 (simplified)
+						rmdAmount = st.tspBalanceTraditional.Div(decimal.NewFromFloat(27.4))
+					}
+
+					// Create withdrawal sources
+					sources := sequencing.CreateWithdrawalSources(
+						p,
+						st.tspBalanceTraditional,
+						st.tspBalanceRoth,
+						isRMDYear,
+						rmdAmount,
+					)
+
+					// Create strategy context
+					currentOrdinaryIncome := cf.GetTotalPension().Add(cf.GetTotalSalary())
+					magiCurrent := cf.MAGI
+					ctx := sequencing.CreateStrategyContext(
+						withdrawal,
+						currentOrdinaryIncome,
+						magiCurrent,
+						isRMDYear,
+						scenario.WithdrawalSequencing,
+					)
+
+					// Create and execute strategy
+					strategy := sequencing.CreateStrategy(scenario.WithdrawalSequencing)
+					plan := strategy.Plan(sources, ctx)
+
+					// Apply the withdrawal plan
+					totalWithdrawn := decimalZero
+					taxableWithdrawn := decimalZero
+					traditionalWithdrawn := decimalZero
+					rothWithdrawn := decimalZero
+
+					for _, allocation := range plan.Allocations {
+						switch allocation.Source {
+						case "taxable":
+							if p.TaxableAccountBalance != nil {
+								withdrawAmount := allocation.Gross
+								if withdrawAmount.GreaterThan(*p.TaxableAccountBalance) {
+									withdrawAmount = *p.TaxableAccountBalance
+								}
+								*p.TaxableAccountBalance = p.TaxableAccountBalance.Sub(withdrawAmount)
+								taxableWithdrawn = taxableWithdrawn.Add(withdrawAmount)
+								totalWithdrawn = totalWithdrawn.Add(withdrawAmount)
+							}
+						case "traditional":
+							withdrawAmount := allocation.Gross
+							if withdrawAmount.GreaterThan(st.tspBalanceTraditional) {
+								withdrawAmount = st.tspBalanceTraditional
+							}
+							st.tspBalanceTraditional = st.tspBalanceTraditional.Sub(withdrawAmount)
+							traditionalWithdrawn = traditionalWithdrawn.Add(withdrawAmount)
+							totalWithdrawn = totalWithdrawn.Add(withdrawAmount)
+						case "roth":
+							withdrawAmount := allocation.Gross
+							if withdrawAmount.GreaterThan(st.tspBalanceRoth) {
+								withdrawAmount = st.tspBalanceRoth
+							}
+							st.tspBalanceRoth = st.tspBalanceRoth.Sub(withdrawAmount)
+							rothWithdrawn = rothWithdrawn.Add(withdrawAmount)
+							totalWithdrawn = totalWithdrawn.Add(withdrawAmount)
+						}
+					}
+
+					// Update balances and cash flow
+					st.tspBalance = st.tspBalanceTraditional.Add(st.tspBalanceRoth)
+					cf.TSPWithdrawals[p.Name] = traditionalWithdrawn.Add(rothWithdrawn)
+					cf.WithdrawalTaxable = cf.WithdrawalTaxable.Add(taxableWithdrawn)
+					cf.WithdrawalTraditional = cf.WithdrawalTraditional.Add(traditionalWithdrawn)
+					cf.WithdrawalRoth = cf.WithdrawalRoth.Add(rothWithdrawn)
+				} else {
+					// Fallback to proportional withdrawal if no sequencing configured
+					if withdrawal.GreaterThan(st.tspBalance) {
+						withdrawal = st.tspBalance
+					}
+
+					// Proportionally split between traditional and Roth based on starting mix
+					tradPortion := decimalZero
+					rothPortion := decimalZero
+					totalBefore := st.tspBalance
+					if totalBefore.GreaterThan(decimalZero) {
+						tradRatio := decimalZero
+						if st.tspBalanceTraditional.GreaterThan(decimalZero) {
+							tradRatio = st.tspBalanceTraditional.Div(totalBefore)
+						}
+						tradPortion = withdrawal.Mul(tradRatio)
+						rothPortion = withdrawal.Sub(tradPortion)
+					}
+
+					st.tspBalanceTraditional = st.tspBalanceTraditional.Sub(tradPortion)
+					if st.tspBalanceTraditional.LessThan(decimalZero) {
+						st.tspBalanceTraditional = decimalZero
+					}
+					st.tspBalanceRoth = st.tspBalanceRoth.Sub(rothPortion)
+					if st.tspBalanceRoth.LessThan(decimalZero) {
+						st.tspBalanceRoth = decimalZero
+					}
+					st.tspBalance = st.tspBalance.Sub(withdrawal)
+					cf.TSPWithdrawals[p.Name] = withdrawal
+					cf.WithdrawalTraditional = cf.WithdrawalTraditional.Add(tradPortion)
+					cf.WithdrawalRoth = cf.WithdrawalRoth.Add(rothPortion)
 				}
-				// Proportionally split between traditional and Roth based on starting mix if balances exist
 				tradPortion := decimal.Zero
 				rothPortion := decimal.Zero
 				totalBefore := st.tspBalance

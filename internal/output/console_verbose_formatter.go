@@ -91,6 +91,36 @@ func (c ConsoleVerboseFormatter) Format(results *domain.ScenarioComparison) ([]b
 					fmt.Fprintf(&buf, "  %s's TSP Withdrawal: %s\n", participantName, FormatCurrency(tspWithdrawal))
 				}
 			}
+
+			// Find a year with withdrawal breakdown to show sequencing example
+			var withdrawalBreakdownYear *domain.AnnualCashFlow
+			var breakdownYearIndex int
+			for i, year := range scenario.Projection {
+				if year.WithdrawalTaxable.GreaterThan(decimal.Zero) ||
+					year.WithdrawalTraditional.GreaterThan(decimal.Zero) ||
+					year.WithdrawalRoth.GreaterThan(decimal.Zero) {
+					withdrawalBreakdownYear = &year
+					breakdownYearIndex = i
+					break
+				}
+			}
+
+			// Show withdrawal breakdown if found
+			if withdrawalBreakdownYear != nil {
+				breakdownYear := 2025 + breakdownYearIndex
+				fmt.Fprintf(&buf, "\nWITHDRAWAL SEQUENCING EXAMPLE (%d):\n", breakdownYear)
+				fmt.Fprintln(&buf, "----------------------------------------")
+				fmt.Fprintln(&buf, "WITHDRAWAL SOURCE BREAKDOWN:")
+				if withdrawalBreakdownYear.WithdrawalTaxable.GreaterThan(decimal.Zero) {
+					fmt.Fprintf(&buf, "  Taxable Account:      %s\n", FormatCurrency(withdrawalBreakdownYear.WithdrawalTaxable))
+				}
+				if withdrawalBreakdownYear.WithdrawalTraditional.GreaterThan(decimal.Zero) {
+					fmt.Fprintf(&buf, "  Traditional TSP:      %s\n", FormatCurrency(withdrawalBreakdownYear.WithdrawalTraditional))
+				}
+				if withdrawalBreakdownYear.WithdrawalRoth.GreaterThan(decimal.Zero) {
+					fmt.Fprintf(&buf, "  Roth TSP:             %s\n", FormatCurrency(withdrawalBreakdownYear.WithdrawalRoth))
+				}
+			}
 			for participantName, ssBenefit := range firstRetirementYear.SSBenefits {
 				if !ssBenefit.IsZero() {
 					fmt.Fprintf(&buf, "  %s's Social Security: %s\n", participantName, FormatCurrency(ssBenefit))
