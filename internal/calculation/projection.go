@@ -348,6 +348,44 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 			}
 			cf.Salaries[p.Name] = salaryForYear
 
+			// Calculate part-time work impact
+			var participantScenario domain.ParticipantScenario
+			if scenario != nil && scenario.ParticipantScenarios != nil {
+				if ps, exists := scenario.ParticipantScenarios[p.Name]; exists {
+					participantScenario = ps
+				}
+			}
+
+			partTimeCalc := NewPartTimeWorkCalculator()
+			partTimeAnalysis, err := partTimeCalc.CalculatePartTimeWorkForYear(
+				*p,
+				participantScenario,
+				startYear+yr,
+				cf.Ages[p.Name],
+			)
+			if err != nil {
+				// Log error and continue with default values
+				partTimeAnalysis = &domain.PartTimeWorkAnalysis{
+					Year:       startYear + yr,
+					IsPartTime: false,
+				}
+			}
+
+			// Update cash flow with part-time work data
+			cf.IsPartTime[p.Name] = partTimeAnalysis.IsPartTime
+			if partTimeAnalysis.IsPartTime {
+				cf.PartTimeSalary[p.Name] = partTimeAnalysis.AnnualSalary
+				cf.PartTimeTSPContributions[p.Name] = partTimeAnalysis.TSPContributions
+				cf.FERSSupplementReduction[p.Name] = partTimeAnalysis.FERSSupplementReduction
+
+				// Override salary with part-time salary if working part-time
+				cf.Salaries[p.Name] = partTimeAnalysis.AnnualSalary
+			} else {
+				cf.PartTimeSalary[p.Name] = decimalZero
+				cf.PartTimeTSPContributions[p.Name] = decimalZero
+				cf.FERSSupplementReduction[p.Name] = decimalZero
+			}
+
 			retiredThisYear := st.retirementYear != nil && yr == *st.retirementYear
 			retiredFraction := decimalZero
 			if retiredThisYear {
@@ -465,6 +503,12 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 				cf.ParticipantTSPContributions[p.Name] = cf.ParticipantTSPContributions[p.Name].Add(employeeContributionAmount)
 			}
 
+			// Add part-time TSP contributions
+			if cf.PartTimeTSPContributions[p.Name].GreaterThan(decimalZero) {
+				cf.ParticipantTSPContributions[p.Name] = cf.ParticipantTSPContributions[p.Name].Add(cf.PartTimeTSPContributions[p.Name])
+				st.tspBalance = st.tspBalance.Add(cf.PartTimeTSPContributions[p.Name])
+			}
+
 			if st.retired && st.pensionAnnual.GreaterThan(decimalZero) {
 				pensionValue := st.pensionAnnual
 				if st.pensionStartYear != nil && yr > *st.pensionStartYear {
@@ -518,6 +562,15 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 				}
 			}
 			cf.FERSSupplements[p.Name] = fersSupplementValue
+
+			// Apply FERS supplement reduction due to part-time work earnings
+			if cf.FERSSupplementReduction[p.Name].GreaterThan(decimalZero) {
+				reducedSupplement := fersSupplementValue.Sub(cf.FERSSupplementReduction[p.Name])
+				if reducedSupplement.LessThan(decimalZero) {
+					reducedSupplement = decimalZero
+				}
+				cf.FERSSupplements[p.Name] = reducedSupplement
+			}
 
 			ssBenefit := decimalZero
 			if st.ssStarted {

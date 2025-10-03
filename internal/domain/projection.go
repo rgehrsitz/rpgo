@@ -23,6 +23,12 @@ type AnnualCashFlow struct {
 	ParticipantTSPContributions map[string]decimal.Decimal `json:"participantTspContributions"` // participantName -> TSP contributions
 	IsDeceased                  map[string]bool            `json:"isDeceased"`                  // participantName -> deceased status
 
+	// Part-time work tracking
+	IsPartTime               map[string]bool            `json:"isPartTime"`               // participantName -> part-time status
+	PartTimeSalary           map[string]decimal.Decimal `json:"partTimeSalary"`           // participantName -> part-time salary
+	PartTimeTSPContributions map[string]decimal.Decimal `json:"partTimeTspContributions"` // participantName -> part-time TSP contributions
+	FERSSupplementReduction  map[string]decimal.Decimal `json:"fersSupplementReduction"`  // participantName -> FERS supplement reduction
+
 	// Household-level totals and taxes
 	TotalGrossIncome         decimal.Decimal `json:"totalGrossIncome"`
 	FederalTax               decimal.Decimal `json:"federalTax"`
@@ -223,6 +229,10 @@ func NewAnnualCashFlow(year int, date time.Time, participantNames []string) *Ann
 		TSPBalances:                 make(map[string]decimal.Decimal),
 		ParticipantTSPContributions: make(map[string]decimal.Decimal),
 		IsDeceased:                  make(map[string]bool),
+		IsPartTime:                  make(map[string]bool),
+		PartTimeSalary:              make(map[string]decimal.Decimal),
+		PartTimeTSPContributions:    make(map[string]decimal.Decimal),
+		FERSSupplementReduction:     make(map[string]decimal.Decimal),
 		WithdrawalTaxable:           decimal.Zero,
 		WithdrawalTraditional:       decimal.Zero,
 		WithdrawalRoth:              decimal.Zero,
@@ -241,6 +251,10 @@ func NewAnnualCashFlow(year int, date time.Time, participantNames []string) *Ann
 		acf.TSPBalances[name] = decimal.Zero
 		acf.ParticipantTSPContributions[name] = decimal.Zero
 		acf.IsDeceased[name] = false
+		acf.IsPartTime[name] = false
+		acf.PartTimeSalary[name] = decimal.Zero
+		acf.PartTimeTSPContributions[name] = decimal.Zero
+		acf.FERSSupplementReduction[name] = decimal.Zero
 	}
 
 	return acf

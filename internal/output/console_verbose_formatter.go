@@ -262,6 +262,16 @@ func writeDetailedComparison(buf *bytes.Buffer, results *domain.ScenarioComparis
 		workingNet := results.BaselineNetIncome
 		fmt.Fprintln(buf, "INCOME SOURCES:")
 		cmpLine(buf, "  Combined Salary", workingGross, firstRetirementYear.GetTotalSalary())
+
+		// Show part-time work information if applicable
+		partTimeSalary := decimal.Zero
+		for participantName, salary := range firstRetirementYear.PartTimeSalary {
+			if salary.GreaterThan(decimal.Zero) {
+				partTimeSalary = partTimeSalary.Add(salary)
+				fmt.Fprintf(buf, "    %s (Part-Time): %s\n", participantName, FormatCurrency(salary))
+			}
+		}
+
 		cmpLine(buf, "  FERS Pension", decimal.Zero, firstRetirementYear.GetTotalPension())
 		cmpLine(buf, "  TSP Withdrawals", decimal.Zero, firstRetirementYear.GetTotalTSPWithdrawal())
 		cmpLine(buf, "  Social Security", decimal.Zero, firstRetirementYear.GetTotalSSBenefit())

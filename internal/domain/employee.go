@@ -486,6 +486,9 @@ type ParticipantScenario struct {
 	// Roth conversion schedule (optional)
 	RothConversions *RothConversionSchedule `yaml:"roth_conversions,omitempty" json:"roth_conversions,omitempty"`
 
+	// Part-time work schedule (optional)
+	PartTimeWork *PartTimeWorkSchedule `yaml:"part_time_work,omitempty" json:"partTimeWork,omitempty"`
+
 	// Optional: per-participant override of sequencing (future use)
 	// (Typically sequencing is household-level; keeping placeholder for extensibility)
 }
@@ -551,6 +554,15 @@ func (gs *GenericScenario) DeepCopy() *GenericScenario {
 			}
 			copy(rcCopy.Conversions, ps.RothConversions.Conversions)
 			psCopy.RothConversions = rcCopy
+		}
+		if ps.PartTimeWork != nil {
+			ptwCopy := &PartTimeWorkSchedule{
+				StartDate: ps.PartTimeWork.StartDate,
+				EndDate:   ps.PartTimeWork.EndDate,
+				Schedule:  make([]PartTimeWorkPeriod, len(ps.PartTimeWork.Schedule)),
+			}
+			copy(ptwCopy.Schedule, ps.PartTimeWork.Schedule)
+			psCopy.PartTimeWork = ptwCopy
 		}
 
 		gc.ParticipantScenarios[name] = psCopy
