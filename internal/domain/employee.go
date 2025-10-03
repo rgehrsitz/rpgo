@@ -426,6 +426,10 @@ type Participant struct {
 	TSPAllocation          *TSPAllocation    `yaml:"tsp_allocation,omitempty" json:"tsp_allocation,omitempty"`
 	TSPLifecycleFund       *TSPLifecycleFund `yaml:"tsp_lifecycle_fund,omitempty" json:"tsp_lifecycle_fund,omitempty"`
 
+	// Taxable brokerage account tracking (optional, for withdrawal sequencing & capital gains)
+	TaxableAccountBalance *decimal.Decimal `yaml:"taxable_account_balance,omitempty" json:"taxable_account_balance,omitempty"`
+	TaxableAccountBasis   *decimal.Decimal `yaml:"taxable_account_basis,omitempty" json:"taxable_account_basis,omitempty"` // Cost basis used to approximate capital gains
+
 	// Social Security (all participants should have this)
 	SSBenefitFRA decimal.Decimal `yaml:"ss_benefit_fra" json:"ss_benefit_fra"`
 	SSBenefit62  decimal.Decimal `yaml:"ss_benefit_62" json:"ss_benefit_62"`
@@ -472,6 +476,9 @@ type ParticipantScenario struct {
 	TSPWithdrawalStrategy      string           `yaml:"tsp_withdrawal_strategy,omitempty" json:"tsp_withdrawal_strategy,omitempty"`
 	TSPWithdrawalTargetMonthly *decimal.Decimal `yaml:"tsp_withdrawal_target_monthly,omitempty" json:"tsp_withdrawal_target_monthly,omitempty"`
 	TSPWithdrawalRate          *decimal.Decimal `yaml:"tsp_withdrawal_rate,omitempty" json:"tsp_withdrawal_rate,omitempty"`
+
+	// Optional: per-participant override of sequencing (future use)
+	// (Typically sequencing is household-level; keeping placeholder for extensibility)
 }
 
 // GenericScenario represents a complete retirement scenario for a household
@@ -479,6 +486,15 @@ type GenericScenario struct {
 	Name                 string                         `yaml:"name" json:"name"`
 	ParticipantScenarios map[string]ParticipantScenario `yaml:"participant_scenarios" json:"participant_scenarios"`
 	Mortality            *GenericScenarioMortality      `yaml:"mortality,omitempty" json:"mortality,omitempty"`
+	WithdrawalSequencing *WithdrawalSequencingConfig    `yaml:"withdrawal_sequencing,omitempty" json:"withdrawal_sequencing,omitempty"`
+}
+
+// WithdrawalSequencingConfig defines strategy and parameters for tax-smart withdrawal ordering
+type WithdrawalSequencingConfig struct {
+	Strategy       string   `yaml:"strategy" json:"strategy"`                                   // standard | tax_efficient | bracket_fill | custom
+	CustomSequence []string `yaml:"custom_sequence,omitempty" json:"custom_sequence,omitempty"` // e.g. ["taxable","roth","traditional"]
+	TargetBracket  *int     `yaml:"target_bracket,omitempty" json:"target_bracket,omitempty"`   // e.g. 22 means fill up to 22% bracket
+	BracketBuffer  *int     `yaml:"bracket_buffer,omitempty" json:"bracket_buffer,omitempty"`   // dollar buffer below bracket edge
 }
 
 // GenericScenarioMortality groups mortality specifications for participants
@@ -494,7 +510,7 @@ func (gs *GenericScenario) DeepCopy() *GenericScenario {
 	}
 
 	// Copy the scenario
-	copy := &GenericScenario{
+	gc := &GenericScenario{
 		Name:                 gs.Name,
 		ParticipantScenarios: make(map[string]ParticipantScenario),
 	}
@@ -521,12 +537,12 @@ func (gs *GenericScenario) DeepCopy() *GenericScenario {
 			psCopy.TSPWithdrawalRate = &valCopy
 		}
 
-		copy.ParticipantScenarios[name] = psCopy
+		gc.ParticipantScenarios[name] = psCopy
 	}
 
 	// Deep copy mortality if present
 	if gs.Mortality != nil {
-		copy.Mortality = &GenericScenarioMortality{
+		gc.Mortality = &GenericScenarioMortality{
 			Participants: make(map[string]*MortalitySpec),
 		}
 
@@ -541,12 +557,12 @@ func (gs *GenericScenario) DeepCopy() *GenericScenario {
 					ageCopy := *spec.DeathAge
 					specCopy.DeathAge = &ageCopy
 				}
-				copy.Mortality.Participants[name] = specCopy
+				gc.Mortality.Participants[name] = specCopy
 			}
 		}
 
 		if gs.Mortality.Assumptions != nil {
-			copy.Mortality.Assumptions = &MortalityAssumptions{
+			gc.Mortality.Assumptions = &MortalityAssumptions{
 				TSPSpousalTransfer:     gs.Mortality.Assumptions.TSPSpousalTransfer,
 				FilingStatusSwitch:     gs.Mortality.Assumptions.FilingStatusSwitch,
 				SurvivorSpendingFactor: gs.Mortality.Assumptions.SurvivorSpendingFactor,
@@ -554,7 +570,26 @@ func (gs *GenericScenario) DeepCopy() *GenericScenario {
 		}
 	}
 
-	return copy
+	// Deep copy withdrawal sequencing if present
+	if gs.WithdrawalSequencing != nil {
+		ws := &WithdrawalSequencingConfig{Strategy: gs.WithdrawalSequencing.Strategy}
+		if len(gs.WithdrawalSequencing.CustomSequence) > 0 {
+			seqCopy := make([]string, len(gs.WithdrawalSequencing.CustomSequence))
+			copy(seqCopy, gs.WithdrawalSequencing.CustomSequence)
+			ws.CustomSequence = seqCopy
+		}
+		if gs.WithdrawalSequencing.TargetBracket != nil {
+			b := *gs.WithdrawalSequencing.TargetBracket
+			ws.TargetBracket = &b
+		}
+		if gs.WithdrawalSequencing.BracketBuffer != nil {
+			bb := *gs.WithdrawalSequencing.BracketBuffer
+			ws.BracketBuffer = &bb
+		}
+		gc.WithdrawalSequencing = ws
+	}
+
+	return gc
 }
 
 // Age calculates the age of the participant at a given date

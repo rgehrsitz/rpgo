@@ -154,7 +154,11 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 		ssStarted                  bool
 		ssAnnualFull               decimal.Decimal
 		ssStartYear                *int
-		tspBalance                 decimal.Decimal
+		tspBalance                 decimal.Decimal // total (legacy)
+		tspBalanceTraditional      decimal.Decimal // new split tracking
+		tspBalanceRoth             decimal.Decimal // new split tracking
+		taxableBalance             decimal.Decimal // taxable brokerage aggregate per participant
+		taxableBasis               decimal.Decimal // cost basis
 		tspWithdrawalBase          decimal.Decimal
 		fehbPremium                decimal.Decimal
 		fersSupplementAnnual       decimal.Decimal
@@ -195,12 +199,23 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 		}
 
 		st.tspBalance = decimalZero
+		st.tspBalanceTraditional = decimalZero
+		st.tspBalanceRoth = decimalZero
+		st.taxableBalance = decimalZero
+		st.taxableBasis = decimalZero
 		if p.TSPBalanceTraditional != nil {
-			st.tspBalance = st.tspBalance.Add(*p.TSPBalanceTraditional)
+			st.tspBalanceTraditional = st.tspBalanceTraditional.Add(*p.TSPBalanceTraditional)
 		}
 		if p.TSPBalanceRoth != nil {
-			st.tspBalance = st.tspBalance.Add(*p.TSPBalanceRoth)
+			st.tspBalanceRoth = st.tspBalanceRoth.Add(*p.TSPBalanceRoth)
 		}
+		if p.TaxableAccountBalance != nil {
+			st.taxableBalance = st.taxableBalance.Add(*p.TaxableAccountBalance)
+		}
+		if p.TaxableAccountBasis != nil {
+			st.taxableBasis = st.taxableBasis.Add(*p.TaxableAccountBasis)
+		}
+		st.tspBalance = st.tspBalanceTraditional.Add(st.tspBalanceRoth)
 
 		if p.IsPrimaryFEHBHolder && p.FEHBPremiumPerPayPeriod != nil {
 			st.fehbPremium = p.FEHBPremiumPerPayPeriod.Mul(decimal.NewFromInt(26))
@@ -559,6 +574,26 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 				if withdrawal.GreaterThan(st.tspBalance) {
 					withdrawal = st.tspBalance
 				}
+				// Proportionally split between traditional and Roth based on starting mix if balances exist
+				tradPortion := decimal.Zero
+				rothPortion := decimal.Zero
+				totalBefore := st.tspBalance
+				if totalBefore.GreaterThan(decimalZero) {
+					tradRatio := decimal.Zero
+					if st.tspBalanceTraditional.GreaterThan(decimalZero) {
+						tradRatio = st.tspBalanceTraditional.Div(totalBefore)
+					}
+					tradPortion = withdrawal.Mul(tradRatio)
+					rothPortion = withdrawal.Sub(tradPortion)
+				}
+				st.tspBalanceTraditional = st.tspBalanceTraditional.Sub(tradPortion)
+				if st.tspBalanceTraditional.LessThan(decimalZero) {
+					st.tspBalanceTraditional = decimalZero
+				}
+				st.tspBalanceRoth = st.tspBalanceRoth.Sub(rothPortion)
+				if st.tspBalanceRoth.LessThan(decimalZero) {
+					st.tspBalanceRoth = decimalZero
+				}
 				st.tspBalance = st.tspBalance.Sub(withdrawal)
 				cf.TSPWithdrawals[p.Name] = withdrawal
 			}
@@ -674,6 +709,15 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 
 		cf.TotalGrossIncome = cf.CalculateTotalIncome()
 		cf.CalculateNetIncome()
+
+		// Determine Medicare eligibility (any participant age 65+)
+		cf.IsMedicareEligible = false
+		for _, age := range cf.Ages {
+			if age >= 65 {
+				cf.IsMedicareEligible = true
+				break
+			}
+		}
 
 		// Calculate MAGI for IRMAA determination
 		cf.MAGI = CalculateMAGI(cf)

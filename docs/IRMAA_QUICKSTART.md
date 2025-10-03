@@ -10,7 +10,7 @@ go test -v ./internal/calculation -run "TestIRMAAThresholdExamples"
 
 You'll see output like:
 
-```
+```text
 MAGI: $199000 (expected ~$199000)
 Risk: Warning (expected Warning)  ← Warning detected!
 Distance to next threshold: $7000

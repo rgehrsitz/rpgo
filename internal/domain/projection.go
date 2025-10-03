@@ -45,6 +45,11 @@ type AnnualCashFlow struct {
 	IRMAARiskStatus     string          `json:"irmaaRiskStatus"`     // "Safe", "Warning", "Breach"
 	IRMAADistanceToNext decimal.Decimal `json:"irmaaDistanceToNext"` // Distance to next IRMAA threshold
 
+	// Withdrawal sequencing breakdown (household-level aggregates)
+	WithdrawalTaxable     decimal.Decimal `json:"withdrawalTaxable"`
+	WithdrawalTraditional decimal.Decimal `json:"withdrawalTraditional"`
+	WithdrawalRoth        decimal.Decimal `json:"withdrawalRoth"`
+
 	// Additional Information
 	IsRetired          bool            `json:"isRetired"`
 	IsMedicareEligible bool            `json:"isMedicareEligible"`
@@ -179,12 +184,12 @@ const (
 
 // IRMAAAnalysis provides detailed IRMAA analysis across projection years
 type IRMAAAnalysis struct {
-	YearsWithBreaches []int              `json:"yearsWithBreaches"` // Years where MAGI exceeds IRMAA thresholds
-	YearsWithWarnings []int              `json:"yearsWithWarnings"` // Years within $10K of threshold
-	TotalIRMAACost    decimal.Decimal    `json:"totalIrmaa Cost"`   // Total IRMAA surcharges across all years
-	FirstBreachYear   int                `json:"firstBreachYear"`   // First year with IRMAA breach (0 if none)
-	HighRiskYears     []IRMAAYearRisk    `json:"highRiskYears"`     // Detailed risk analysis per year
-	Recommendations   []string           `json:"recommendations"`   // Suggested mitigation strategies
+	YearsWithBreaches []int           `json:"yearsWithBreaches"` // Years where MAGI exceeds IRMAA thresholds
+	YearsWithWarnings []int           `json:"yearsWithWarnings"` // Years within $10K of threshold
+	TotalIRMAACost    decimal.Decimal `json:"totalIrmaa Cost"`   // Total IRMAA surcharges across all years
+	FirstBreachYear   int             `json:"firstBreachYear"`   // First year with IRMAA breach (0 if none)
+	HighRiskYears     []IRMAAYearRisk `json:"highRiskYears"`     // Detailed risk analysis per year
+	Recommendations   []string        `json:"recommendations"`   // Suggested mitigation strategies
 }
 
 // IRMAAYearRisk provides detailed IRMAA risk information for a single year
@@ -214,6 +219,9 @@ func NewAnnualCashFlow(year int, date time.Time, participantNames []string) *Ann
 		TSPBalances:                 make(map[string]decimal.Decimal),
 		ParticipantTSPContributions: make(map[string]decimal.Decimal),
 		IsDeceased:                  make(map[string]bool),
+		WithdrawalTaxable:           decimal.Zero,
+		WithdrawalTraditional:       decimal.Zero,
+		WithdrawalRoth:              decimal.Zero,
 	}
 
 	// Initialize all participants with zero values

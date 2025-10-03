@@ -133,6 +133,24 @@ func (ip *InputParser) validateParticipant(index int, participant *domain.Partic
 		}
 	}
 
+	// Taxable account validations (optional fields)
+	if participant.TaxableAccountBalance != nil {
+		if participant.TaxableAccountBalance.LessThan(decimal.Zero) {
+			return fmt.Errorf("taxable account balance cannot be negative")
+		}
+		if participant.TaxableAccountBasis != nil {
+			if participant.TaxableAccountBasis.LessThan(decimal.Zero) {
+				return fmt.Errorf("taxable account basis cannot be negative")
+			}
+			if participant.TaxableAccountBasis.GreaterThan(*participant.TaxableAccountBalance) {
+				return fmt.Errorf("taxable account basis cannot exceed balance")
+			}
+		}
+	}
+	if participant.TaxableAccountBasis != nil && participant.TaxableAccountBalance == nil {
+		return fmt.Errorf("taxable account basis provided without taxable account balance")
+	}
+
 	return nil
 }
 
@@ -274,6 +292,45 @@ func (ip *InputParser) validateGenericScenario(index int, scenario *domain.Gener
 			}
 			if scenario.Mortality.Assumptions.FilingStatusSwitch != "" && scenario.Mortality.Assumptions.FilingStatusSwitch != "next_year" && scenario.Mortality.Assumptions.FilingStatusSwitch != "immediate" {
 				return fmt.Errorf("filing_status_switch must be 'next_year' or 'immediate'")
+			}
+		}
+	}
+
+	// Validate withdrawal sequencing if present
+	if scenario.WithdrawalSequencing != nil {
+		ws := scenario.WithdrawalSequencing
+		if ws.Strategy == "" {
+			return fmt.Errorf("withdrawal sequencing strategy cannot be empty if block provided")
+		}
+		valid := map[string]bool{"standard": true, "tax_efficient": true, "bracket_fill": true, "custom": true}
+		if !valid[ws.Strategy] {
+			return fmt.Errorf("withdrawal sequencing strategy must be one of: standard, tax_efficient, bracket_fill, custom")
+		}
+		if ws.Strategy == "custom" {
+			if len(ws.CustomSequence) == 0 {
+				return fmt.Errorf("custom sequence required when strategy=custom")
+			}
+			allowed := map[string]bool{"taxable": true, "traditional": true, "roth": true}
+			seen := map[string]bool{}
+			for _, src := range ws.CustomSequence {
+				if !allowed[src] {
+					return fmt.Errorf("custom sequence contains invalid source: %s", src)
+				}
+				if seen[src] {
+					return fmt.Errorf("custom sequence contains duplicate source: %s", src)
+				}
+				seen[src] = true
+			}
+		}
+		if ws.Strategy == "bracket_fill" {
+			if ws.TargetBracket == nil {
+				return fmt.Errorf("target_bracket required for bracket_fill strategy")
+			}
+			if *ws.TargetBracket <= 0 || *ws.TargetBracket > 37 { // Using top marginal percentage check
+				return fmt.Errorf("target_bracket must be a positive percentage (e.g., 22) and <= 37")
+			}
+			if ws.BracketBuffer != nil && *ws.BracketBuffer < 0 {
+				return fmt.Errorf("bracket_buffer cannot be negative")
 			}
 		}
 	}

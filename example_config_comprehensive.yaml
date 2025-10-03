@@ -13,6 +13,8 @@ household:
       high_3_salary: "186572.00"
       tsp_balance_traditional: "1966168.86"
       tsp_balance_roth: "0.00"
+      taxable_account_balance: "250000.00"   # New: taxable brokerage account balance
+      taxable_account_basis: "200000.00"     # New: cost basis for capital gains approximation
       tsp_contribution_percent: "0.128"
       ss_benefit_62: "2795.00"
       ss_benefit_fra: "4012.00"
@@ -38,6 +40,8 @@ household:
       high_3_salary: "164000.00"
       tsp_balance_traditional: "1525175.90"
       tsp_balance_roth: "0.00"
+      taxable_account_balance: "150000.00"   # New: taxable brokerage account balance
+      taxable_account_basis: "130000.00"     # New: cost basis for capital gains approximation
       tsp_contribution_percent: "0.153"
       ss_benefit_62: "2527.00"
       ss_benefit_fra: "3826.00"
@@ -232,6 +236,11 @@ scenarios:
         ss_start_age: 62
         tsp_withdrawal_strategy: "variable_percentage"
         tsp_withdrawal_rate: "0.01"
+    withdrawal_sequencing:
+      strategy: "standard"   # standard | tax_efficient | bracket_fill | custom
+      # custom_sequence: ["taxable", "traditional", "roth"]
+      # target_bracket: 22    # only for bracket_fill
+      # bracket_buffer: 5000  # only for bracket_fill (stay below edge)
 
   - name: "Rob Retires at 62 - Feb 2027"
     participant_scenarios:
