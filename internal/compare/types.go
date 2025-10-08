@@ -9,37 +9,73 @@ import (
 
 // ComparisonResult represents a single scenario comparison with calculated metrics
 type ComparisonResult struct {
-	ScenarioName        string          `json:"scenarioName"`
-	Description         string          `json:"description"`
-	Summary             *domain.ScenarioSummary
+	ScenarioName string `json:"scenarioName"`
+	Description  string `json:"description"`
+	Summary      *domain.ScenarioSummary
 
 	// Key Metrics
-	FirstYearNetIncome  decimal.Decimal `json:"firstYearNetIncome"`
-	LifetimeIncome      decimal.Decimal `json:"lifetimeIncome"`
-	TSPLongevity        int             `json:"tspLongevity"`        // Years until TSP depletion
-	FinalTSPBalance     decimal.Decimal `json:"finalTSPBalance"`
-	LifetimeTaxes       decimal.Decimal `json:"lifetimeTaxes"`
+	FirstYearNetIncome decimal.Decimal `json:"firstYearNetIncome"`
+	LifetimeIncome     decimal.Decimal `json:"lifetimeIncome"`
+	TSPLongevity       int             `json:"tspLongevity"` // Years until TSP depletion
+	FinalTSPBalance    decimal.Decimal `json:"finalTSPBalance"`
+	LifetimeTaxes      decimal.Decimal `json:"lifetimeTaxes"`
 
 	// Comparison to Base
-	IncomeDiffFromBase  decimal.Decimal `json:"incomeDiffFromBase"`
-	IncomePctFromBase   decimal.Decimal `json:"incomePctFromBase"`
-	TSPLongevityDiff    int             `json:"tspLongevityDiff"`
-	TaxDiffFromBase     decimal.Decimal `json:"taxDiffFromBase"`
+	IncomeDiffFromBase decimal.Decimal `json:"incomeDiffFromBase"`
+	IncomePctFromBase  decimal.Decimal `json:"incomePctFromBase"`
+	TSPLongevityDiff   int             `json:"tspLongevityDiff"`
+	TaxDiffFromBase    decimal.Decimal `json:"taxDiffFromBase"`
 
 	// Scenario Specifics (extracted from scenario for display)
-	RetirementDate      string `json:"retirementDate,omitempty"`
-	SSClaimAge          int    `json:"ssClaimAge,omitempty"`
+	RetirementDate        string `json:"retirementDate,omitempty"`
+	SSClaimAge            int    `json:"ssClaimAge,omitempty"`
 	TSPWithdrawalStrategy string `json:"tspWithdrawalStrategy,omitempty"`
-	TSPWithdrawalRate   string `json:"tspWithdrawalRate,omitempty"`
+	TSPWithdrawalRate     string `json:"tspWithdrawalRate,omitempty"`
 }
 
 // ComparisonSet represents a collection of scenario comparisons
 type ComparisonSet struct {
-	BaseScenarioName    string             `json:"baseScenarioName"`
-	BaseResult          *ComparisonResult  `json:"baseResult"`
-	AlternativeResults  []ComparisonResult `json:"alternativeResults"`
-	Recommendations     []string           `json:"recommendations"`
-	ConfigPath          string             `json:"configPath"`
+	BaseScenarioName   string             `json:"baseScenarioName"`
+	BaseResult         *ComparisonResult  `json:"baseResult"`
+	AlternativeResults []ComparisonResult `json:"alternativeResults"`
+	Recommendations    []string           `json:"recommendations"`
+	ConfigPath         string             `json:"configPath"`
+}
+
+// ToScenarioComparison converts a ComparisonSet to a domain.ScenarioComparison for HTML output
+func (cs *ComparisonSet) ToScenarioComparison() *domain.ScenarioComparison {
+	scenarios := make([]domain.ScenarioSummary, 0, len(cs.AlternativeResults)+1)
+
+	// Add base scenario
+	if cs.BaseResult != nil && cs.BaseResult.Summary != nil {
+		scenarios = append(scenarios, *cs.BaseResult.Summary)
+	}
+
+	// Add alternative scenarios
+	for _, result := range cs.AlternativeResults {
+		if result.Summary != nil {
+			scenarios = append(scenarios, *result.Summary)
+		}
+	}
+
+	// Create baseline net income from base scenario
+	baselineNetIncome := decimal.Zero
+	if cs.BaseResult != nil {
+		baselineNetIncome = cs.BaseResult.FirstYearNetIncome
+	}
+
+	return &domain.ScenarioComparison{
+		BaselineNetIncome: baselineNetIncome,
+		Scenarios:         scenarios,
+		Assumptions: []string{
+			"General COLA (FERS pension & SS): 2.0% annually",
+			"FEHB premium inflation: 6.0% annually",
+			"TSP growth pre-retirement: 6.0% annually",
+			"TSP growth post-retirement: 4.0% annually",
+			"Social Security wage base indexing: ~5% annually (2025 est: $168,600)",
+			"Tax brackets: 2025 levels held constant (no inflation indexing)",
+		},
+	}
 }
 
 // MetricsCalculator extracts key metrics from scenario summaries

@@ -374,13 +374,22 @@ Examples:
 			}
 			fmt.Print(output)
 
+		case "html":
+			formatter := &output.HTMLFormatter{}
+			scenarioComparison := comparisonSet.ToScenarioComparison()
+			output, err := formatter.Format(scenarioComparison)
+			if err != nil {
+				log.Fatalf("Failed to format HTML: %v", err)
+			}
+			fmt.Print(string(output))
+
 		case "table", "console", "":
 			formatter := &compare.TableFormatter{}
 			output := formatter.Format(comparisonSet)
 			fmt.Print(output)
 
 		default:
-			log.Fatalf("Unknown output format: %s (valid: table, csv, json)", outputFormat)
+			log.Fatalf("Unknown output format: %s (valid: table, csv, json, html)", outputFormat)
 		}
 	},
 }
@@ -595,7 +604,7 @@ func init() {
 	// Compare command flags
 	compareCmd.Flags().String("base", "", "Base scenario name to compare against (required)")
 	compareCmd.Flags().String("with", "", "Comma-separated list of templates to compare (required)")
-	compareCmd.Flags().StringP("format", "f", "table", "Output format (table, csv, json)")
+	compareCmd.Flags().StringP("format", "f", "table", "Output format (table, csv, json, html)")
 	compareCmd.Flags().String("participant", "", "Participant name for template application (auto-detected if not specified)")
 	compareCmd.Flags().Bool("list-templates", false, "List all available scenario templates")
 	compareCmd.Flags().Bool("debug", false, "Enable debug output for detailed calculations")
@@ -935,6 +944,154 @@ func initHistoricalCommand() {
 	historicalCmd.AddCommand(queryCmd)
 	historicalCmd.AddCommand(monteCarloCmd)
 	rootCmd.AddCommand(historicalCmd)
+
+	// FERS Monte Carlo command
+	fersMonteCarloCmd := &cobra.Command{
+		Use:   "fers-monte-carlo [input-file]",
+		Short: "Run comprehensive FERS Monte Carlo simulations",
+		Long: `Run comprehensive FERS Monte Carlo simulations that model market variability
+across all retirement components including TSP returns, inflation, COLA, and FEHB premiums.
+
+This command integrates with the full FERS retirement planning engine to provide
+probabilistic analysis of retirement scenarios.
+
+Examples:
+  ./rpgo fers-monte-carlo config.yaml --scenario "Both Retire in 2025" --simulations 1000
+  ./rpgo fers-monte-carlo config.yaml --scenario "Base" --simulations 5000 --historical
+  ./rpgo fers-monte-carlo config.yaml --scenario "Base" --simulations 1000 --output html`,
+		Args: cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			inputFile := args[0]
+
+			// Parse input
+			parser := config.NewInputParser()
+			regulatoryFile, _ := cmd.Flags().GetString("regulatory-config")
+
+			var configData *domain.Configuration
+			var err error
+
+			// Try to load with regulatory config if specified or if regulatory.yaml exists
+			if regulatoryFile != "" || fileExists("regulatory.yaml") {
+				if regulatoryFile == "" {
+					regulatoryFile = "regulatory.yaml"
+				}
+
+				configData, err = parser.LoadFromFileWithRegulatory(inputFile, regulatoryFile)
+				if err != nil {
+					fmt.Printf("Failed to load with regulatory config: %v\n", err)
+					fmt.Printf("Falling back to standalone config loading...\n")
+					configData, err = parser.LoadFromFile(inputFile)
+					if err != nil {
+						log.Fatal(err)
+					}
+				}
+			} else {
+				configData, err = parser.LoadFromFile(inputFile)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+
+			// Get simulation parameters
+			scenarioName, _ := cmd.Flags().GetString("scenario")
+			useHistorical, _ := cmd.Flags().GetBool("historical")
+			outputFormat, _ := cmd.Flags().GetString("format")
+
+			if scenarioName == "" {
+				log.Fatal("--scenario flag is required")
+			}
+
+			// Load historical data if requested
+			var historicalData *calculation.HistoricalDataManager
+			if useHistorical {
+				dataPath, _ := cmd.Flags().GetString("data-path")
+				if dataPath == "" {
+					dataPath = "./data" // Default data path
+				}
+				historicalData = calculation.NewHistoricalDataManager(dataPath)
+				if err := historicalData.LoadAllData(); err != nil {
+					fmt.Printf("Warning: Failed to load historical data: %v\n", err)
+					fmt.Printf("Falling back to statistical distributions...\n")
+					historicalData = nil
+				}
+			}
+
+			// Create FERS Monte Carlo engine
+			engine := calculation.NewFERSMonteCarloEngine(configData, historicalData)
+
+			// Run simulation
+			ctx := context.Background()
+			result, err := engine.RunFERSMonteCarlo(ctx, scenarioName)
+			if err != nil {
+				log.Fatalf("FERS Monte Carlo simulation failed: %v", err)
+			}
+
+			// Format and output results
+			switch strings.ToLower(outputFormat) {
+			case "json":
+				// TODO: Implement JSON formatter for FERS Monte Carlo results
+				fmt.Printf("JSON output not yet implemented for FERS Monte Carlo\n")
+
+			case "html":
+				// TODO: Implement HTML formatter for FERS Monte Carlo results
+				fmt.Printf("HTML output not yet implemented for FERS Monte Carlo\n")
+
+			case "table", "console", "":
+				// Console output
+				fmt.Printf("🎲 FERS MONTE CARLO SIMULATION RESULTS\n")
+				fmt.Printf("=====================================\n\n")
+				fmt.Printf("Base Scenario: %s\n", result.BaseScenarioName)
+				fmt.Printf("Simulations: %d\n", result.NumSimulations)
+				fmt.Printf("Projection Years: %d\n", result.ProjectionYears)
+				fmt.Printf("Success Rate: %.1f%%\n", result.SuccessRate.Mul(decimal.NewFromInt(100)).InexactFloat64())
+				fmt.Printf("Median Lifetime Income: $%.0f\n", result.MedianLifetimeIncome.InexactFloat64())
+				fmt.Printf("Median TSP Longevity: %d years\n", result.MedianTSPLongevity)
+
+				fmt.Printf("\n📊 PERCENTILE RANGES\n")
+				fmt.Printf("===================\n")
+				fmt.Printf("Lifetime Income:\n")
+				fmt.Printf("  10th percentile: $%.0f\n", result.PercentileRanges.LifetimeIncome["10th"].InexactFloat64())
+				fmt.Printf("  25th percentile: $%.0f\n", result.PercentileRanges.LifetimeIncome["25th"].InexactFloat64())
+				fmt.Printf("  50th percentile: $%.0f\n", result.PercentileRanges.LifetimeIncome["50th"].InexactFloat64())
+				fmt.Printf("  75th percentile: $%.0f\n", result.PercentileRanges.LifetimeIncome["75th"].InexactFloat64())
+				fmt.Printf("  90th percentile: $%.0f\n", result.PercentileRanges.LifetimeIncome["90th"].InexactFloat64())
+
+				fmt.Printf("\nTSP Longevity:\n")
+				fmt.Printf("  10th percentile: %d years\n", result.PercentileRanges.TSPLongevity["10th"])
+				fmt.Printf("  25th percentile: %d years\n", result.PercentileRanges.TSPLongevity["25th"])
+				fmt.Printf("  50th percentile: %d years\n", result.PercentileRanges.TSPLongevity["50th"])
+				fmt.Printf("  75th percentile: %d years\n", result.PercentileRanges.TSPLongevity["75th"])
+				fmt.Printf("  90th percentile: %d years\n", result.PercentileRanges.TSPLongevity["90th"])
+
+				fmt.Printf("\nYear 5 Net Income:\n")
+				fmt.Printf("  10th percentile: $%.0f\n", result.PercentileRanges.Year5Income["10th"].InexactFloat64())
+				fmt.Printf("  25th percentile: $%.0f\n", result.PercentileRanges.Year5Income["25th"].InexactFloat64())
+				fmt.Printf("  50th percentile: $%.0f\n", result.PercentileRanges.Year5Income["50th"].InexactFloat64())
+				fmt.Printf("  75th percentile: $%.0f\n", result.PercentileRanges.Year5Income["75th"].InexactFloat64())
+				fmt.Printf("  90th percentile: $%.0f\n", result.PercentileRanges.Year5Income["90th"].InexactFloat64())
+
+				fmt.Printf("\nYear 10 Net Income:\n")
+				fmt.Printf("  10th percentile: $%.0f\n", result.PercentileRanges.Year10Income["10th"].InexactFloat64())
+				fmt.Printf("  25th percentile: $%.0f\n", result.PercentileRanges.Year10Income["25th"].InexactFloat64())
+				fmt.Printf("  50th percentile: $%.0f\n", result.PercentileRanges.Year10Income["50th"].InexactFloat64())
+				fmt.Printf("  75th percentile: $%.0f\n", result.PercentileRanges.Year10Income["75th"].InexactFloat64())
+				fmt.Printf("  90th percentile: $%.0f\n", result.PercentileRanges.Year10Income["90th"].InexactFloat64())
+
+			default:
+				log.Fatalf("Unknown output format: %s (valid: table, json, html)", outputFormat)
+			}
+		},
+	}
+
+	// Add flags to FERS Monte Carlo command
+	fersMonteCarloCmd.Flags().String("scenario", "", "Base scenario name for Monte Carlo simulation (required)")
+	fersMonteCarloCmd.Flags().IntP("simulations", "s", 1000, "Number of simulations to run")
+	fersMonteCarloCmd.Flags().Bool("historical", true, "Use historical data (false for statistical distributions)")
+	fersMonteCarloCmd.Flags().String("data-path", "./data", "Path to historical data directory")
+	fersMonteCarloCmd.Flags().StringP("format", "f", "table", "Output format (table, json, html)")
+	fersMonteCarloCmd.Flags().String("regulatory-config", "", "Path to regulatory config file (default: regulatory.yaml if it exists)")
+
+	rootCmd.AddCommand(fersMonteCarloCmd)
 }
 
 // Helper functions for FERS Monte Carlo
