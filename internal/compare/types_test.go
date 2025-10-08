@@ -66,17 +66,17 @@ func TestMetricsCalculator_CalculateComparison(t *testing.T) {
 	calc := NewMetricsCalculator()
 
 	base := ComparisonResult{
-		ScenarioName:    "Base",
-		LifetimeIncome:  decimal.NewFromInt(3000000),
-		TSPLongevity:    25,
-		LifetimeTaxes:   decimal.NewFromInt(500000),
+		ScenarioName:   "Base",
+		LifetimeIncome: decimal.NewFromInt(3000000),
+		TSPLongevity:   25,
+		LifetimeTaxes:  decimal.NewFromInt(500000),
 	}
 
 	scenario := ComparisonResult{
-		ScenarioName:    "Alternative",
-		LifetimeIncome:  decimal.NewFromInt(3200000),
-		TSPLongevity:    28,
-		LifetimeTaxes:   decimal.NewFromInt(550000),
+		ScenarioName:   "Alternative",
+		LifetimeIncome: decimal.NewFromInt(3200000),
+		TSPLongevity:   28,
+		LifetimeTaxes:  decimal.NewFromInt(550000),
 	}
 
 	result := calc.CalculateComparison(scenario, base)
@@ -107,10 +107,10 @@ func TestMetricsCalculator_CalculateComparison(t *testing.T) {
 
 func TestGenerateRecommendations(t *testing.T) {
 	baseResult := &ComparisonResult{
-		ScenarioName:    "Base",
-		LifetimeIncome:  decimal.NewFromInt(3000000),
-		TSPLongevity:    25,
-		LifetimeTaxes:   decimal.NewFromInt(500000),
+		ScenarioName:   "Base",
+		LifetimeIncome: decimal.NewFromInt(3000000),
+		TSPLongevity:   25,
+		LifetimeTaxes:  decimal.NewFromInt(500000),
 	}
 
 	alt1 := ComparisonResult{
@@ -203,10 +203,10 @@ func TestGenerateRecommendations_EmptyAlternatives(t *testing.T) {
 
 func TestGenerateRecommendations_NoBetterThanBase(t *testing.T) {
 	baseResult := &ComparisonResult{
-		ScenarioName:    "Base",
-		LifetimeIncome:  decimal.NewFromInt(3000000),
-		TSPLongevity:    30,
-		LifetimeTaxes:   decimal.NewFromInt(400000),
+		ScenarioName:   "Base",
+		LifetimeIncome: decimal.NewFromInt(3000000),
+		TSPLongevity:   30,
+		LifetimeTaxes:  decimal.NewFromInt(400000),
 	}
 
 	alt1 := ComparisonResult{
@@ -232,17 +232,4 @@ func TestGenerateRecommendations_NoBetterThanBase(t *testing.T) {
 		t.Logf("Recommendations: %v", recommendations)
 		t.Error("Expected no recommendations when alternatives are worse than base")
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsInMiddle(s, substr)))
-}
-
-func containsInMiddle(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

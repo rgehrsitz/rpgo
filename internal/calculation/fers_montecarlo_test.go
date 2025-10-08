@@ -1,355 +1,298 @@
-//go:build legacy_removed
-// +build legacy_removed
-
 package calculation
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/rgehrsitz/rpgo/internal/domain"
 	"github.com/shopspring/decimal"
 )
 
-func TestFERSMonteCarloEngine(t *testing.T) {
-	// Create test configuration
-	config := createFERSMonteCarloTestConfiguration()
+func TestFERSMonteCarloEngine_NewFERSMonteCarloEngine(t *testing.T) {
+	config := createTestConfig()
 
-	// Create historical data manager with test data
-	hdm := createTestHistoricalDataManager(t)
+	// Test engine creation
+	engine := NewFERSMonteCarloEngine(config, nil)
 
-	// Create FERS Monte Carlo engine
-	engine := NewFERSMonteCarloEngine(config, hdm)
-
-	// Test configuration
-	mcConfig := FERSMonteCarloConfig{
-		BaseConfig:     config,
-		NumSimulations: 10, // Small number for testing
-		UseHistorical:  true,
-		Seed:           12345,
+	if engine == nil {
+		t.Fatal("Expected engine to be created, got nil")
 	}
 
-	// Run simulation
-	result, err := engine.RunFERSMonteCarlo(mcConfig)
-	if err != nil {
-		t.Fatalf("Failed to run FERS Monte Carlo simulation: %v", err)
+	if engine.baseConfig != config {
+		t.Error("Expected baseConfig to match input config")
 	}
 
-	// Verify basic results
-	if result.NumSimulations != 10 {
-		t.Errorf("Expected 10 simulations, got %d", result.NumSimulations)
+	if engine.historicalData != nil {
+		t.Error("Expected historicalData to be nil when not provided")
 	}
 
-	if len(result.Simulations) != 10 {
-		t.Errorf("Expected 10 simulation results, got %d", len(result.Simulations))
+	if engine.calculationEngine == nil {
+		t.Error("Expected calculationEngine to be initialized")
 	}
 
-	// Verify success rate is reasonable (between 0 and 1)
-	if result.SuccessRate.LessThan(decimal.Zero) || result.SuccessRate.GreaterThan(decimal.NewFromInt(1)) {
-		t.Errorf("Success rate should be between 0 and 1, got %s", result.SuccessRate.String())
+	// Test default configuration values
+	if engine.config.NumSimulations != 1000 {
+		t.Errorf("Expected NumSimulations to be 1000, got %d", engine.config.NumSimulations)
 	}
 
-	// Verify median net income is positive
-	if result.MedianNetIncome.LessThanOrEqual(decimal.Zero) {
-		t.Errorf("Median net income should be positive, got %s", result.MedianNetIncome.String())
-	}
-}
-
-func TestFERSMonteCarloStatisticalMode(t *testing.T) {
-	// Create test configuration
-	config := createFERSMonteCarloTestConfiguration()
-
-	// Create historical data manager with test data
-	hdm := createTestHistoricalDataManager(t)
-
-	// Create FERS Monte Carlo engine
-	engine := NewFERSMonteCarloEngine(config, hdm)
-
-	// Test configuration with statistical mode
-	mcConfig := FERSMonteCarloConfig{
-		BaseConfig:     config,
-		NumSimulations: 5,     // Small number for testing
-		UseHistorical:  false, // Use statistical distributions
-		Seed:           54321,
+	if engine.config.ProjectionYears != 30 {
+		t.Errorf("Expected ProjectionYears to be 30, got %d", engine.config.ProjectionYears)
 	}
 
-	// Run simulation
-	result, err := engine.RunFERSMonteCarlo(mcConfig)
-	if err != nil {
-		t.Fatalf("Failed to run FERS Monte Carlo simulation in statistical mode: %v", err)
+	if !engine.config.UseHistorical {
+		t.Error("Expected UseHistorical to be true by default")
 	}
 
-	// Verify results
-	if result.NumSimulations != 5 {
-		t.Errorf("Expected 5 simulations, got %d", result.NumSimulations)
+	// Test variability settings
+	expectedTSPVariability := decimal.NewFromFloat(0.05)
+	if !engine.config.TSPReturnVariability.Equal(expectedTSPVariability) {
+		t.Errorf("Expected TSPReturnVariability to be %v, got %v", expectedTSPVariability, engine.config.TSPReturnVariability)
 	}
 
-	// Verify that market conditions were generated
-	for i, sim := range result.Simulations {
-		if sim.MarketConditions.Year == 0 {
-			t.Errorf("Simulation %d: Market conditions year should not be 0", i)
-		}
-
-		// Verify TSP returns were generated
-		if len(sim.MarketConditions.TSPReturns) == 0 {
-			t.Errorf("Simulation %d: TSP returns should be generated", i)
-		}
-
-		// Verify inflation rate is reasonable
-		if sim.MarketConditions.InflationRate.LessThan(decimal.NewFromFloat(-0.1)) ||
-			sim.MarketConditions.InflationRate.GreaterThan(decimal.NewFromFloat(0.2)) {
-			t.Errorf("Simulation %d: Inflation rate should be reasonable, got %s",
-				i, sim.MarketConditions.InflationRate.String())
-		}
+	expectedInflationVariability := decimal.NewFromFloat(0.01)
+	if !engine.config.InflationVariability.Equal(expectedInflationVariability) {
+		t.Errorf("Expected InflationVariability to be %v, got %v", expectedInflationVariability, engine.config.InflationVariability)
 	}
 }
 
-func TestFERSMonteCarloMarketConditionGeneration(t *testing.T) {
-	// Create test configuration
-	config := createFERSMonteCarloTestConfiguration()
+func TestFERSMonteCarloEngine_generateMarketConditions(t *testing.T) {
+	config := createTestConfig()
+	engine := NewFERSMonteCarloEngine(config, nil)
 
-	// Create historical data manager with test data
-	hdm := createTestHistoricalDataManager(t)
+	// Test market condition generation
+	condition := engine.generateMarketConditions()
 
-	// Create FERS Monte Carlo engine
-	engine := NewFERSMonteCarloEngine(config, hdm)
-
-	// Test historical market condition generation
-	historicalMarket := engine.generateHistoricalMarketConditions()
-
-	// Verify historical market conditions
-	if historicalMarket.Year < 1990 || historicalMarket.Year > 2023 {
-		t.Errorf("Historical year should be between 1990-2023, got %d", historicalMarket.Year)
-	}
-
-	if len(historicalMarket.TSPReturns) != 5 {
-		t.Errorf("Expected 5 TSP fund returns, got %d", len(historicalMarket.TSPReturns))
-	}
-
-	// Test statistical market condition generation
-	statisticalMarket := engine.generateStatisticalMarketConditions()
-
-	// Verify statistical market conditions
-	if statisticalMarket.Year < 2025 || statisticalMarket.Year > 2055 {
-		t.Errorf("Statistical year should be between 2025-2055, got %d", statisticalMarket.Year)
-	}
-
-	if len(statisticalMarket.TSPReturns) != 5 {
-		t.Errorf("Expected 5 TSP fund returns, got %d", len(statisticalMarket.TSPReturns))
-	}
-}
-
-func TestFERSMonteCarloStatisticalDistributions(t *testing.T) {
-	// Create test configuration
-	config := createFERSMonteCarloTestConfiguration()
-
-	// Create historical data manager with test data
-	hdm := createTestHistoricalDataManager(t)
-
-	// Create FERS Monte Carlo engine
-	engine := NewFERSMonteCarloEngine(config, hdm)
-
-	// Test TSP return generation
-	funds := []string{"C", "S", "I", "F", "G"}
-	for _, fund := range funds {
-		returnRate := engine.generateStatisticalTSPReturn(fund)
-
-		// Verify return rate is reasonable (not extreme)
-		if returnRate.LessThan(decimal.NewFromFloat(-0.5)) ||
-			returnRate.GreaterThan(decimal.NewFromFloat(1.0)) {
-			t.Errorf("TSP return for %s fund should be reasonable, got %s", fund, returnRate.String())
+	// Test TSP returns
+	expectedFunds := []string{"C", "S", "I", "F", "G"}
+	for _, fund := range expectedFunds {
+		if _, exists := condition.TSPReturns[fund]; !exists {
+			t.Errorf("Expected TSP return for fund %s to be generated", fund)
 		}
 	}
 
-	// Test inflation generation
-	inflation := engine.generateStatisticalInflation()
-	if inflation.LessThan(decimal.NewFromFloat(-0.1)) ||
-		inflation.GreaterThan(decimal.NewFromFloat(0.2)) {
-		t.Errorf("Inflation rate should be reasonable, got %s", inflation.String())
+	// Test inflation rate
+	if condition.InflationRate.IsZero() {
+		t.Error("Expected inflation rate to be generated")
 	}
 
-	// Test COLA generation
-	cola := engine.generateStatisticalCOLA()
-	if cola.LessThan(decimal.NewFromFloat(-0.1)) ||
-		cola.GreaterThan(decimal.NewFromFloat(0.2)) {
-		t.Errorf("COLA rate should be reasonable, got %s", cola.String())
+	// Test COLA rate
+	if condition.COLARate.IsZero() {
+		t.Error("Expected COLA rate to be generated")
 	}
 
-	// Test FEHB increase generation
-	fehb := engine.generateStatisticalFEHBIncrease()
-	if fehb.LessThan(decimal.NewFromFloat(-0.1)) ||
-		fehb.GreaterThan(decimal.NewFromFloat(0.3)) {
-		t.Errorf("FEHB increase should be reasonable, got %s", fehb.String())
+	// Test FEHB inflation
+	if condition.FEHBInflation.IsZero() {
+		t.Error("Expected FEHB inflation to be generated")
 	}
 }
 
-func TestFERSMonteCarloMetricsCalculation(t *testing.T) {
-	// Create test configuration
-	config := createFERSMonteCarloTestConfiguration()
+func TestFERSMonteCarloEngine_generateStatisticalTSPReturn(t *testing.T) {
+	config := createTestConfig()
+	engine := NewFERSMonteCarloEngine(config, nil)
 
-	// Create historical data manager with test data
-	hdm := createTestHistoricalDataManager(t)
+	tests := []struct {
+		fund     string
+		expected decimal.Decimal
+	}{
+		{"C", decimal.NewFromFloat(0.10)}, // 10% average
+		{"S", decimal.NewFromFloat(0.12)}, // 12% average
+		{"I", decimal.NewFromFloat(0.08)}, // 8% average
+		{"F", decimal.NewFromFloat(0.05)}, // 5% average
+		{"G", decimal.NewFromFloat(0.03)}, // 3% average
+	}
 
-	// Create FERS Monte Carlo engine
-	engine := NewFERSMonteCarloEngine(config, hdm)
+	for _, test := range tests {
+		t.Run(test.fund, func(t *testing.T) {
+			// Run multiple times to test variability
+			results := make([]decimal.Decimal, 100)
+			for i := 0; i < 100; i++ {
+				results[i] = engine.generateStatisticalTSPReturn(test.fund)
+			}
+
+			// Check that results have variability (not all the same)
+			allSame := true
+			for i := 1; i < len(results); i++ {
+				if !results[i].Equal(results[0]) {
+					allSame = false
+					break
+				}
+			}
+
+			if allSame {
+				t.Error("Expected statistical TSP returns to have variability")
+			}
+
+			// Check that results are within reasonable bounds (not too extreme)
+			for _, result := range results {
+				if result.LessThan(decimal.NewFromFloat(-0.5)) {
+					t.Errorf("Expected TSP return to be >= -50%%, got %v", result)
+				}
+				if result.GreaterThan(decimal.NewFromFloat(1.0)) {
+					t.Errorf("Expected TSP return to be <= 100%%, got %v", result)
+				}
+			}
+		})
+	}
+}
+
+func TestFERSMonteCarloEngine_calculateFERSSummary(t *testing.T) {
+	config := createTestConfig()
+	engine := NewFERSMonteCarloEngine(config, nil)
 
 	// Create test simulations
 	simulations := []FERSMonteCarloSimulation{
 		{
 			SimulationID: 1,
 			Success:      true,
-			NetIncomeMetrics: NetIncomeMetrics{
-				FirstYearNetIncome: decimal.NewFromFloat(80000),
-				AverageNetIncome:   decimal.NewFromFloat(80000),
-			},
-			TSPMetrics: TSPMetrics{
-				Longevity: 25,
-				Depleted:  false,
+			ScenarioSummary: domain.ScenarioSummary{
+				TotalLifetimeIncome: decimal.NewFromFloat(4000000),
+				TSPLongevity:        25,
+				Year5NetIncome:      decimal.NewFromFloat(150000),
+				Year10NetIncome:     decimal.NewFromFloat(160000),
 			},
 		},
 		{
 			SimulationID: 2,
-			Success:      false,
-			NetIncomeMetrics: NetIncomeMetrics{
-				FirstYearNetIncome: decimal.NewFromFloat(60000),
-				AverageNetIncome:   decimal.NewFromFloat(60000),
-			},
-			TSPMetrics: TSPMetrics{
-				Longevity: 15,
-				Depleted:  true,
+			Success:      true,
+			ScenarioSummary: domain.ScenarioSummary{
+				TotalLifetimeIncome: decimal.NewFromFloat(4500000),
+				TSPLongevity:        30,
+				Year5NetIncome:      decimal.NewFromFloat(170000),
+				Year10NetIncome:     decimal.NewFromFloat(180000),
 			},
 		},
 		{
 			SimulationID: 3,
 			Success:      true,
-			NetIncomeMetrics: NetIncomeMetrics{
-				FirstYearNetIncome: decimal.NewFromFloat(90000),
-				AverageNetIncome:   decimal.NewFromFloat(90000),
-			},
-			TSPMetrics: TSPMetrics{
-				Longevity: 30,
-				Depleted:  false,
+			ScenarioSummary: domain.ScenarioSummary{
+				TotalLifetimeIncome: decimal.NewFromFloat(5000000),
+				TSPLongevity:        30,
+				Year5NetIncome:      decimal.NewFromFloat(190000),
+				Year10NetIncome:     decimal.NewFromFloat(200000),
 			},
 		},
 	}
 
-	// Calculate aggregate results
-	result := engine.calculateAggregateResults(simulations)
-
-	// Verify results (with tolerance for floating point precision)
-	expectedSuccessRate := decimal.NewFromFloat(2.0 / 3.0) // 2 out of 3 successful
-	successRateDiff := result.SuccessRate.Sub(expectedSuccessRate).Abs()
-	if successRateDiff.GreaterThan(decimal.NewFromFloat(0.0001)) {
-		t.Errorf("Expected success rate %s, got %s (diff: %s)", expectedSuccessRate.String(), result.SuccessRate.String(), successRateDiff.String())
+	marketConditions := []MarketCondition{
+		{TSPReturns: map[string]decimal.Decimal{"C": decimal.NewFromFloat(0.1)}},
+		{TSPReturns: map[string]decimal.Decimal{"C": decimal.NewFromFloat(0.12)}},
+		{TSPReturns: map[string]decimal.Decimal{"C": decimal.NewFromFloat(0.08)}},
 	}
 
-	expectedDepletionRate := decimal.NewFromFloat(1.0 / 3.0) // 1 out of 3 depleted
-	depletionRateDiff := result.TSPDepletionRate.Sub(expectedDepletionRate).Abs()
-	if depletionRateDiff.GreaterThan(decimal.NewFromFloat(0.0001)) {
-		t.Errorf("Expected TSP depletion rate %s, got %s (diff: %s)", expectedDepletionRate.String(), result.TSPDepletionRate.String(), depletionRateDiff.String())
+	result := engine.calculateFERSSummary(simulations, marketConditions, "Test Scenario")
+
+	if result == nil {
+		t.Fatal("Expected summary to be calculated, got nil")
 	}
 
-	// Verify median net income
-	expectedMedian := decimal.NewFromFloat(80000) // Middle value
-	if !result.MedianNetIncome.Equal(expectedMedian) {
-		t.Errorf("Expected median net income %s, got %s", expectedMedian.String(), result.MedianNetIncome.String())
+	if result.BaseScenarioName != "Test Scenario" {
+		t.Errorf("Expected BaseScenarioName to be 'Test Scenario', got %s", result.BaseScenarioName)
+	}
+
+	if result.NumSimulations != 1000 {
+		t.Errorf("Expected NumSimulations to be 1000 (from engine config), got %d", result.NumSimulations)
+	}
+
+	// Test success rate (should be 100% since all simulations succeeded)
+	expectedSuccessRate := decimal.NewFromInt(1)
+	if !result.SuccessRate.Equal(expectedSuccessRate) {
+		t.Errorf("Expected SuccessRate to be %v, got %v", expectedSuccessRate, result.SuccessRate)
+	}
+
+	// Test median lifetime income (should be 4500000 - middle value)
+	expectedMedianIncome := decimal.NewFromFloat(4500000)
+	if !result.MedianLifetimeIncome.Equal(expectedMedianIncome) {
+		t.Errorf("Expected MedianLifetimeIncome to be %v, got %v", expectedMedianIncome, result.MedianLifetimeIncome)
+	}
+
+	// Test median TSP longevity (should be 30 - middle value)
+	expectedMedianLongevity := 30
+	if result.MedianTSPLongevity != expectedMedianLongevity {
+		t.Errorf("Expected MedianTSPLongevity to be %d, got %d", expectedMedianLongevity, result.MedianTSPLongevity)
+	}
+
+	// Test percentile ranges
+	if len(result.PercentileRanges.LifetimeIncome) != 5 {
+		t.Errorf("Expected 5 percentile ranges for lifetime income, got %d", len(result.PercentileRanges.LifetimeIncome))
+	}
+
+	if len(result.PercentileRanges.TSPLongevity) != 5 {
+		t.Errorf("Expected 5 percentile ranges for TSP longevity, got %d", len(result.PercentileRanges.TSPLongevity))
 	}
 }
 
-func TestFERSMonteCarloErrorHandling(t *testing.T) {
-	// Create test configuration
-	config := createFERSMonteCarloTestConfiguration()
-
-	// Create FERS Monte Carlo engine without historical data
+func TestFERSMonteCarloEngine_RunFERSMonteCarlo_InvalidScenario(t *testing.T) {
+	config := createTestConfig()
 	engine := NewFERSMonteCarloEngine(config, nil)
 
-	// Test configuration
-	mcConfig := FERSMonteCarloConfig{
-		BaseConfig:     config,
-		NumSimulations: 5,
-		UseHistorical:  true,
+	ctx := context.Background()
+	result, err := engine.RunFERSMonteCarlo(ctx, "Non-existent Scenario")
+
+	if err == nil {
+		t.Error("Expected error for non-existent scenario, got nil")
 	}
 
-	// Run simulation should fail
-	_, err := engine.RunFERSMonteCarlo(mcConfig)
-	if err == nil {
-		t.Error("Expected error when historical data is not loaded")
+	if result != nil {
+		t.Error("Expected result to be nil for non-existent scenario")
 	}
 }
 
-// Helper functions
-
-func createFERSMonteCarloTestConfiguration() *domain.Configuration {
+// Helper function to create test configuration
+func createTestConfig() *domain.Configuration {
 	return &domain.Configuration{
-		PersonalDetails: map[string]domain.Employee{
-			"robert": {
-				Name:                    "Robert",
-				CurrentSalary:           decimal.NewFromFloat(100000),
-				High3Salary:             decimal.NewFromFloat(100000),
-				TSPBalanceTraditional:   decimal.NewFromFloat(500000),
-				TSPBalanceRoth:          decimal.NewFromFloat(100000),
-				TSPContributionPercent:  decimal.NewFromFloat(0.05),
-				SSBenefitFRA:            decimal.NewFromFloat(2500),
-				SSBenefit62:             decimal.NewFromFloat(1800),
-				SSBenefit70:             decimal.NewFromFloat(3100),
-				FEHBPremiumPerPayPeriod: decimal.NewFromFloat(500),
+		Household: &domain.Household{
+			Participants: []domain.Participant{
+				{
+					Name:                   "Test Participant",
+					BirthDate:              time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
+					IsFederal:              true,
+					HireDate:               &[]time.Time{time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC)}[0],
+					CurrentSalary:          &[]decimal.Decimal{decimal.NewFromFloat(100000)}[0],
+					High3Salary:            &[]decimal.Decimal{decimal.NewFromFloat(100000)}[0],
+					TSPBalanceTraditional:  &[]decimal.Decimal{decimal.NewFromFloat(500000)}[0],
+					TSPBalanceRoth:         &[]decimal.Decimal{decimal.NewFromFloat(0)}[0],
+					TSPContributionPercent: &[]decimal.Decimal{decimal.NewFromFloat(0.05)}[0],
+					TSPAllocation: &domain.TSPAllocation{
+						CFund: decimal.NewFromFloat(0.6),
+						SFund: decimal.NewFromFloat(0.2),
+						IFund: decimal.NewFromFloat(0.1),
+						FFund: decimal.NewFromFloat(0.1),
+						GFund: decimal.Zero,
+					},
+				},
 			},
-			"dawn": {
-				Name:                    "Dawn",
-				CurrentSalary:           decimal.NewFromFloat(80000),
-				High3Salary:             decimal.NewFromFloat(80000),
-				TSPBalanceTraditional:   decimal.NewFromFloat(300000),
-				TSPBalanceRoth:          decimal.NewFromFloat(50000),
-				TSPContributionPercent:  decimal.NewFromFloat(0.05),
-				SSBenefitFRA:            decimal.NewFromFloat(2000),
-				SSBenefit62:             decimal.NewFromFloat(1400),
-				SSBenefit70:             decimal.NewFromFloat(2500),
-				FEHBPremiumPerPayPeriod: decimal.NewFromFloat(400),
-			},
+			FilingStatus: "married_filing_jointly",
 		},
 		GlobalAssumptions: domain.GlobalAssumptions{
 			InflationRate:           decimal.NewFromFloat(0.025),
-			FEHBPremiumInflation:    decimal.NewFromFloat(0.05),
-			TSPReturnPreRetirement:  decimal.NewFromFloat(0.07),
-			TSPReturnPostRetirement: decimal.NewFromFloat(0.05),
-			COLAGeneralRate:         decimal.NewFromFloat(0.025),
-			ProjectionYears:         25,
-			CurrentLocation: domain.Location{
-				State:  "PA",
-				County: "Allegheny",
+			FEHBPremiumInflation:    decimal.NewFromFloat(0.06),
+			TSPReturnPreRetirement:  decimal.NewFromFloat(0.06),
+			TSPReturnPostRetirement: decimal.NewFromFloat(0.04),
+			COLAGeneralRate:         decimal.NewFromFloat(0.02),
+			ProjectionYears:         30,
+			FederalRules: domain.FederalRules{
+				// Use minimal required fields for testing
+				SocialSecurityTaxThresholds: domain.SocialSecurityTaxThresholds{},
+				SocialSecurityRules:         domain.SocialSecurityRules{},
+				FERSRules:                   domain.FERSRules{},
+				FederalTaxConfig:            domain.FederalTaxConfig{},
+				StateLocalTaxConfig:         domain.StateLocalTaxConfig{},
+				FICATaxConfig:               domain.FICATaxConfig{},
+				MedicareConfig:              domain.MedicareConfig{},
+				FEHBConfig:                  domain.FEHBConfig{},
 			},
 		},
-		Scenarios: []domain.Scenario{
+		Scenarios: []domain.GenericScenario{
 			{
 				Name: "Test Scenario",
-				Robert: domain.RetirementScenario{
-					EmployeeName:          "robert",
-					SSStartAge:            62,
-					TSPWithdrawalStrategy: "4_percent_rule",
-				},
-				Dawn: domain.RetirementScenario{
-					EmployeeName:          "dawn",
-					SSStartAge:            62,
-					TSPWithdrawalStrategy: "4_percent_rule",
+				ParticipantScenarios: map[string]domain.ParticipantScenario{
+					"Test Participant": {
+						ParticipantName: "Test Participant",
+						SSStartAge:      62,
+					},
 				},
 			},
 		},
 	}
-}
-
-func createTestHistoricalDataManager(t *testing.T) *HistoricalDataManager {
-	// Use existing data directory - try multiple paths
-	paths := []string{"./data", "../data", "../../data"}
-	var hdm *HistoricalDataManager
-	var err error
-
-	for _, path := range paths {
-		hdm = NewHistoricalDataManager(path)
-		err = hdm.LoadAllData()
-		if err == nil {
-			return hdm
-		}
-	}
-
-	t.Fatalf("Failed to load test historical data from any path: %v", err)
-	return nil
 }

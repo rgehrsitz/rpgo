@@ -414,7 +414,38 @@ tsp_allocation:
 
 ### Monte Carlo Analysis
 
-The current CLI ships with a portfolio-only Monte Carlo simulator under the `historical` command group. It models withdrawal strategies against TSP fund return histories (or statistical distributions) without processing a full FERS configuration.
+RPGO includes comprehensive FERS Monte Carlo simulation that models market variability across all retirement components including TSP returns, inflation, COLA, and FEHB premiums.
+
+#### Comprehensive FERS Monte Carlo
+
+```bash
+# Full FERS Monte Carlo simulation
+./rpgo fers-monte-carlo config.yaml --scenario "Both Retire in 2025" --simulations 1000
+
+# Statistical distributions (no historical data)
+./rpgo fers-monte-carlo config.yaml --scenario "Base" --simulations 5000 --historical=false
+
+# Custom data path
+./rpgo fers-monte-carlo config.yaml --scenario "Base" --simulations 1000 --data-path ./data
+```
+
+**Key Features:**
+- **Full FERS Integration**: Uses existing CalculationEngine and domain.Configuration
+- **Market Variability**: TSP returns (5% std dev), inflation (1% std dev), COLA (0.5% std dev), FEHB (2% std dev)
+- **Dual Mode Support**: Historical data sampling or statistical distributions
+- **Performance**: Parallel execution with configurable simulation count
+- **Comprehensive Analysis**: Percentile ranges for lifetime income, TSP longevity, year-specific income
+
+**Known Limitations:**
+- TSP longevity variability not fully integrated (shows 30 years for all percentiles)
+- TSP returns variability needs deeper integration with calculation engine
+- HTML/JSON output formatters not yet implemented
+
+> 📋 **Technical Debt**: See [TECHNICAL_DEBT.md](./docs/TECHNICAL_DEBT.md) for detailed tracking of known issues and limitations.
+
+#### Portfolio-Only Monte Carlo (Legacy)
+
+The CLI also ships with a portfolio-only Monte Carlo simulator under the `historical` command group for simple withdrawal strategy testing:
 
 ```bash
 ./rpgo historical monte-carlo ./data \
@@ -423,16 +454,6 @@ The current CLI ships with a portfolio-only Monte Carlo simulator under the `his
   --withdrawal 40000 \
   --strategy fixed_amount
 ```
-
-Key options:
-
-- `--balance`, `--withdrawal` – starting balance and annual draw.
-- `--strategy` – choose among `fixed_amount`, `fixed_percentage`, `inflation_adjusted`, or `guardrails`.
-- `--historical` – toggle between true historical draws (default) and statistical mode.
-- `--years` – projection length.
-- `--simulations` – number of trials.
-
-> ℹ️ Config-driven “comprehensive FERS” Monte Carlo was removed from the CLI. Use deterministic `calculate` runs to compare scenario files, and rely on the portfolio simulator for withdrawal stress-testing.
 
 ### Social Security
 
