@@ -2,8 +2,8 @@
 
 A comprehensive retirement planning calculator for Federal Employees Retirement System (FERS) participants, built in Go. This tool provides accurate "apples-to-apples" comparisons between current net income and multiple retirement scenarios, incorporating all recent regulatory changes, tax implications, and federal-specific benefits.
 
-**Status:** Phase 3.1 Complete - Advanced Features In Progress (December 2024)  
-**Progress:** 75% Complete
+**Status:** Phase 4.1 Complete - Testing & Quality Complete (December 2024)  
+**Progress:** 85% Complete
 
 ## 🚀 **Key Features**
 
@@ -20,6 +20,7 @@ A comprehensive retirement planning calculator for Federal Employees Retirement 
 - **Roth Conversion Planner**: Multi-year optimization with multiple objectives (minimize taxes, IRMAA, maximize estate)
 - **Healthcare Cost Modeling**: Pre-65 coverage, Medicare Part B/D, Medigap with age-based transitions
 - **Survivor Viability Analysis**: Financial impact modeling when spouse dies with life insurance needs calculation
+- **Monte Carlo Integration**: Full FERS Monte Carlo with market variability, probabilistic analysis of retirement portfolio sustainability
 
 ### **User Experience**
 - **Interactive TUI**: Terminal user interface with real-time parameter adjustment and visualization
@@ -44,6 +45,9 @@ A comprehensive retirement planning calculator for Federal Employees Retirement 
 
 # Analyze survivor viability
 ./rpgo analyze-survivor config.yaml --deceased "Alice Johnson" --survivor-spending-factor 0.75
+
+# Run Monte Carlo analysis
+./rpgo fers-monte-carlo config.yaml --scenario "Scenario 1" --simulations 1000 --format console
 
 # Launch interactive TUI
 ./rpgo-tui config.yaml

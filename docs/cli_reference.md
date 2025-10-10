@@ -212,6 +212,21 @@ Display version, commit, and build information.
 
 ### 3. Monte Carlo Risk Analysis
 
+#### Comprehensive FERS Monte Carlo
+
+```bash
+# Full FERS Monte Carlo simulation
+./rpgo fers-monte-carlo config.yaml --scenario "Base" --simulations 1000
+
+# Statistical distributions (no historical data)
+./rpgo fers-monte-carlo config.yaml --scenario "Base" --simulations 5000 --historical=false
+
+# Custom data path and output format
+./rpgo fers-monte-carlo config.yaml --scenario "Base" --simulations 1000 --data-path ./data --format console
+```
+
+#### Portfolio-Only Monte Carlo (Legacy)
+
 ```bash
 # Conservative 4% rule test (simple portfolio)
 ./rpgo historical monte-carlo ./data \
@@ -352,6 +367,32 @@ Notes:
 - Use guardrails strategy for flexibility
 - Maintain 20-40% bond allocation
 - Monitor and adjust annually
+
+### `fers-monte-carlo [input-file]` — Run comprehensive FERS Monte Carlo analysis
+
+Run Monte Carlo simulations using the full FERS calculation engine with market variability.
+
+**Flags:**
+
+- `--scenario`: Scenario name to analyze (required)
+- `--simulations`: Number of simulations to run (default: 1000)
+- `--historical`: Use historical data sampling (default: true)
+- `--data-path`: Path to historical data directory (default: ./data)
+- `--format`: Output format (default: console)
+- `--regulatory-config`: Path to regulatory config file
+
+**Examples:**
+
+```bash
+# Basic FERS Monte Carlo analysis
+./rpgo fers-monte-carlo config.yaml --scenario "Base"
+
+# High-precision analysis with statistical distributions
+./rpgo fers-monte-carlo config.yaml --scenario "Base" --simulations 5000 --historical=false
+
+# Custom data path and output format
+./rpgo fers-monte-carlo config.yaml --scenario "Base" --simulations 1000 --data-path ./data --format console
+```
 
 ## Performance Tips
 

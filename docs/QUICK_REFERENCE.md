@@ -1,6 +1,6 @@
 # RPGO Quick Reference Guide
 
-**Version:** Phase 3.1 Complete  
+**Version:** Phase 4.1 Complete  
 **Date:** December 2024
 
 ## 🚀 **Available Commands**
@@ -21,6 +21,9 @@
 
 # Analyze survivor viability
 ./rpgo analyze-survivor config.yaml --deceased "Alice Johnson" --survivor-spending-factor 0.75
+
+# Run Monte Carlo analysis
+./rpgo fers-monte-carlo config.yaml --scenario "Scenario 1" --simulations 1000 --format console
 ```
 
 ### **Interactive TUI**
