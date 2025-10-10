@@ -22,8 +22,6 @@ func (tf *TableFormatter) Format(compSet *ComparisonSet) string {
 	sb.WriteString("\n")
 
 	// Create table with all scenarios
-	allResults := []ComparisonResult{*compSet.BaseResult}
-	allResults = append(allResults, compSet.AlternativeResults...)
 
 	// Column widths
 	nameWidth := 25

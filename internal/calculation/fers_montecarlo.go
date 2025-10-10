@@ -117,9 +117,6 @@ func (fmce *FERSMonteCarloEngine) RunFERSMonteCarlo(ctx context.Context, baseSce
 		return nil, fmt.Errorf("base scenario '%s' not found", baseScenarioName)
 	}
 
-	// Set random seed
-	rand.Seed(fmce.config.Seed)
-
 	// Run simulations in parallel
 	simulations := make([]FERSMonteCarloSimulation, fmce.config.NumSimulations)
 	marketConditions := make([]MarketCondition, fmce.config.NumSimulations)
@@ -134,8 +131,11 @@ func (fmce *FERSMonteCarloEngine) RunFERSMonteCarlo(ctx context.Context, baseSce
 		go func(simID int) {
 			defer wg.Done()
 
+			// Create a new random source for this simulation
+			simRNG := rand.New(rand.NewSource(fmce.config.Seed + int64(simID)))
+
 			// Generate market conditions for this simulation
-			marketCondition := fmce.generateMarketConditions()
+			marketCondition := fmce.generateMarketConditions(simRNG)
 			marketChan <- marketCondition
 
 			// Run single FERS simulation
@@ -174,21 +174,21 @@ func (fmce *FERSMonteCarloEngine) RunFERSMonteCarlo(ctx context.Context, baseSce
 }
 
 // generateMarketConditions creates market conditions for a single simulation
-func (fmce *FERSMonteCarloEngine) generateMarketConditions() MarketCondition {
+func (fmce *FERSMonteCarloEngine) generateMarketConditions(rng *rand.Rand) MarketCondition {
 	condition := MarketCondition{
 		TSPReturns:    make(map[string]decimal.Decimal),
-		InflationRate: fmce.generateInflationRate(),
-		COLARate:      fmce.generateCOLARate(),
-		FEHBInflation: fmce.generateFEHBInflation(),
+		InflationRate: fmce.generateInflationRate(rng),
+		COLARate:      fmce.generateCOLARate(rng),
+		FEHBInflation: fmce.generateFEHBInflation(rng),
 	}
 
 	// Generate TSP fund returns
 	funds := []string{"C", "S", "I", "F", "G"}
 	for _, fund := range funds {
 		if fmce.config.UseHistorical {
-			condition.TSPReturns[fund] = fmce.generateHistoricalTSPReturn(fund)
+			condition.TSPReturns[fund] = fmce.generateHistoricalTSPReturn(fund, rng)
 		} else {
-			condition.TSPReturns[fund] = fmce.generateStatisticalTSPReturn(fund)
+			condition.TSPReturns[fund] = fmce.generateStatisticalTSPReturn(fund, rng)
 		}
 	}
 
@@ -196,16 +196,16 @@ func (fmce *FERSMonteCarloEngine) generateMarketConditions() MarketCondition {
 }
 
 // generateInflationRate generates a random inflation rate
-func (fmce *FERSMonteCarloEngine) generateInflationRate() decimal.Decimal {
+func (fmce *FERSMonteCarloEngine) generateInflationRate(rng *rand.Rand) decimal.Decimal {
 	baseRate := fmce.baseConfig.GlobalAssumptions.InflationRate
 	if fmce.config.UseHistorical {
 		// Use historical inflation data if available
-		return fmce.generateHistoricalInflationRate()
+		return fmce.generateHistoricalInflationRate(rng)
 	}
 
 	// Generate using normal distribution around base rate
 	variability := fmce.config.InflationVariability
-	randomFactor := decimal.NewFromFloat(rand.NormFloat64()).Mul(variability)
+	randomFactor := decimal.NewFromFloat(rng.NormFloat64()).Mul(variability)
 	result := baseRate.Add(randomFactor)
 	if result.LessThan(decimal.NewFromFloat(-0.05)) {
 		result = decimal.NewFromFloat(-0.05) // Cap at -5%
@@ -214,14 +214,14 @@ func (fmce *FERSMonteCarloEngine) generateInflationRate() decimal.Decimal {
 }
 
 // generateCOLARate generates a random COLA rate
-func (fmce *FERSMonteCarloEngine) generateCOLARate() decimal.Decimal {
+func (fmce *FERSMonteCarloEngine) generateCOLARate(rng *rand.Rand) decimal.Decimal {
 	baseRate := fmce.baseConfig.GlobalAssumptions.COLAGeneralRate
 	if fmce.config.UseHistorical {
-		return fmce.generateHistoricalCOLARate()
+		return fmce.generateHistoricalCOLARate(rng)
 	}
 
 	variability := fmce.config.COLAVariability
-	randomFactor := decimal.NewFromFloat(rand.NormFloat64()).Mul(variability)
+	randomFactor := decimal.NewFromFloat(rng.NormFloat64()).Mul(variability)
 	result := baseRate.Add(randomFactor)
 	if result.LessThan(decimal.NewFromFloat(-0.02)) {
 		result = decimal.NewFromFloat(-0.02) // Cap at -2%
@@ -230,10 +230,10 @@ func (fmce *FERSMonteCarloEngine) generateCOLARate() decimal.Decimal {
 }
 
 // generateFEHBInflation generates a random FEHB inflation rate
-func (fmce *FERSMonteCarloEngine) generateFEHBInflation() decimal.Decimal {
+func (fmce *FERSMonteCarloEngine) generateFEHBInflation(rng *rand.Rand) decimal.Decimal {
 	baseRate := fmce.baseConfig.GlobalAssumptions.FEHBPremiumInflation
 	variability := fmce.config.FEHBVariability
-	randomFactor := decimal.NewFromFloat(rand.NormFloat64()).Mul(variability)
+	randomFactor := decimal.NewFromFloat(rng.NormFloat64()).Mul(variability)
 	result := baseRate.Add(randomFactor)
 	if result.LessThan(decimal.NewFromFloat(0.0)) {
 		result = decimal.NewFromFloat(0.0) // Cap at 0%
@@ -242,28 +242,28 @@ func (fmce *FERSMonteCarloEngine) generateFEHBInflation() decimal.Decimal {
 }
 
 // generateHistoricalTSPReturn generates TSP return using historical data
-func (fmce *FERSMonteCarloEngine) generateHistoricalTSPReturn(fund string) decimal.Decimal {
+func (fmce *FERSMonteCarloEngine) generateHistoricalTSPReturn(fund string, rng *rand.Rand) decimal.Decimal {
 	if fmce.historicalData == nil {
-		return fmce.generateStatisticalTSPReturn(fund)
+		return fmce.generateStatisticalTSPReturn(fund, rng)
 	}
 
 	// Get a random historical year
 	year, err := fmce.historicalData.GetRandomHistoricalYear()
 	if err != nil {
-		return fmce.generateStatisticalTSPReturn(fund)
+		return fmce.generateStatisticalTSPReturn(fund, rng)
 	}
 
 	// Get TSP return for that year
 	returnRate, err := fmce.historicalData.GetTSPReturn(fund, year)
 	if err != nil {
-		return fmce.generateStatisticalTSPReturn(fund)
+		return fmce.generateStatisticalTSPReturn(fund, rng)
 	}
 
 	return returnRate
 }
 
 // generateStatisticalTSPReturn generates TSP return using statistical distribution
-func (fmce *FERSMonteCarloEngine) generateStatisticalTSPReturn(fund string) decimal.Decimal {
+func (fmce *FERSMonteCarloEngine) generateStatisticalTSPReturn(fund string, rng *rand.Rand) decimal.Decimal {
 	// Base returns by fund (long-term averages)
 	baseReturns := map[string]decimal.Decimal{
 		"C": decimal.NewFromFloat(0.10), // 10% average
@@ -275,7 +275,7 @@ func (fmce *FERSMonteCarloEngine) generateStatisticalTSPReturn(fund string) deci
 
 	baseReturn := baseReturns[fund]
 	variability := fmce.config.TSPReturnVariability
-	randomFactor := decimal.NewFromFloat(rand.NormFloat64()).Mul(variability)
+	randomFactor := decimal.NewFromFloat(rng.NormFloat64()).Mul(variability)
 	result := baseReturn.Add(randomFactor)
 	if result.LessThan(decimal.NewFromFloat(-0.5)) {
 		result = decimal.NewFromFloat(-0.5) // Cap at -50%
@@ -284,12 +284,12 @@ func (fmce *FERSMonteCarloEngine) generateStatisticalTSPReturn(fund string) deci
 }
 
 // generateHistoricalInflationRate generates inflation rate using historical data
-func (fmce *FERSMonteCarloEngine) generateHistoricalInflationRate() decimal.Decimal {
+func (fmce *FERSMonteCarloEngine) generateHistoricalInflationRate(rng *rand.Rand) decimal.Decimal {
 	if fmce.historicalData == nil {
 		// Fall back to statistical generation
 		baseRate := fmce.baseConfig.GlobalAssumptions.InflationRate
 		variability := fmce.config.InflationVariability
-		randomFactor := decimal.NewFromFloat(rand.NormFloat64()).Mul(variability)
+		randomFactor := decimal.NewFromFloat(rng.NormFloat64()).Mul(variability)
 		result := baseRate.Add(randomFactor)
 		if result.LessThan(decimal.NewFromFloat(-0.05)) {
 			result = decimal.NewFromFloat(-0.05) // Cap at -5%
@@ -303,7 +303,7 @@ func (fmce *FERSMonteCarloEngine) generateHistoricalInflationRate() decimal.Deci
 		// Fall back to statistical generation
 		baseRate := fmce.baseConfig.GlobalAssumptions.InflationRate
 		variability := fmce.config.InflationVariability
-		randomFactor := decimal.NewFromFloat(rand.NormFloat64()).Mul(variability)
+		randomFactor := decimal.NewFromFloat(rng.NormFloat64()).Mul(variability)
 		result := baseRate.Add(randomFactor)
 		if result.LessThan(decimal.NewFromFloat(-0.05)) {
 			result = decimal.NewFromFloat(-0.05) // Cap at -5%
@@ -317,7 +317,7 @@ func (fmce *FERSMonteCarloEngine) generateHistoricalInflationRate() decimal.Deci
 		// Fall back to statistical generation
 		baseRate := fmce.baseConfig.GlobalAssumptions.InflationRate
 		variability := fmce.config.InflationVariability
-		randomFactor := decimal.NewFromFloat(rand.NormFloat64()).Mul(variability)
+		randomFactor := decimal.NewFromFloat(rng.NormFloat64()).Mul(variability)
 		result := baseRate.Add(randomFactor)
 		if result.LessThan(decimal.NewFromFloat(-0.05)) {
 			result = decimal.NewFromFloat(-0.05) // Cap at -5%
@@ -329,12 +329,12 @@ func (fmce *FERSMonteCarloEngine) generateHistoricalInflationRate() decimal.Deci
 }
 
 // generateHistoricalCOLARate generates COLA rate using historical data
-func (fmce *FERSMonteCarloEngine) generateHistoricalCOLARate() decimal.Decimal {
+func (fmce *FERSMonteCarloEngine) generateHistoricalCOLARate(rng *rand.Rand) decimal.Decimal {
 	if fmce.historicalData == nil {
 		// Fall back to statistical generation
 		baseRate := fmce.baseConfig.GlobalAssumptions.COLAGeneralRate
 		variability := fmce.config.COLAVariability
-		randomFactor := decimal.NewFromFloat(rand.NormFloat64()).Mul(variability)
+		randomFactor := decimal.NewFromFloat(rng.NormFloat64()).Mul(variability)
 		result := baseRate.Add(randomFactor)
 		if result.LessThan(decimal.NewFromFloat(-0.02)) {
 			result = decimal.NewFromFloat(-0.02) // Cap at -2%
@@ -348,7 +348,7 @@ func (fmce *FERSMonteCarloEngine) generateHistoricalCOLARate() decimal.Decimal {
 		// Fall back to statistical generation
 		baseRate := fmce.baseConfig.GlobalAssumptions.COLAGeneralRate
 		variability := fmce.config.COLAVariability
-		randomFactor := decimal.NewFromFloat(rand.NormFloat64()).Mul(variability)
+		randomFactor := decimal.NewFromFloat(rng.NormFloat64()).Mul(variability)
 		result := baseRate.Add(randomFactor)
 		if result.LessThan(decimal.NewFromFloat(-0.02)) {
 			result = decimal.NewFromFloat(-0.02) // Cap at -2%
@@ -362,7 +362,7 @@ func (fmce *FERSMonteCarloEngine) generateHistoricalCOLARate() decimal.Decimal {
 		// Fall back to statistical generation
 		baseRate := fmce.baseConfig.GlobalAssumptions.COLAGeneralRate
 		variability := fmce.config.COLAVariability
-		randomFactor := decimal.NewFromFloat(rand.NormFloat64()).Mul(variability)
+		randomFactor := decimal.NewFromFloat(rng.NormFloat64()).Mul(variability)
 		result := baseRate.Add(randomFactor)
 		if result.LessThan(decimal.NewFromFloat(-0.02)) {
 			result = decimal.NewFromFloat(-0.02) // Cap at -2%

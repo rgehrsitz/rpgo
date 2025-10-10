@@ -489,7 +489,7 @@ func TestInputParser_ValidateRegulatoryConfig_InvalidFICARates(t *testing.T) {
 
 	err := parser.validateRegulatoryConfig(regConfig)
 	assert.Error(t, err, "Should error for invalid Social Security rate")
-	assert.Contains(t, err.Error(), "Social Security rate must be positive", "Should have specific error message")
+	assert.Contains(t, err.Error(), "social security rate must be positive", "Should have specific error message")
 }
 
 // Helper function for creating decimal pointers

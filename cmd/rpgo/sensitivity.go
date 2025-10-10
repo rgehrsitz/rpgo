@@ -241,7 +241,7 @@ func parseParameterString(paramStr string) (domain.SensitivityParameter, error) 
 	}
 
 	// Get the actual base value from the configuration
-	baseValue := decimal.NewFromFloat(0.025) // Default inflation rate
+	var baseValue decimal.Decimal
 	switch name {
 	case "inflation_rate":
 		baseValue = decimal.NewFromFloat(0.025)
@@ -296,7 +296,7 @@ func parseSingleParameter(name, rangeStr string, steps int) (domain.SensitivityP
 	}
 
 	// Get the actual base value from the configuration
-	baseValue := decimal.NewFromFloat(0.025) // Default inflation rate
+	var baseValue decimal.Decimal
 	switch name {
 	case "inflation_rate":
 		baseValue = decimal.NewFromFloat(0.025)

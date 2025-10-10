@@ -309,9 +309,7 @@ func (ce *CalculationEngine) calculateCurrentNetIncomeGeneric(household *domain.
 // RunScenarios runs all scenarios and returns a comparison
 func (ce *CalculationEngine) RunScenarios(config *domain.Configuration) (*domain.ScenarioComparison, error) {
 	ctx := context.Background()
-	var scenarios []domain.ScenarioSummary
-
-	scenarios = make([]domain.ScenarioSummary, len(config.Scenarios))
+	scenarios := make([]domain.ScenarioSummary, len(config.Scenarios))
 	for i, scenario := range config.Scenarios {
 		summary, err := ce.RunGenericScenario(ctx, config, &scenario)
 		if err != nil {

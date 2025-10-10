@@ -17,7 +17,7 @@ import (
 // Model represents the entire application state
 type Model struct {
 	// Navigation
-	currentScene Scene
+	currentScene  Scene
 	previousScene Scene
 
 	// Terminal dimensions
@@ -27,9 +27,6 @@ type Model struct {
 	// Configuration and data
 	configPath string
 	config     *domain.Configuration
-
-	// Calculation engine
-	calcEngine *calculation.CalculationEngine
 
 	// Current selections
 	selectedScenario string
@@ -53,30 +50,29 @@ type Model struct {
 	compareModel    *scenes.CompareModel
 	optimizeModel   *scenes.OptimizeModel
 	resultsModel    *scenes.ResultsModel
-	helpModel       interface{} // HelpModel (to be created)
 
 	// Error state
 	err error
 
 	// Loading state
-	loading bool
+	loading        bool
 	loadingMessage string
 }
 
 // NewModel creates a new application model
 func NewModel(configPath string) Model {
 	return Model{
-		currentScene:        SceneHome,
-		configPath:          configPath,
-		comparisonResults:   make(map[string]*domain.ScenarioSummary),
-		homeModel:           scenes.NewHomeModel(),
-		scenariosModel:      scenes.NewScenariosModel(),
-		parametersModel:     scenes.NewParametersModel(),
-		compareModel:        scenes.NewCompareModel(),
-		optimizeModel:       scenes.NewOptimizeModel(),
-		resultsModel:        scenes.NewResultsModel(),
-		width:               80,
-		height:              24,
+		currentScene:      SceneHome,
+		configPath:        configPath,
+		comparisonResults: make(map[string]*domain.ScenarioSummary),
+		homeModel:         scenes.NewHomeModel(),
+		scenariosModel:    scenes.NewScenariosModel(),
+		parametersModel:   scenes.NewParametersModel(),
+		compareModel:      scenes.NewCompareModel(),
+		optimizeModel:     scenes.NewOptimizeModel(),
+		resultsModel:      scenes.NewResultsModel(),
+		width:             80,
+		height:            24,
 	}
 }
 

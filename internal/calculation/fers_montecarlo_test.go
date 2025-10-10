@@ -2,6 +2,7 @@ package calculation
 
 import (
 	"context"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -61,7 +62,8 @@ func TestFERSMonteCarloEngine_generateMarketConditions(t *testing.T) {
 	engine := NewFERSMonteCarloEngine(config, nil)
 
 	// Test market condition generation
-	condition := engine.generateMarketConditions()
+	rng := rand.New(rand.NewSource(12345))
+	condition := engine.generateMarketConditions(rng)
 
 	// Test TSP returns
 	expectedFunds := []string{"C", "S", "I", "F", "G"}
@@ -106,8 +108,9 @@ func TestFERSMonteCarloEngine_generateStatisticalTSPReturn(t *testing.T) {
 		t.Run(test.fund, func(t *testing.T) {
 			// Run multiple times to test variability
 			results := make([]decimal.Decimal, 100)
+			rng := rand.New(rand.NewSource(12345))
 			for i := 0; i < 100; i++ {
-				results[i] = engine.generateStatisticalTSPReturn(test.fund)
+				results[i] = engine.generateStatisticalTSPReturn(test.fund, rng)
 			}
 
 			// Check that results have variability (not all the same)

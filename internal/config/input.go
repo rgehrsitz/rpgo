@@ -434,62 +434,6 @@ func (ip *InputParser) validateParticipantScenario(participantName string, scena
 	return nil
 }
 
-// validateEmployee validates a single employee's data
-func (ip *InputParser) validateEmployee(_ string, employee *domain.Employee) error {
-	// Validate required fields
-	if employee.BirthDate.IsZero() {
-		return fmt.Errorf("birth date is required")
-	}
-	if employee.HireDate.IsZero() {
-		return fmt.Errorf("hire date is required")
-	}
-	if employee.CurrentSalary.LessThanOrEqual(decimal.Zero) {
-		return fmt.Errorf("current salary must be positive")
-	}
-	if employee.High3Salary.LessThanOrEqual(decimal.Zero) {
-		return fmt.Errorf("high 3 salary must be positive")
-	}
-	if employee.TSPBalanceTraditional.LessThan(decimal.Zero) {
-		return fmt.Errorf("TSP traditional balance cannot be negative")
-	}
-	if employee.TSPBalanceRoth.LessThan(decimal.Zero) {
-		return fmt.Errorf("TSP Roth balance cannot be negative")
-	}
-	if employee.TSPContributionPercent.LessThan(decimal.Zero) || employee.TSPContributionPercent.GreaterThan(decimal.NewFromFloat(1.0)) {
-		return fmt.Errorf("TSP contribution percent must be between 0 and 1")
-	}
-	if employee.SSBenefitFRA.LessThanOrEqual(decimal.Zero) {
-		return fmt.Errorf("social security benefit at FRA must be positive")
-	}
-	if employee.SSBenefit62.LessThanOrEqual(decimal.Zero) {
-		return fmt.Errorf("social security benefit at 62 must be positive")
-	}
-	if employee.SSBenefit70.LessThanOrEqual(decimal.Zero) {
-		return fmt.Errorf("social security benefit at 70 must be positive")
-	}
-	if employee.FEHBPremiumPerPayPeriod.LessThan(decimal.Zero) {
-		return fmt.Errorf("FEHB premium per pay period cannot be negative")
-	}
-	if employee.SurvivorBenefitElectionPercent.LessThan(decimal.Zero) || employee.SurvivorBenefitElectionPercent.GreaterThan(decimal.NewFromFloat(1.0)) {
-		return fmt.Errorf("survivor benefit election percent must be between 0 and 1")
-	}
-
-	// Validate date logic
-	if employee.BirthDate.After(employee.HireDate) {
-		return fmt.Errorf("birth date cannot be after hire date")
-	}
-
-	// Validate Social Security benefit progression
-	if employee.SSBenefit62.GreaterThan(employee.SSBenefitFRA) {
-		return fmt.Errorf("SS benefit at 62 cannot be greater than at FRA")
-	}
-	if employee.SSBenefitFRA.GreaterThan(employee.SSBenefit70) {
-		return fmt.Errorf("SS benefit at FRA cannot be greater than at 70")
-	}
-
-	return nil
-}
-
 // validateGlobalAssumptions validates global assumptions
 func (ip *InputParser) validateGlobalAssumptions(assumptions *domain.GlobalAssumptions) error {
 	if assumptions.InflationRate.LessThan(decimal.NewFromFloat(-0.10)) {
@@ -574,10 +518,10 @@ func (ip *InputParser) validateRegulatoryConfig(regConfig *domain.RegulatoryConf
 
 	// Validate FICA rates
 	if regConfig.FICA.SocialSecurity.Rate.LessThanOrEqual(decimal.Zero) {
-		return fmt.Errorf("Social Security rate must be positive")
+		return fmt.Errorf("social security rate must be positive")
 	}
 	if regConfig.FICA.Medicare.Rate.LessThanOrEqual(decimal.Zero) {
-		return fmt.Errorf("Medicare rate must be positive")
+		return fmt.Errorf("medicare rate must be positive")
 	}
 
 	return nil

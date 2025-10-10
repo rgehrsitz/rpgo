@@ -32,7 +32,8 @@ func TestRootCommand_Execute(t *testing.T) {
 
 	// Capture output
 	var buf bytes.Buffer
-	cmd.SetOutput(&buf)
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
 
 	// Execute the command
 	err := cmd.Execute()
@@ -54,7 +55,8 @@ func TestRootCommand_Help(t *testing.T) {
 	cmd.SetArgs([]string{"--help"})
 
 	var buf bytes.Buffer
-	cmd.SetOutput(&buf)
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
 
 	err := cmd.Execute()
 
@@ -121,7 +123,8 @@ func TestRootCommand_InvalidCommand(t *testing.T) {
 	cmd.SetArgs([]string{"invalid-command"})
 
 	var buf bytes.Buffer
-	cmd.SetOutput(&buf)
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
 
 	err := cmd.Execute()
 
@@ -136,7 +139,8 @@ func TestRootCommand_InvalidFlag(t *testing.T) {
 	cmd.SetArgs([]string{"--invalid-flag"})
 
 	var buf bytes.Buffer
-	cmd.SetOutput(&buf)
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
 
 	err := cmd.Execute()
 

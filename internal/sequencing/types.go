@@ -120,12 +120,3 @@ type SequencingStrategy interface {
 	Name() string
 	Plan(sources []WithdrawalSource, ctx StrategyContext) WithdrawalPlan
 }
-
-// Helper to sum decimal slices
-func sumDecimals(vals []decimal.Decimal) decimal.Decimal {
-	total := decimal.Zero
-	for _, v := range vals {
-		total = total.Add(v)
-	}
-	return total
-}
