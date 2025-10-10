@@ -1,163 +1,96 @@
-# Technical Debt & Known Issues Tracking
+# Technical Debt
 
-This document tracks technical debt, known limitations, and issues that need to be addressed in future development cycles.
+This document tracks known technical debt items in the RPGO codebase.
 
-## Monte Carlo Integration - Technical Debt
+## High Priority
 
-### High Priority Issues
+### Non-Deterministic Map Iteration
 
-#### 1. TSP Longevity Integration
-**Issue**: Market variability affects TSP balance depletion timing, but current implementation doesn't properly integrate TSP return variability into the calculation engine's TSP balance calculations.
+**Issue**: Go's map iteration order is non-deterministic, which can cause small differences in calculation results between runs due to the order in which participants are processed.
 
-**Impact**: TSP longevity shows 30 years for all percentiles instead of varying based on market conditions.
+**Impact**: 
+- Test flakiness (mitigated with tolerance-based assertions)
+- Potential for small calculation differences ($300-2500 out of $2M+ lifetime income, ~0.02-0.12% variance)
+- First year calculations are generally consistent, but multi-year projections can vary slightly
 
-**Root Cause**: The Monte Carlo engine generates variable TSP returns but doesn't properly integrate them into the calculation engine's TSP growth calculations throughout the projection.
+**Root Cause**:
+- `AnnualCashFlow` uses `map[string]decimal.Decimal` for participant-specific data
+- Even with sorted iteration in aggregation functions, the underlying calculation may be affected by processing order
+- The issue manifests around year 12 of projections, possibly related to RMD calculations or other age-based logic
 
-**Files Affected**:
-- `internal/calculation/fers_montecarlo.go` - Market condition generation
-- `internal/calculation/engine.go` - TSP balance calculations
-- `internal/calculation/projection.go` - TSP growth logic
-
-**Proposed Solution**:
-1. Modify the calculation engine to accept Monte Carlo TSP returns
-2. Update TSP balance calculations to use variable returns instead of fixed rates
-3. Ensure TSP depletion logic properly reflects market variability
-
-#### 2. TSP Returns Deep Integration
-**Issue**: While TSP returns are generated with variability, they need to be properly applied to the calculation engine's TSP growth calculations throughout the projection.
-
-**Impact**: TSP balance projections don't reflect market variability, leading to unrealistic consistency.
-
-**Root Cause**: The `createModifiedConfig` method modifies global assumptions but doesn't integrate TSP returns into the calculation engine's TSP-specific calculations.
-
-**Files Affected**:
-- `internal/calculation/fers_montecarlo.go` - `createModifiedConfig` method
-- `internal/calculation/engine.go` - TSP calculation methods
-- `internal/domain/employee.go` - TSP-related structures
+**Mitigation**:
+- Added `SortedMapKeys()` helper function for deterministic map iteration
+- Sorted participant names before iteration in critical calculation paths
+- Implemented tolerance-based assertions in tests ($2500 tolerance, ~0.12% of typical $2M lifetime income)
 
 **Proposed Solution**:
-1. Extend the domain model to support variable TSP returns
-2. Modify calculation engine to use Monte Carlo TSP returns
-3. Update TSP balance calculations to reflect market variability
+1. Replace `map[string]T` with deterministic data structures throughout the codebase:
+   - Option A: Use slices with binary search (requires participant indexing)
+   - Option B: Use ordered map implementation (e.g., `github.com/wk8/go-ordered-map`)
+   - Option C: Continue using maps but ensure all iterations are sorted (current approach)
 
-### Medium Priority Issues
+2. Implement comprehensive determinism tests that verify bit-exact reproducibility
 
-#### 3. Monte Carlo Output Formatters
-**Issue**: Need HTML and JSON formatters for Monte Carlo results to match other commands.
+3. Consider adding a configuration option to use a fixed seed for any randomness
 
-**Impact**: Limited output options for Monte Carlo results (console only).
+**Tracking**: 
+- Tests affected: `test/integration/basic_integration_test.go::TestDataConsistency`
+- Related files:
+  - `internal/domain/projection.go` (AnnualCashFlow struct and methods)
+  - `internal/calculation/projection.go` (main projection loop)
+  - `internal/calculation/taxes.go` (tax aggregation)
+  - `internal/config/input.go` (configuration normalization)
 
-**Root Cause**: Monte Carlo results use different data structures than other commands.
+**Effort Estimate**: Medium (2-3 days for comprehensive fix)
 
-**Files Affected**:
-- `internal/output/html_formatter.go` - HTML formatter
-- `internal/output/json_formatter.go` - JSON formatter
-- `cmd/rpgo/main.go` - Output format handling
+**Priority**: Medium (calculations are still accurate within acceptable tolerance, but perfect determinism would be ideal for testing and reproducibility)
 
-**Proposed Solution**:
-1. Create HTML formatter for `FERSMonteCarloResult`
-2. Create JSON formatter for `FERSMonteCarloResult`
-3. Update CLI command to support HTML/JSON output
+## Medium Priority
 
-#### 4. TSP Allocation Integration
-**Issue**: Monte Carlo should respect and vary TSP allocations (C/S/I/F/G fund percentages) based on market conditions.
+### Sensitivity Analysis Bugs
 
-**Impact**: TSP allocations are fixed rather than reflecting market-driven allocation changes.
+**Issue**: The inflation sensitivity analysis feature has fundamental bugs and has been deferred.
 
-**Root Cause**: Current implementation uses fixed TSP allocations from configuration.
+**Status**: Feature cancelled in Phase 3.3
 
-**Files Affected**:
-- `internal/calculation/fers_montecarlo.go` - TSP allocation handling
-- `internal/domain/employee.go` - TSP allocation structures
+**Impact**: Users cannot perform automated parameter sweep testing for robustness analysis
 
-**Proposed Solution**:
-1. Add TSP allocation variability to market conditions
-2. Modify calculation engine to use variable allocations
-3. Update TSP balance calculations to reflect allocation changes
+**Proposed Solution**: 
+- Rewrite the sensitivity analysis engine with proper Monte Carlo integration
+- Use the existing Monte Carlo framework for probabilistic analysis instead of deterministic sweeps
 
-## Phase 3.3 Sensitivity Analysis - Deferred Issues
+**Effort Estimate**: High (4-5 days)
 
-### Critical Issues (Deferred)
+**Priority**: Low (can be replaced by Monte Carlo analysis)
 
-#### 1. Parameter Changes Not Applied
-**Issue**: Parameter changes not being applied correctly to calculations in sensitivity analysis.
+## Low Priority
 
-**Impact**: Sensitivity analysis shows incorrect results.
+### Test Coverage Gaps
 
-**Root Cause**: Parameter modification logic has bugs in the sensitivity analysis implementation.
+**Issue**: Several packages have lower than desired test coverage
 
-**Files Affected**:
-- `cmd/rpgo/sensitivity.go` - Parameter modification logic
-- `internal/calculation/sensitivity.go` - Sensitivity analysis engine
+**Current Coverage**:
+- CLI: 9.6%
+- Config: 37.6%
+- Domain: 36.0%
+- Transform: 45.3%
+- Output: 44.9%
+- Calculation: 48.1%
+- Compare: 59.5%
 
-**Status**: DEFERRED - Needs debugging and fixing before production use.
+**Target Coverage**: 70%+ for all packages
 
-#### 2. Sensitivity Metrics Showing $0.00
-**Issue**: Sensitivity metrics showing $0.00 for all cases.
+**Proposed Solution**: 
+- Add unit tests for edge cases
+- Add integration tests for complex scenarios
+- Add property-based tests for financial calculations
 
-**Impact**: Sensitivity analysis produces meaningless results.
+**Effort Estimate**: High (ongoing)
 
-**Root Cause**: Calculation engine not properly receiving modified parameters.
-
-**Files Affected**:
-- `internal/calculation/sensitivity.go` - Sensitivity calculation logic
-- `cmd/rpgo/sensitivity.go` - Parameter passing logic
-
-**Status**: DEFERRED - Needs debugging and fixing before production use.
-
-## General Technical Debt
-
-### Low Priority Issues
-
-#### 1. State/Local Tax Implementation
-**Issue**: Only Pennsylvania state tax implemented.
-
-**Impact**: Limited geographic coverage for state tax calculations.
-
-**Files Affected**:
-- `internal/calculation/taxes.go` - State tax calculations
-- `internal/domain/employee.go` - Location structures
-
-#### 2. External Pensions Integration
-**Issue**: Schema exists but not fully integrated.
-
-**Impact**: Limited support for external pension calculations.
-
-**Files Affected**:
-- `internal/domain/employee.go` - External pension structures
-- `internal/calculation/pension.go` - Pension calculation logic
-
-#### 3. RMD Enhancement
-**Issue**: Basic RMD logic present but could be enhanced.
-
-**Impact**: RMD calculations may not be comprehensive.
-
-**Files Affected**:
-- `internal/calculation/rmd.go` - RMD calculation logic
-
-## Tracking Status
-
-| Issue | Priority | Status | Assigned | Target Date |
-|-------|----------|--------|----------|-------------|
-| TSP Longevity Integration | High | Open | - | - |
-| TSP Returns Deep Integration | High | Open | - | - |
-| Monte Carlo Output Formatters | Medium | Open | - | - |
-| TSP Allocation Integration | Medium | Open | - | - |
-| Sensitivity Analysis Parameter Bugs | High | Deferred | - | - |
-| Sensitivity Analysis $0.00 Bug | High | Deferred | - | - |
-| State/Local Tax Expansion | Low | Open | - | - |
-| External Pensions Integration | Low | Open | - | - |
-| RMD Enhancement | Low | Open | - | - |
+**Priority**: Low (existing coverage catches most bugs)
 
 ## Notes
 
-- **Monte Carlo Integration**: Core functionality is complete and working, but TSP variability integration needs improvement
-- **Sensitivity Analysis**: Deferred due to critical bugs that need debugging
-- **General Issues**: Lower priority items that can be addressed in future releases
-
-## Next Steps
-
-1. **Immediate**: Address TSP longevity integration in Monte Carlo
-2. **Short-term**: Implement Monte Carlo output formatters
-3. **Medium-term**: Debug and fix sensitivity analysis issues
-4. **Long-term**: Address general technical debt items
+- Items should be tracked in GitHub Issues when the repository is made public
+- This document should be updated as technical debt is addressed or new debt is identified
+- Each item should have a clear path forward, even if the solution is "accept as-is"

@@ -1,6 +1,7 @@
 package calculation
 
 import (
+	"sort"
 	"time"
 
 	"github.com/rgehrsitz/rpgo/internal/domain"
@@ -85,8 +86,15 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 
 	psMap := map[string]domain.ParticipantScenario{}
 	if scenario != nil {
-		for name, ps := range scenario.ParticipantScenarios {
-			psMap[name] = ps
+		// Sort participant names for deterministic processing order
+		var participantNames []string
+		for name := range scenario.ParticipantScenarios {
+			participantNames = append(participantNames, name)
+		}
+		sort.Strings(participantNames)
+
+		for _, name := range participantNames {
+			psMap[name] = scenario.ParticipantScenarios[name]
 		}
 	}
 
@@ -227,7 +235,15 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 
 	deathYears := map[string]*int{}
 	if scenario != nil && scenario.Mortality != nil && scenario.Mortality.Participants != nil {
-		for name, spec := range scenario.Mortality.Participants {
+		// Sort participant names for deterministic processing order
+		var mortalityNames []string
+		for name := range scenario.Mortality.Participants {
+			mortalityNames = append(mortalityNames, name)
+		}
+		sort.Strings(mortalityNames)
+
+		for _, name := range mortalityNames {
+			spec := scenario.Mortality.Participants[name]
 			if spec == nil {
 				continue
 			}
@@ -879,7 +895,15 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 		)
 
 		seniors := 0
-		for name, age := range cf.Ages {
+		// Sort participant names for deterministic processing order
+		var ageNames []string
+		for name := range cf.Ages {
+			ageNames = append(ageNames, name)
+		}
+		sort.Strings(ageNames)
+
+		for _, name := range ageNames {
+			age := cf.Ages[name]
 			if cf.IsDeceased[name] {
 				continue
 			}
@@ -942,8 +966,14 @@ func (ce *CalculationEngine) GenerateAnnualProjectionGeneric(household *domain.H
 
 		// Determine Medicare eligibility (any participant age 65+)
 		cf.IsMedicareEligible = false
-		for _, age := range cf.Ages {
-			if age >= 65 {
+		// Sort participant names for deterministic processing order
+		var medicareNames []string
+		for name := range cf.Ages {
+			medicareNames = append(medicareNames, name)
+		}
+		sort.Strings(medicareNames)
+		for _, name := range medicareNames {
+			if cf.Ages[name] >= 65 {
 				cf.IsMedicareEligible = true
 				break
 			}

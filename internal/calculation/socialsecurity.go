@@ -82,6 +82,11 @@ func ProjectSocialSecurityBenefits(employee *domain.Employee, ssStartAge int, pr
 	initialBenefit := CalculateMonthlySSBenefitAtAge(employee.SSBenefitFRA, employee.BirthDate, ssStartAge)
 	currentBenefit := initialBenefit
 
+	// nowFunc returns the current time for projections
+	nowFunc := func() time.Time {
+		return time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	}
+
 	for year := 0; year < projectionYears; year++ {
 		projectionDate := nowFunc().AddDate(year, 0, 0)
 		age := employee.Age(projectionDate)

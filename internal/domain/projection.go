@@ -1,10 +1,31 @@
 package domain
 
 import (
+	"sort"
 	"time"
 
 	"github.com/shopspring/decimal"
 )
+
+// SortedMapKeys returns the keys of a map in sorted order for deterministic iteration
+func SortedMapKeys[K comparable, V any](m map[K]V) []K {
+	keys := make([]K, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+
+	// Sort keys if they are strings
+	if len(keys) > 0 {
+		switch any(keys[0]).(type) {
+		case string:
+			sort.Slice(keys, func(i, j int) bool {
+				return any(keys[i]).(string) < any(keys[j]).(string)
+			})
+		}
+	}
+
+	return keys
+}
 
 // AnnualCashFlow represents the complete cash flow for a single year with generic participant support
 type AnnualCashFlow struct {
@@ -276,8 +297,10 @@ func (acf *AnnualCashFlow) GetParticipantNames() []string {
 // GetTotalSalary returns the sum of all participant salaries
 func (acf *AnnualCashFlow) GetTotalSalary() decimal.Decimal {
 	total := decimal.Zero
-	for _, salary := range acf.Salaries {
-		total = total.Add(salary)
+	// Sort participant names for deterministic processing order
+	names := SortedMapKeys(acf.Salaries)
+	for _, name := range names {
+		total = total.Add(acf.Salaries[name])
 	}
 	return total
 }
@@ -285,8 +308,10 @@ func (acf *AnnualCashFlow) GetTotalSalary() decimal.Decimal {
 // GetTotalPension returns the sum of all participant pensions
 func (acf *AnnualCashFlow) GetTotalPension() decimal.Decimal {
 	total := decimal.Zero
-	for _, pension := range acf.Pensions {
-		total = total.Add(pension)
+	// Sort participant names for deterministic processing order
+	names := SortedMapKeys(acf.Pensions)
+	for _, name := range names {
+		total = total.Add(acf.Pensions[name])
 	}
 	return total
 }
@@ -294,8 +319,10 @@ func (acf *AnnualCashFlow) GetTotalPension() decimal.Decimal {
 // GetTotalSurvivorPension returns the sum of all survivor pension amounts
 func (acf *AnnualCashFlow) GetTotalSurvivorPension() decimal.Decimal {
 	total := decimal.Zero
-	for _, pension := range acf.SurvivorPensions {
-		total = total.Add(pension)
+	// Sort participant names for deterministic processing order
+	names := SortedMapKeys(acf.SurvivorPensions)
+	for _, name := range names {
+		total = total.Add(acf.SurvivorPensions[name])
 	}
 	return total
 }
@@ -303,8 +330,10 @@ func (acf *AnnualCashFlow) GetTotalSurvivorPension() decimal.Decimal {
 // GetTotalTSPWithdrawal returns the sum of all participant TSP withdrawals
 func (acf *AnnualCashFlow) GetTotalTSPWithdrawal() decimal.Decimal {
 	total := decimal.Zero
-	for _, withdrawal := range acf.TSPWithdrawals {
-		total = total.Add(withdrawal)
+	// Sort participant names for deterministic processing order
+	names := SortedMapKeys(acf.TSPWithdrawals)
+	for _, name := range names {
+		total = total.Add(acf.TSPWithdrawals[name])
 	}
 	return total
 }
@@ -312,8 +341,10 @@ func (acf *AnnualCashFlow) GetTotalTSPWithdrawal() decimal.Decimal {
 // GetTotalSSBenefit returns the sum of all participant Social Security benefits
 func (acf *AnnualCashFlow) GetTotalSSBenefit() decimal.Decimal {
 	total := decimal.Zero
-	for _, benefit := range acf.SSBenefits {
-		total = total.Add(benefit)
+	// Sort participant names for deterministic processing order
+	names := SortedMapKeys(acf.SSBenefits)
+	for _, name := range names {
+		total = total.Add(acf.SSBenefits[name])
 	}
 	return total
 }
@@ -321,8 +352,10 @@ func (acf *AnnualCashFlow) GetTotalSSBenefit() decimal.Decimal {
 // GetTotalFERSSupplement returns the sum of all participant FERS supplements
 func (acf *AnnualCashFlow) GetTotalFERSSupplement() decimal.Decimal {
 	total := decimal.Zero
-	for _, supplement := range acf.FERSSupplements {
-		total = total.Add(supplement)
+	// Sort participant names for deterministic processing order
+	names := SortedMapKeys(acf.FERSSupplements)
+	for _, name := range names {
+		total = total.Add(acf.FERSSupplements[name])
 	}
 	return total
 }
@@ -330,8 +363,10 @@ func (acf *AnnualCashFlow) GetTotalFERSSupplement() decimal.Decimal {
 // GetTotalTSPBalance returns the sum of all participant TSP balances
 func (acf *AnnualCashFlow) GetTotalTSPBalance() decimal.Decimal {
 	total := decimal.Zero
-	for _, balance := range acf.TSPBalances {
-		total = total.Add(balance)
+	// Sort participant names for deterministic processing order
+	names := SortedMapKeys(acf.TSPBalances)
+	for _, name := range names {
+		total = total.Add(acf.TSPBalances[name])
 	}
 	return total
 }
@@ -339,8 +374,10 @@ func (acf *AnnualCashFlow) GetTotalTSPBalance() decimal.Decimal {
 // GetLivingParticipants returns a list of living participants
 func (acf *AnnualCashFlow) GetLivingParticipants() []string {
 	living := make([]string, 0)
-	for name, deceased := range acf.IsDeceased {
-		if !deceased {
+	// Sort participant names for deterministic processing order
+	names := SortedMapKeys(acf.IsDeceased)
+	for _, name := range names {
+		if !acf.IsDeceased[name] {
 			living = append(living, name)
 		}
 	}
@@ -350,8 +387,10 @@ func (acf *AnnualCashFlow) GetLivingParticipants() []string {
 // GetDeceasedParticipants returns a list of deceased participants
 func (acf *AnnualCashFlow) GetDeceasedParticipants() []string {
 	deceased := make([]string, 0)
-	for name, isDead := range acf.IsDeceased {
-		if isDead {
+	// Sort participant names for deterministic processing order
+	names := SortedMapKeys(acf.IsDeceased)
+	for _, name := range names {
+		if acf.IsDeceased[name] {
 			deceased = append(deceased, name)
 		}
 	}

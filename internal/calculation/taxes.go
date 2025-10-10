@@ -1,6 +1,8 @@
 package calculation
 
 import (
+	"sort"
+
 	"github.com/rgehrsitz/rpgo/internal/domain"
 	"github.com/shopspring/decimal"
 )
@@ -477,19 +479,43 @@ func (ctc *ComprehensiveTaxCalculator) calculateFederalTaxWithStatus(agiComponen
 func CalculateTaxableIncome(cashFlow domain.AnnualCashFlow, isRetired bool) domain.TaxableIncome {
 	// Aggregate pensions (including survivor pensions) and withdrawals from maps
 	ferPension := decimal.Zero
-	for _, p := range cashFlow.Pensions {
-		ferPension = ferPension.Add(p)
+	// Sort participant names for deterministic processing order
+	var pensionNames []string
+	for name := range cashFlow.Pensions {
+		pensionNames = append(pensionNames, name)
 	}
-	for _, sp := range cashFlow.SurvivorPensions {
-		ferPension = ferPension.Add(sp)
+	sort.Strings(pensionNames)
+	for _, name := range pensionNames {
+		ferPension = ferPension.Add(cashFlow.Pensions[name])
 	}
+
+	var survivorNames []string
+	for name := range cashFlow.SurvivorPensions {
+		survivorNames = append(survivorNames, name)
+	}
+	sort.Strings(survivorNames)
+	for _, name := range survivorNames {
+		ferPension = ferPension.Add(cashFlow.SurvivorPensions[name])
+	}
+
 	withdrawals := decimal.Zero
-	for _, w := range cashFlow.TSPWithdrawals {
-		withdrawals = withdrawals.Add(w)
+	var withdrawalNames []string
+	for name := range cashFlow.TSPWithdrawals {
+		withdrawalNames = append(withdrawalNames, name)
 	}
+	sort.Strings(withdrawalNames)
+	for _, name := range withdrawalNames {
+		withdrawals = withdrawals.Add(cashFlow.TSPWithdrawals[name])
+	}
+
 	ss := decimal.Zero
-	for _, s := range cashFlow.SSBenefits {
-		ss = ss.Add(s)
+	var ssNames []string
+	for name := range cashFlow.SSBenefits {
+		ssNames = append(ssNames, name)
+	}
+	sort.Strings(ssNames)
+	for _, name := range ssNames {
+		ss = ss.Add(cashFlow.SSBenefits[name])
 	}
 	return domain.TaxableIncome{Salary: decimal.Zero, FERSPension: ferPension, TSPWithdrawalsTrad: withdrawals, TaxableSSBenefits: ss, OtherTaxableIncome: decimal.Zero, WageIncome: decimal.Zero, InterestIncome: decimal.Zero}
 }

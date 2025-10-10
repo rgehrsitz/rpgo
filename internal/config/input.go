@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/rgehrsitz/rpgo/internal/domain"
 	"github.com/shopspring/decimal"
@@ -34,7 +35,45 @@ func (ip *InputParser) LoadFromFile(filename string) (*domain.Configuration, err
 		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
 
+	// Ensure deterministic order for all maps in the configuration
+	ip.normalizeConfiguration(&config)
+
 	return &config, nil
+}
+
+// normalizeConfiguration ensures deterministic order for all maps in the configuration
+func (ip *InputParser) normalizeConfiguration(config *domain.Configuration) {
+	// Normalize scenario participant scenarios
+	for i := range config.Scenarios {
+		scenario := &config.Scenarios[i]
+		if scenario.ParticipantScenarios != nil {
+			// Create a new map with sorted keys
+			normalized := make(map[string]domain.ParticipantScenario)
+			var keys []string
+			for k := range scenario.ParticipantScenarios {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				normalized[k] = scenario.ParticipantScenarios[k]
+			}
+			scenario.ParticipantScenarios = normalized
+		}
+
+		// Normalize mortality participants
+		if scenario.Mortality != nil && scenario.Mortality.Participants != nil {
+			normalized := make(map[string]*domain.MortalitySpec)
+			var keys []string
+			for k := range scenario.Mortality.Participants {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				normalized[k] = scenario.Mortality.Participants[k]
+			}
+			scenario.Mortality.Participants = normalized
+		}
+	}
 }
 
 // ValidateConfiguration validates the loaded configuration
@@ -245,7 +284,15 @@ func (ip *InputParser) validateGenericScenario(index int, scenario *domain.Gener
 	}
 
 	// Validate each participant scenario
-	for name, participantScenario := range scenario.ParticipantScenarios {
+	// Sort participant names for deterministic processing order
+	var scenarioNames []string
+	for name := range scenario.ParticipantScenarios {
+		scenarioNames = append(scenarioNames, name)
+	}
+	sort.Strings(scenarioNames)
+
+	for _, name := range scenarioNames {
+		participantScenario := scenario.ParticipantScenarios[name]
 		// Check that participant exists in household
 		found := false
 		for _, p := range household.Participants {
@@ -265,7 +312,15 @@ func (ip *InputParser) validateGenericScenario(index int, scenario *domain.Gener
 
 	// Validate mortality if present
 	if scenario.Mortality != nil {
-		for participantName, mortalitySpec := range scenario.Mortality.Participants {
+		// Sort participant names for deterministic processing order
+		var mortalityNames []string
+		for name := range scenario.Mortality.Participants {
+			mortalityNames = append(mortalityNames, name)
+		}
+		sort.Strings(mortalityNames)
+
+		for _, participantName := range mortalityNames {
+			mortalitySpec := scenario.Mortality.Participants[participantName]
 			// Check that participant exists
 			found := false
 			for _, p := range household.Participants {

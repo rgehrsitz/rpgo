@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/shopspring/decimal"
 )
@@ -71,6 +72,11 @@ type PercentileRanges struct {
 	P50 decimal.Decimal `json:"p50"`
 	P75 decimal.Decimal `json:"p75"`
 	P90 decimal.Decimal `json:"p90"`
+}
+
+// seedFunc returns a random seed for Monte Carlo simulations
+func seedFunc() int64 {
+	return time.Now().UnixNano()
 }
 
 // NewMonteCarloSimulator creates a new Monte Carlo simulator
