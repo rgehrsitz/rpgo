@@ -97,8 +97,8 @@ func TestCommandSubcommands(t *testing.T) {
 }
 
 func TestFileExists(t *testing.T) {
-	// Test with existing file (use a file we know exists in the project)
-	if !fileExists("/Users/robertgehrsitz/Code/rpgo/README.md") {
+	// Test with existing file (use a file we know exists in the project root)
+	if !fileExists("../../README.md") {
 		t.Error("Expected README.md to exist")
 	}
 
